@@ -2,7 +2,8 @@
 
 Ubiquitous language for `task-guide`, a single-user opportunistic task reminder system.
 
-Decisions recorded here were settled in [Task property model](https://github.com/jpjerkins/task-guide/issues/2).
+Decisions recorded here were settled in [Task property model](https://github.com/jpjerkins/task-guide/issues/2)
+and [Weekly schedule and availability window model](https://github.com/jpjerkins/task-guide/issues/7).
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -47,8 +48,13 @@ thing matching looks at.
 Each Dimension declares, in code:
 
 - its **value type** — categorical (set membership) or ordinal (comparison),
-- its **default**, applied when the Task carries no value on that axis,
+- its **task-side default**, applied when the Task carries no value on that axis,
+- its **window-side default**, applied when the Availability Window declares no value on that axis,
 - its **matching rule**.
+
+**Two defaults, not one.** Both sides of the comparison may be silent, and silence means something
+different on each. Both are chosen as the *least constrained, most common* case for that side, so a
+zero-tag Task and a ten-second Window still match correctly.
 
 There is deliberately **no UI for managing Dimensions or their defaults**. Adding one is a code change.
 
@@ -61,6 +67,8 @@ Known Dimensions (illustrative — the registry is authoritative):
 | Mental energy | ordinal | low |
 | Weather | categorical | any |
 | Duration | ordinal | — (required) |
+
+(The table lists task-side defaults; window-side defaults are declared alongside them in the registry.)
 
 Defaults are **per-Dimension**, not global. A blanket "absent means unconstrained" or "absent means
 default" rule gets some axes wrong. Every default is chosen to be the *least constrained, most common*
@@ -79,6 +87,69 @@ may be loose (type `#sam`); the Dimension registry resolves it on write.
 **Inert Tag** — a Tag that resolves to no Dimension. It is **kept but inert**: stored, visible in the
 UI, ignored by matching. This is the intended path for a new idea — invent the Tag now, add the rule
 in code later. Inert Tags act as a staging area for future functionality.
+
+### Availability Window
+
+A **clock-bounded span within a day**, carrying a name and a set of Dimension values. The day's
+Windows are what drive reminders: **a Window firing *is* the reminder**, and its Dimension values are
+the filter selecting matching Tasks. There is no separate reminder-definition concept.
+
+| Property | Type | Notes |
+|---|---|---|
+| Name | text | Label and reminder copy — "Evening prep". Not an identity |
+| Start / End | clock times | Bounded span. Duration is real arithmetic, not a vibe |
+| Dimension values | partial | Declares what it declares; unset axes take the window-side default |
+
+A Window is a **per-day instance**, not a shared definition. "Evening" on Tuesday and "Evening" on
+Saturday are two different Windows that happen to share a label and may have very different spans —
+volleyball-season evenings are short. Editing one never propagates to the other.
+
+### Day template
+
+A **named, reusable set of Availability Windows** — "Ordinary weekday", "Volleyball Tuesday",
+"Tournament Saturday", "Travel day". The unit of substitution: swapping one day of a week means
+pointing that day at a different Day template.
+
+### Pattern
+
+**Seven Day template references**, one per weekday. Exactly one Pattern is active at a time; a
+seasonal change (children's sports) is a switch of the active Pattern.
+
+References are **live** — editing a Day template propagates to every Pattern using it, and that
+propagation is the point. The risk is handled by visibility, not by prevention: **editing a Day
+template shows its usage list** ("used by 3 Patterns: Volleyball, Summer, School year") before saving.
+To diverge, clone the template under a new name. There is no versioning and no copy-on-assign.
+
+### Firing
+
+**Every Availability Window fires at its start time.** There is no per-Window notify flag and no
+day-level notification budget.
+
+Notification restraint comes from a different lever: **if no Tasks match, no notification fires.**
+Silence is therefore always truthful — no push means nothing fit. This decouples restraint from
+authoring fidelity, so the week can be authored honestly without deleting Windows to quiet the phone
+(which would also destroy a matchable moment).
+
+A Window is **not** re-fired automatically part-way through, however long it is. A second push
+carrying no new information is noise, and it would destroy the truthfulness of silence.
+
+### Snooze
+
+The **only** re-fire path, always user-initiated from the landing page a notification opens.
+
+- **Interval** — `clamp(25% of Window duration, 5 minutes, 30 minutes)`. Proportional, floored so a
+  short Window cannot buzz again almost immediately, capped at 30 minutes.
+- **Repeats** — unlimited, same interval each time. No escalation, no cap.
+- **Expiry** — the reminder dies at end of day. Snooze means "show me this again *later today*".
+- **Past Window end** — allowed. Work sometimes continues past the authored span.
+- **Content** — **re-matched at the re-fire time against the original Window's Dimension values, using
+  current Task state.** Same filter, fresh list: Tasks completed since the first fire drop off, newly
+  captured Tasks that fit appear. Snoozing while actively working a long list is the motivating case.
+  The reminder keeps its Window's name throughout.
+
+Re-matching against *whatever Window is live* at the re-fire time is explicitly rejected: it silently
+changes the filter, has no answer when no Window is live, and is really "show me what fits now" — a
+separate on-demand feature of the UI.
 
 ### Matching rule
 
