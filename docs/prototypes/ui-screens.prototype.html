@@ -411,6 +411,8 @@
     { id:8, t:"Sort out the loft", dur:"Longer", st:"Active", dims:{ location:"home", energy:"medium" } },
     { id:9, t:"Book the dentist", dur:10, st:"Active", dims:{ energy:"medium", location:"desk" } },
     { id:10, t:"Replace the shed padlock", dur:10, st:"Active", dims:{ location:"outside", weather:"dry" } },
+    { id:12, t:"Take the mower in for service", dur:60, st:"Active",
+      dims:{ location:"out & about", energy:"medium" } },
     { id:20, t:"gutter thing??", dur:null, st:"Unprocessed", dims:{} },
     { id:21, t:"look into the loft hatch", dur:null, st:"Unprocessed", dims:{} },
     { id:22, t:"ring re: warranty", dur:null, st:"Unprocessed", dims:{} },
@@ -435,6 +437,7 @@
       { name:"Short evening",  s:"21:15", e:"22:00", dims:{ location:"home", energy:"low" } },
     ], protos:[] },
     { id:"tour", name:"Tournament Saturday", windows:[
+      { name:"Garden hour",       s:"08:00", e:"09:30", dims:{ location:["outside","garage"], weather:"dry", energy:"medium" } },
       { name:"Car park downtime", s:"10:00", e:"15:00", dims:{ location:"out & about", energy:"low" } },
     ], protos:[] },
     { id:"sat", name:"Ordinary Saturday", windows:[
@@ -445,7 +448,8 @@
       { name:"On the road",    s:"09:00", e:"13:00", dims:{ location:"out & about", energy:"low" } },
     ], protos:[] },
     { id:"church", name:"Church Sunday", windows:[
-      { name:"Slow afternoon", s:"14:00", e:"17:00", dims:{ location:"home", energy:"low" } },
+      { name:"Slow afternoon", s:"14:00", e:"17:00",
+        dims:{ location:"home", energy:"medium", who:["Sam","Ana","the kids"] } },
     ], protos:[{ name:"Church", s:"10:00", e:"11:30" }] },
   ];
   const tpl = id => TEMPLATES.find(t => t.id === id);
@@ -621,6 +625,16 @@
     (extraTags || []).forEach(t => out.push(`<span class="pill inert">${esc(t)} · inert</span>`));
     return out.join("");
   }
+  // Always shown on an active task. The scarcest task sorts to the top of a window's
+  // list, so the strongest wording lands exactly where the decision is being made.
+  function rarityPill(t) {
+    if (t.st !== "Active") return "";
+    const n = scarcity(t);
+    if (n === 0) return `<span class="pill due">never fits this pattern</span>`;
+    if (n === 1) return `<span class="pill now">only window this week</span>`;
+    if (n <= 3) return `<span class="pill now">rare · ${n} windows/wk</span>`;
+    return `<span class="pill">${n} windows/wk</span>`;
+  }
   function duePill(t) {
     if (!t.due) return "";
     const n = Math.round((new Date(t.due) - today) / DAY);
@@ -637,10 +651,7 @@
           ${t.dur ? `<span class="pill dur">${durLabel(t.dur)}</span>` : `<span class="pill due">no duration</span>`}
           ${duePill(t)}
           ${opts.dims === false ? "" : dimPills(t.dims, t.tags)}
-          ${t.st !== "Active" ? ""
-            : scarcity(t) === 0 ? `<span class="pill due">never fits this pattern</span>`
-            : scarcity(t) <= 3 ? `<span class="pill now">rare · ${scarcity(t)} window${scarcity(t) === 1 ? "" : "s"}/wk</span>`
-            : ""}
+          ${rarityPill(t)}
         </div>
       </button>
       <span class="chev">›</span>
@@ -1183,7 +1194,7 @@
                 <span class="tick" data-done="0">✓</span>
                 <span style="flex:1"><span style="display:block;font-size:15.5px;letter-spacing:-.01em">${esc(t.t)}</span>
                 <span class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">
-                  <span class="pill dur">${durLabel(t.dur)}</span>${duePill(t)}${dimPills(t.dims)}</span></span>
+                  <span class="pill dur">${durLabel(t.dur)}</span>${duePill(t)}${rarityPill(t)}${dimPills(t.dims)}</span></span>
               </button>`).join("")}</div>
               <div class="btn-row"><button class="btn" data-act="snooze">Snooze ${Math.min(30, Math.max(5, Math.round(winMins(live) * .25)))} min</button>
                 <button class="btn ghost" data-act="noop">Not now</button></div>`
