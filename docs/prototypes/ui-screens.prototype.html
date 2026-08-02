@@ -183,6 +183,8 @@
     width:100%; font:inherit; font-size:16px; padding:11px 12px; color:var(--ink);
     background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
   }
+  input.field.time { max-width:118px; font-variant-numeric:tabular-nums; }
+  input.field.bad { border-color:var(--danger); background:var(--danger-soft); color:var(--danger); }
   .chipset { display:flex; flex-wrap:wrap; gap:7px; }
   .chipset button {
     background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2);
@@ -548,6 +550,29 @@
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return (m ? `${h12}:${String(m).padStart(2, "0")}` : `${h12}`) + (h < 12 ? "a" : "p");
   }
+  // Accepts what a person actually types: 3p, 3pm, 3:30p, 7.30a, 15:00, 1500, 12a.
+  // Returns canonical "HH:MM", or null if it cannot be read.
+  function parseTime(v) {
+    const t = String(v).trim().toLowerCase().replace(/[\s.]/g, m => m === "." ? ":" : "");
+    const m = t.match(/^(\d{1,2}):?(\d{2})?\s*(am|pm|a|p)?$/);
+    if (!m) return null;
+    let h = +m[1];
+    const min = m[2] ? +m[2] : 0;
+    const ap = m[3] ? m[3][0] : null;
+    if (min > 59) return null;
+    if (ap) {
+      if (h < 1 || h > 12) return null;
+      h = (h % 12) + (ap === "p" ? 12 : 0);
+    } else if (h > 23) return null;
+    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+  function timeField(w, f, tplId) {
+    return `<input class="field time" type="text" inputmode="text" spellcheck="false" autocapitalize="off"
+      value="${hm(w[f])}" data-time data-t="${esc(tplId || "")}" data-w="${esc(w.name)}" data-f="${f}"
+      aria-label="${f === "s" ? "Start" : "End"} time">`;
+  }
+  const timeHint = `<div class="note" style="padding:4px 0 0">Type it how you say it — <b>3p</b>, <b>7:30a</b>,
+    <b>12p</b>. <span style="opacity:.75">24-hour works too.</span></div>`;
 
   // Duration's window-side ceiling is DERIVED from the window's length — nothing to
   // declare, nothing to keep in sync, and it can never contradict the clock.
@@ -1117,8 +1142,9 @@
               <div class="lbl">Name — becomes the reminder's copy</div>
               <input class="field" value="${esc(w.name)}">
               <div class="lbl">Span</div>
-              <div style="display:flex;gap:9px"><input class="field" type="time" value="${w.s}">
-                <input class="field" type="time" value="${w.e}"></div>
+              <div style="display:flex;gap:9px;align-items:center">${timeField(w, "s", t.id)}
+                <span style="color:var(--ink-3)">to</span>${timeField(w, "e", t.id)}</div>
+              ${timeHint}
               <div class="note" style="padding:2px 0 0">Fires at <b>${hm(w.s)}</b>. ${winMins(w)} minutes long, so
                 snooze is ${Math.min(30, Math.max(5, Math.round(winMins(w) * .25)))} min.</div>
             </div>
@@ -1477,7 +1503,9 @@
         <button class="icon" data-act="landing" data-win="${esc(w.name)}" style="background:none;border:none;color:var(--accent)">Preview</button></div>
       <div class="stack">
         <div class="lbl">Span on ${esc(fmtShort(curDate()))} — ${hm(w.s)}–${hm(w.e)}</div>
-        <div style="display:flex;gap:9px"><input class="field" type="time" value="${w.s}"><input class="field" type="time" value="${w.e}"></div>
+        <div style="display:flex;gap:9px;align-items:center">${timeField(w, "s", "")}
+          <span style="color:var(--ink-3)">to</span>${timeField(w, "e", "")}</div>
+        ${timeHint}
         ${DIMS.map(d => `<div class="lbl">${esc(d.label)}</div>
           <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
             aria-pressed="${d.type === "ord" ? (w.dims[d.key] ?? d.winDef) === v : valuesOf(w, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
@@ -1558,6 +1586,21 @@
       case "capfocus": break;
       default: break;
     }
+  });
+
+  document.addEventListener("change", e => {
+    const el = e.target.closest("[data-time]");
+    if (!el) return;
+    const v = parseTime(el.value);
+    if (!v) { el.classList.add("bad"); el.select && el.select(); return; }
+    const w = el.dataset.t ? tpl(el.dataset.t).windows.find(x => x.name === el.dataset.w)
+                           : findWindow(el.dataset.w);
+    const other = el.dataset.f === "s" ? w.e : w.s;
+    if (el.dataset.f === "s" ? mins(v) >= mins(other) : mins(v) <= mins(other)) {
+      el.classList.add("bad"); return;                 // a window must have positive length
+    }
+    w[el.dataset.f] = v;
+    render();
   });
 
   function cycle(dir) {
