@@ -192,6 +192,24 @@
   .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); font-weight:650; }
   .stack { display:flex; flex-direction:column; gap:8px; padding:14px 16px 4px; }
 
+  /* ---- live "will this ever come up?" bar on the authoring screen ---- */
+  .fitbar {
+    position:sticky; top:0; z-index:3;
+    display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;
+    padding:12px 16px; background:var(--surface-2); border-bottom:1px solid var(--line);
+  }
+  .fitbar .n { font-size:23px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .fitbar .of { font-size:13px; color:var(--ink-2); flex:1; min-width:0; }
+  .fitbar .which {
+    flex-basis:100%; font-size:12px; line-height:1.5; color:var(--ink-2);
+    display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+  }
+  .fitbar .which b { color:var(--ink); font-weight:600; }
+  .fitbar.rare { background:var(--now-soft); }
+  .fitbar.rare .n { color:var(--now); }
+  .fitbar.zero { background:var(--danger-soft); }
+  .fitbar.zero .n { color:var(--danger); }
+
   /* ---- ad-hoc query adjuster ---- */
   .adjust { background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
   .adjust-h {
@@ -568,6 +586,35 @@
   }
   const orphans = () => TASKS.filter(t => t.st === "Active" && scarcity(t) === 0);
 
+  // For the authoring screen: answer as if the task were Active, so status doesn't
+  // masquerade as "nothing fits", and name the windows while there are few enough to name.
+  const asActive = t => ({ ...t, dims:{ ...t.dims }, st:"Active" });
+  function admittingWindows(t) {
+    const probe = asActive(t), out = new Map();
+    pattern().days.forEach((tid, i) => {
+      tpl(tid).windows.forEach(w => {
+        if (!matchesQ(probe, baseQuery(w))) return;
+        const k = tid + "|" + w.name;
+        if (!out.has(k)) out.set(k, { w, days:[] });
+        out.get(k).days.push(WD[i]);
+      });
+    });
+    return [...out.values()];
+  }
+  const fitCount = t => pattern().days
+    .reduce((n, tid) => n + tpl(tid).windows.filter(w => matchesQ(asActive(t), baseQuery(w))).length, 0);
+  // Which single axis, relaxed on its own, would rescue a task nothing can admit?
+  function blockingAxes(t) {
+    const fixes = d => {
+      const probe = asActive(t); delete probe.dims[d.key];
+      return weekWindows().some(w => matchesQ(probe, baseQuery(w)));
+    };
+    const out = DIMS.filter(fixes).map(d => d.label.toLowerCase());
+    const shorter = asActive(t); shorter.dur = 2;
+    if (weekWindows().some(w => matchesQ(shorter, baseQuery(w)))) out.push("duration");
+    return out;
+  }
+
   function rank(list) {
     return list.sort((a, b) => {
       const ad = a.due ? new Date(a.due) - today : 1e9;
@@ -783,10 +830,30 @@
       </div>`;
   }
 
+  // Live answer to "will this ever come up?", recomputed on every property change.
+  function fitBar(t) {
+    const n = fitCount(t), tot = weekWindows().length;
+    const which = admittingWindows(t);
+    const blockers = n === 0 ? blockingAxes(t) : [];
+    return `<div class="fitbar ${n === 0 ? "zero" : n <= 3 ? "rare" : ""}">
+      <span class="n">${n}</span>
+      <span class="of">${n === 0
+        ? "windows fit — as written, this can never come up"
+        : `of ${tot} windows this week${n === 1 ? " — its only chance" : ""}`}</span>
+      ${n > 0 && which.length <= 3 ? `<span class="which">${which.map(x =>
+        `<span class="pill dim">${esc(x.w.name)} · ${x.days.join(" ")} ${x.w.s}</span>`).join("")}</span>` : ""}
+      ${n === 0 ? `<span class="which">${blockers.length
+        ? `No window declares ${blockers.map(b => `<b>${esc(b)}</b>`).join(" or ")} — relax one, or declare it on a window`
+        : `No single property is to blame; the combination has no home in this pattern`}</span>` : ""}
+      ${t.st !== "Active" ? `<span class="which">Counted as if <b>Active</b> — it is <b>${esc(t.st)}</b>, so it is not being matched at all right now.</span>` : ""}
+    </div>`;
+  }
+
   function taskDetail(back, backLabel) {
     const t = task(+S.param) || TASKS[0];
     return nav("Task", { back, backLabel }) + `
       <div class="scroll">
+        ${fitBar(t)}
         <div class="stack">
           <div class="lbl">Title</div>
           <input class="field" value="${esc(t.t)}">
