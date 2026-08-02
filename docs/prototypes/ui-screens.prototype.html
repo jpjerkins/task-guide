@@ -184,6 +184,35 @@
   .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); font-weight:650; }
   .stack { display:flex; flex-direction:column; gap:8px; padding:14px 16px 4px; }
 
+  /* ---- ad-hoc query adjuster ---- */
+  .adjust { background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .adjust-h {
+    display:flex; align-items:center; gap:9px; width:100%; padding:11px 16px;
+    background:none; border:none; text-align:left;
+  }
+  .adjust-h .lbl { flex:none; }
+  .adjust-sum { flex:1; display:flex; flex-wrap:wrap; gap:5px; min-width:0; }
+  .adjust-body { padding:2px 16px 14px; display:flex; flex-direction:column; gap:7px; border-top:1px solid var(--line-soft); }
+  .adjust-bar {
+    display:flex; align-items:center; gap:8px; padding:9px 12px 9px 16px;
+    background:var(--now-soft); border-top:1px solid var(--line-soft); font-size:13px; color:var(--ink-2);
+  }
+  .adjust-bar span:first-child { flex:1; }
+  .adjust-bar b { color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  /* ---- variant D ---- */
+  .scroll.col { display:flex; flex-direction:column; }
+  .fitspace { flex:1; display:grid; place-items:center; padding:20px 16px; min-height:104px; }
+  .btn.fits { width:auto; border-radius:99px; padding:12px 26px; }
+  .livecard {
+    margin:14px 16px 2px; padding:15px 16px; border-radius:15px;
+    background:var(--now-soft); border:1px solid var(--now); width:auto;
+    display:block; text-align:left;
+  }
+  .livecard .eyebrow { font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--now); font-weight:700; }
+  .livecard .t { font-size:20px; letter-spacing:-.02em; margin-top:5px; }
+  .livecard .m { font-size:13px; color:var(--ink-2); margin-top:3px; font-variant-numeric:tabular-nums; }
+
   /* ---- variant A ---- */
   .filterbar { display:flex; gap:7px; padding:11px 16px; overflow-x:auto; background:var(--surface); border-bottom:1px solid var(--line); }
   .filterbar button { flex:none; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2); padding:6px 12px; border-radius:99px; font-size:13px; }
@@ -424,21 +453,43 @@
   const mins = hhmm => (+hhmm.slice(0,2)) * 60 + (+hhmm.slice(3));
   const winMins = w => mins(w.e) - mins(w.s);
 
-  function matches(t, w) {
+  // A query is what matching actually runs against. A window yields one; the landing page
+  // may then adjust it for this fire only. Categorical axes hold a SET of values —
+  // "carries the value" is set membership, which is what makes ad-hoc widening expressible.
+  function baseQuery(w) {
+    const q = { mins:winMins(w), label:w.name };
+    for (const d of DIMS) {
+      const v = w.dims[d.key] ?? d.winDef;
+      q[d.key] = d.type === "ord" ? v : [v];
+    }
+    return q;
+  }
+  function openQuery() {
+    const q = { mins:600, label:"Right now" };
+    for (const d of DIMS) q[d.key] = d.type === "ord" ? d.winDef : [d.winDef];
+    return q;
+  }
+  function effQuery(w) {
+    const q = w ? baseQuery(w) : openQuery();
+    if (S.adjust) for (const k of Object.keys(S.adjust)) q[k] = S.adjust[k];
+    return q;
+  }
+  function matchesQ(t, q) {
     if (t.st !== "Active") return false;
-    if (durMins(t.dur) > winMins(w)) return false;
+    if (durMins(t.dur) > q.mins) return false;
     for (const d of DIMS) {
       const tv = t.dims[d.key] ?? d.taskDef;
-      const wv = w.dims[d.key] ?? d.winDef;
       if (d.type === "ord") {
-        if (d.values.indexOf(tv) > d.values.indexOf(wv)) return false;
+        if (d.values.indexOf(tv) > d.values.indexOf(q[d.key])) return false;
       } else {
-        if (wv === d.any || tv === d.any) continue;
-        if (tv !== wv) return false;
+        const set = q[d.key];
+        if (set.includes(d.any) || tv === d.any) continue;
+        if (!set.includes(tv)) return false;
       }
     }
     return true;
   }
+  const matches = (t, w) => matchesQ(t, baseQuery(w));
   function boost(t, w) {
     let n = 0;
     for (const d of DIMS) {
@@ -448,14 +499,16 @@
     }
     return n;
   }
-  function matchesFor(w) {
-    return TASKS.filter(t => matches(t, w)).sort((a, b) => {
+  function rank(list, w) {
+    return list.sort((a, b) => {
       const ad = a.due ? new Date(a.due) - today : 1e9;
       const bd = b.due ? new Date(b.due) - today : 1e9;
       if (ad !== bd) return ad - bd;
-      return boost(b, w) - boost(a, w);
+      return (w ? boost(b, w) - boost(a, w) : 0);
     });
   }
+  const matchesFor = w => rank(TASKS.filter(t => matchesQ(t, baseQuery(w))), w);
+  const matchesForQ = (q, w) => rank(TASKS.filter(t => matchesQ(t, q)), w);
   const countBy = st => TASKS.filter(t => t.st === st).length;
 
   // dated events surface in the footer for the 3 days up to and including the day
@@ -468,13 +521,15 @@
 
   /* ============================== state ============================== */
   const S = {
-    variant: new URLSearchParams(location.search).get("variant") || "A",
+    variant: new URLSearchParams(location.search).get("variant") || "D",
     screen: "home",
     param: null,
     filter: "Active",
     date: iso(today),
     sheet: null,
     about: false,
+    adjust: null,      // per-dimension overrides of the query, this fire only
+    adjustOpen: false,
   };
   const curDate = () => { const d = new Date(S.date + "T00:00:00"); return d; };
   const liveWindow = () => {
@@ -484,7 +539,11 @@
   };
   const nextWindow = () => dayShape(today).windows.find(w => mins(w.s) > (new Date().getHours()*60 + new Date().getMinutes())) || null;
 
-  function go(screen, param) { S.screen = screen; S.param = param ?? null; S.sheet = null; render(); }
+  function go(screen, param) {
+    S.screen = screen; S.param = param ?? null; S.sheet = null;
+    S.adjust = null; S.adjustOpen = false;   // an adjustment never outlives the screen
+    render();
+  }
   function sheet(kind, param) { S.sheet = kind ? { kind, param } : null; render(); }
 
   /* ============================ components ============================ */
@@ -535,7 +594,8 @@
       ${o.right || ""}
     </div>`;
   }
-  function tabbar(items, active) {
+  function tabbar(_items, active) {
+    const items = TABS[S.variant] || TABS.A;
     return `<div class="tabbar">${items.map(i => `
       <button data-act="go" data-screen="${i.k}" ${i.k === active ? 'aria-current="page"' : ""}>
         <span class="g">${i.g}</span>${esc(i.l)}
@@ -558,22 +618,95 @@
   }
 
   /* ====================== screens shared by variants ====================== */
+  /* --- ad-hoc query adjustment: "actually, #while-out tasks are fine right now" --- */
+  function qText(d, q) { return d.type === "ord" ? q[d.key] : q[d.key].join(" / "); }
+  function isAdjusted(k) { return !!(S.adjust && S.adjust[k] !== undefined); }
+
+  function adjuster(w, q) {
+    const changed = !!S.adjust && Object.keys(S.adjust).length > 0;
+    const baseN = TASKS.filter(t => matchesQ(t, w ? baseQuery(w) : openQuery())).length;
+    const nowN = TASKS.filter(t => matchesQ(t, q)).length;
+    return `<div class="adjust">
+      <button class="adjust-h" data-act="adjustopen" aria-expanded="${S.adjustOpen}">
+        <span class="lbl">Matching on</span>
+        <span class="adjust-sum">${DIMS.map(d =>
+          `<span class="pill ${isAdjusted(d.key) ? "now" : "dim"}">${esc(d.label.toLowerCase())}: ${esc(qText(d, q))}</span>`).join("")}</span>
+        <span class="chev">${S.adjustOpen ? "⌃" : "⌄"}</span>
+      </button>
+      ${S.adjustOpen ? `<div class="adjust-body">
+        ${DIMS.map(d => `<div class="lbl">${esc(d.label)}${d.type === "ord"
+            ? ` <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— ceiling</span>` : ""}</div>
+          <div class="chipset">${d.values.map(v => `<button data-act="qtoggle" data-k="${d.key}" data-v="${esc(v)}"
+            aria-pressed="${d.type === "ord" ? q[d.key] === v : q[d.key].includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
+        <div class="note" style="padding:12px 0 2px">Widening is the common case — you are out and about anyway,
+          or Carrie turned out to be around. Narrowing works too: switch a value off to hide what you can't
+          face right now.</div>
+      </div>` : ""}
+      ${changed ? `<div class="adjust-bar">
+        <span><b>${nowN}</b> fit, was ${baseN}</span>
+        <button class="btn ghost" style="padding:6px 10px" data-act="qreset">Reset</button>
+        <button class="btn" style="padding:6px 12px" data-act="sheet" data-kind="keep">Keep this…</button>
+      </div>` : ""}
+    </div>`;
+  }
+
+  function keepSheet() {
+    const w = findWindow(S.param);
+    const used = PATTERNS.filter(p => p.days.some(t => tpl(t).windows.some(x => x.name === w.name)));
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>Keep this change?</h2>
+        <button class="icon" data-act="closesheet" style="background:none;border:none;color:var(--accent)">Cancel</button></div>
+      <div class="note" style="padding-top:12px">By default the adjustment is <b>for this fire only</b> — it dies
+        with the reminder at end of day. Making it stick is the same fork the model already draws.</div>
+      <div class="stack">
+        <button class="btn wide" data-act="closesheet">Just ${esc(fmtShort(curDate()))}<br>
+          <span style="font-size:12px;color:var(--ink-2);font-weight:400">Writes an override — a copied one-off day. Nothing else changes.</span></button>
+        <button class="btn wide" data-act="closesheet">Every “${esc(w.name)}”<br>
+          <span style="font-size:12px;color:var(--ink-2);font-weight:400">Edits the day template. Propagates to ${used.length} pattern${used.length === 1 ? "" : "s"}.</span></button>
+      </div>
+      <div class="note">Reality vs assumption, decided at the moment you noticed the difference — which is the
+        only moment you actually know which one it was.</div>
+    </div></div>`;
+  }
+
   function landingScreen(back, backLabel) {
     const w = findWindow(S.param);
-    const list = matchesFor(w);
+    const q = effQuery(w);
+    const list = matchesForQ(q, w);
+    const snoozeMin = Math.min(30, Math.max(5, Math.round(winMins(w) * .25)));
     return nav(w.name, { back, backLabel, sub:`${w.s}–${w.e} · ${fmtShort(curDate())}` }) + `
       <div class="scroll">
         <div class="note">Opened from the notification. This is where triage lives — the push itself is
           <b>a doorbell carrying one URL</b>.</div>
+        ${adjuster(w, q)}
         <div class="list">${list.length ? list.map(t => taskRow(t)).join("")
-          : `<div class="empty">Nothing fits this window.<br>No notification would have fired.</div>`}</div>
+          : `<div class="empty">Nothing fits.<br>No notification would have fired.</div>`}</div>
         <div class="btn-row">
-          <button class="btn" data-act="snooze">Snooze ${Math.min(30, Math.max(5, Math.round(winMins(w) * .25)))} min</button>
+          <button class="btn" data-act="snooze">Snooze ${snoozeMin} min</button>
           <button class="btn ghost" data-act="go" data-screen="${back}">Done for now</button>
         </div>
         ${footerBar()}
-        <div class="note">Snooze re-matches at the new time against <b>this window's</b> dimension values with
-          current task state. It dies at end of day.</div>
+        <div class="note">Snooze re-matches at the new time with current task state. <b>Open question:</b> does it
+          re-match on the window's own values, or on the adjustment you just made?</div>
+      </div>`;
+  }
+
+  function fitsNowScreen(back, backLabel) {
+    const live = liveWindow();
+    const q = effQuery(live);
+    const list = matchesForQ(q, live);
+    return nav("Right now", { back, backLabel,
+      sub:live ? `Starting from ${live.name}` : "No window open — starting wide" }) + `
+      <div class="scroll">
+        <div class="note">Asked for on purpose, not pushed. ${live ? `Seeded from the open window, then yours to bend.`
+          : `Nothing is open, so this starts from the window-side defaults and nothing else.`}</div>
+        ${adjuster(live, q)}
+        <div class="list">${list.length ? list.map(t => taskRow(t)).join("")
+          : `<div class="empty">Nothing fits that.<br>Try widening a dimension above.</div>`}</div>
+        ${footerBar()}
+        <div class="note">This is the "show me what fits now" feature the snooze rule was careful <i>not</i> to be.
+          It never fires a notification and never edits a window unless you ask it to.</div>
       </div>`;
   }
 
@@ -699,6 +832,15 @@
     { k:"home", g:"☑", l:"Tasks" }, { k:"today", g:"◷", l:"Today" },
     { k:"schedule", g:"▤", l:"Schedule" }, { k:"more", g:"⋯", l:"More" },
   ];
+  const TABS_B = [
+    { k:"home", g:"◷", l:"Day" }, { k:"tasks", g:"☑", l:"Tasks" },
+    { k:"templates", g:"▤", l:"Shapes" }, { k:"more", g:"⋯", l:"More" },
+  ];
+  const TABS_D = [
+    { k:"home", g:"◷", l:"Now" }, { k:"tasks", g:"☑", l:"Tasks" },
+    { k:"schedule", g:"▤", l:"Schedule" }, { k:"more", g:"⋯", l:"More" },
+  ];
+  const TABS = { A:TABS_A, B:TABS_B, D:TABS_D };
   const A = {
     name:"Task-first",
     tagline:"A conventional bottom tab bar. The task list is home; the schedule is a settings-like drill-down you visit rarely.",
@@ -726,7 +868,7 @@
             ${eventsOn(today).length ? `<div class="sec-h">Events</div><div class="list">
               ${eventsOn(today).map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
                 <div class="meta"><span class="pill dur">${e.s}–${e.e}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
-            <div class="sec"><button class="btn wide" data-act="landing" data-win="${esc((live || sh.windows[0]).name)}">What fits right now?</button></div>
+            <div class="sec"><button class="btn wide" data-act="go" data-screen="fitsnow">What fits right now?</button></div>
             ${footerBar()}
           </div>` + tabbar(TABS_A, "today");
       },
@@ -838,6 +980,7 @@
           </div>` + tabbar(TABS_A, "more");
       },
       landing:() => landingScreen("today", "Today"),
+      fitsnow:() => fitsNowScreen("today", "Today"),
       task:() => taskDetail("home", "Tasks"),
       dimensions:() => dimensionsScreen("more", "More"),
       triage:() => triageScreen("more", "More"),
@@ -845,10 +988,6 @@
   };
 
   /* ============================ variant B ============================ */
-  const TABS_B = [
-    { k:"home", g:"◷", l:"Day" }, { k:"tasks", g:"☑", l:"Tasks" },
-    { k:"templates", g:"▤", l:"Shapes" }, { k:"more", g:"⋯", l:"More" },
-  ];
   const B = {
     name:"Day-first",
     tagline:"The day is the home screen. You edit the schedule by editing the day in front of you; templates and patterns are derived from what you've drawn.",
@@ -939,6 +1078,7 @@
       },
       dates:() => A.screens.dates(),
       landing:() => landingScreen("home", "Day"),
+      fitsnow:() => fitsNowScreen("home", "Day"),
       task:() => taskDetail("tasks", "Tasks"),
       dimensions:() => dimensionsScreen("more", "More"),
       triage:() => triageScreen("more", "More"),
@@ -971,7 +1111,7 @@
               <div class="btn-row"><button class="btn" data-act="snooze">Snooze ${Math.min(30, Math.max(5, Math.round(winMins(live) * .25)))} min</button>
                 <button class="btn ghost" data-act="noop">Not now</button></div>`
             : `<div class="empty">Silence is truthful — nothing is open, so nothing is being asked of you.<br><br>
-                <button class="btn" data-act="landing" data-win="${esc(w.name)}">Show me what would fit ${esc(w.name)}</button></div>`}
+                <button class="btn" data-act="go" data-screen="fitsnow">Show me what would fit anyway</button></div>`}
             ${footerBar()}
             <div class="note">The notification opens <b>exactly this screen</b>. There is no separate landing page,
               because the landing page and the home screen are the same question.</div>
@@ -1030,14 +1170,66 @@
       dates:() => A.screens.dates(),
       window:() => A.screens.window(),
       landing:() => landingScreen("home", "Now"),
+      fitsnow:() => fitsNowScreen("home", "Now"),
       task:() => taskDetail("all", "All tasks"),
       dimensions:() => dimensionsScreen("index", "Index"),
       triage:() => triageScreen("index", "Index"),
     },
   };
 
-  const VARIANTS = { A, B, C };
-  const KEYS = ["A","B","C"];
+  /* ====================== variant D — C, merged per feedback ====================== */
+  const D = {
+    name:"Moment-first, merged",
+    tagline:"C's calm, A's Today layout, and a tab bar back at the bottom. Adds ad-hoc query adjustment to both "
+      + "the reminder landing page and \"Right now\" — the thing none of the first three could do.",
+    screens:{
+      home() {
+        const sh = dayShape(today), live = liveWindow(), evs = eventsOn(today);
+        return nav("Today", { sub:`${fmtDate(today)} · ${sh.label}`,
+          right:`<button class="icon" data-act="sheet" data-kind="capture">＋</button>` }) + `
+          <div class="scroll col">
+            ${live ? `<button class="livecard" data-act="landing" data-win="${esc(live.name)}">
+              <div class="eyebrow">Open now</div>
+              <div class="t">${esc(live.name)}</div>
+              <div class="m">${live.s}–${live.e} · ${matchesFor(live).length} of ${countBy("Active")} tasks fit</div>
+            </button>` : ""}
+            <div class="sec-h">Windows today</div>
+            <div class="list">${sh.windows.map(w => windowLine(w)).join("")}</div>
+            ${evs.length ? `<div class="sec-h">Events</div><div class="list">
+              ${evs.map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
+                <div class="meta"><span class="pill dur">${e.s}–${e.e}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+            <div class="fitspace">
+              <button class="btn fits" data-act="go" data-screen="fitsnow">What fits right now?</button>
+            </div>
+            ${footerBar()}
+          </div>` + tabbar(null, "home");
+      },
+      tasks() {
+        const list = TASKS.filter(t => t.st === S.filter);
+        return nav("Tasks", { right:`<button class="icon" data-act="sheet" data-kind="capture">＋</button>` }) + `
+          <div class="filterbar">${["Active","Unprocessed","Stale","Done"].map(f =>
+            `<button data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${f} ${TASKS.filter(t => t.st === f).length}</button>`).join("")}</div>
+          <div class="scroll">
+            <div class="list">${list.map(t => taskRow(t)).join("") || `<div class="empty">Nothing here.</div>`}</div>
+            <div class="note">Marking off happens <b>here</b>, deliberately — never as a side effect of dismissing
+              a reminder.</div>
+          </div>` + tabbar(null, "tasks");
+      },
+      schedule:() => A.screens.schedule(),
+      template:() => A.screens.template(),
+      window:() => A.screens.window(),
+      dates:() => A.screens.dates(),
+      more:() => A.screens.more(),
+      landing:() => landingScreen("home", "Today"),
+      fitsnow:() => fitsNowScreen("home", "Today"),
+      task:() => taskDetail("tasks", "Tasks"),
+      dimensions:() => dimensionsScreen("more", "More"),
+      triage:() => triageScreen("more", "More"),
+    },
+  };
+
+  const VARIANTS = { D, A, B, C };
+  const KEYS = ["D","A","B","C"];
 
   /* ============================== render ============================== */
   function render() {
@@ -1049,6 +1241,7 @@
       else if (S.sheet.kind === "pattern") html += patternSheet();
       else if (S.sheet.kind === "overlap") html += eventOverlapSheet();
       else if (S.sheet.kind === "win") html += winSheet(S.sheet.param);
+      else if (S.sheet.kind === "keep") html += keepSheet();
     }
     document.getElementById("device").innerHTML = html;
 
@@ -1129,6 +1322,28 @@
       case "sheet": sheet(el.dataset.kind, el.dataset.param); break;
       case "closesheet": sheet(null); break;
       case "filter": S.filter = el.dataset.v; render(); break;
+      case "adjustopen": S.adjustOpen = !S.adjustOpen; render(); break;
+      case "qreset": S.adjust = null; render(); break;
+      case "qtoggle": {
+        const k = el.dataset.k, v = el.dataset.v, d = dim(k);
+        const w = S.screen === "fitsnow" ? liveWindow() : findWindow(S.param);
+        const q = effQuery(w), base = w ? baseQuery(w) : openQuery();
+        S.adjust = S.adjust || {};
+        if (d.type === "ord") {
+          S.adjust[k] = v;
+        } else {
+          const set = q[k].slice(), i = set.indexOf(v);
+          if (i >= 0) set.splice(i, 1); else set.push(v);
+          S.adjust[k] = set;
+        }
+        // back to the window's own value? then it isn't an adjustment any more
+        const same = d.type === "ord"
+          ? S.adjust[k] === base[k]
+          : S.adjust[k].length === base[k].length && S.adjust[k].every(x => base[k].includes(x));
+        if (same) delete S.adjust[k];
+        if (!Object.keys(S.adjust).length) S.adjust = null;
+        render(); break;
+      }
       case "setdate": S.date = el.dataset.v; render(); break;
       case "toggle": { const t = task(+el.dataset.id); t.st = t.st === "Done" ? "Active" : "Done"; render(); break; }
       case "setdur": { const t = task(+el.dataset.id); const v = el.dataset.v; t.dur = v === "Longer" ? "Longer" : +v; render(); break; }
