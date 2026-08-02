@@ -458,21 +458,60 @@
   }
   const eventsOn = d => EVENTS.filter(e => e.date === iso(d));
 
+  // Adjusting a filter is a statement about the day you are living, so it writes through
+  // to that date. An Override always stores copied Windows (#8), so the first adjustment
+  // materialises the whole day and detaches it from its Day template.
+  function ensureOverride(dateKey) {
+    let ov = OVERRIDES.find(o => o.date === dateKey);
+    if (ov) {
+      if (!ov.windows) ov.windows = tpl(ov.from).windows.map(w => ({ ...w, dims:{ ...w.dims } }));
+      return ov;
+    }
+    const d = new Date(dateKey + "T00:00:00");
+    const t = tpl(pattern().days[d.getDay()]);
+    ov = { date:dateKey, from:null, label:`${t.name}, adjusted`, adjusted:true,
+           windows:t.windows.map(w => ({ ...w, dims:{ ...w.dims } })) };
+    OVERRIDES.push(ov);
+    return ov;
+  }
+  function overrideWindow(dateKey, name) {
+    const ov = ensureOverride(dateKey);
+    let w = ov.windows.find(x => x.name === name);
+    if (!w) { w = { name, s:"00:00", e:"23:59", dims:{} }; ov.windows.push(w); }
+    return w;
+  }
+  // Nothing open, and reality just handed you a pocket of time: record it as a real window
+  // running from now to whatever you are next committed to. It never fires — you are already here.
+  function adHocWindow(dateKey) {
+    const n = new Date();
+    const start = `${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;
+    const ov = ensureOverride(dateKey);
+    const next = [...ov.windows.map(w => w.s), ...eventsOn(new Date(dateKey + "T00:00:00")).map(e => e.s)]
+      .filter(t => mins(t) > mins(start)).sort()[0];
+    const w = { name:"Unplanned", s:start, e:next || "23:59", dims:{}, adhoc:true };
+    ov.windows.push(w);
+    ov.windows.sort((a, b) => mins(a.s) - mins(b.s));
+    return w;
+  }
+
   const mins = hhmm => (+hhmm.slice(0,2)) * 60 + (+hhmm.slice(3));
   const winMins = w => mins(w.e) - mins(w.s);
 
-  // A query is what matching actually runs against. A window yields one; the landing page
-  // may then adjust it for this fire only. Categorical axes hold a SET of values —
-  // "carries the value" is set membership, which is what makes ad-hoc widening expressible.
+  // A window's declared values on a categorical axis. Stored as a bare string when there
+  // is one, an array when there are several — the adjuster can produce several.
+  function declaredOf(w, d) {
+    const v = w.dims[d.key];
+    if (v === undefined) return [];
+    return (Array.isArray(v) ? v.slice() : [v]).filter(x => x !== d.winDef);
+  }
   // ADDITIVE, not replacing: the window-side default is never excluded, and a declared
   // non-default value LIFTS the exclude for that value (and boosts it). So the admitted
-  // set is {window default} ∪ {declared} — derived, never stored as a set.
+  // set is {window default} ∪ {declared} — derived at query time, never stored as a set.
   function baseQuery(w) {
     const q = { mins:winMins(w), label:w.name };
     for (const d of DIMS) {
       if (d.type === "ord") { q[d.key] = w.dims[d.key] ?? d.winDef; continue; }
-      const declared = w.dims[d.key];
-      q[d.key] = (declared === undefined || declared === d.winDef) ? [d.winDef] : [d.winDef, declared];
+      q[d.key] = [d.winDef, ...declaredOf(w, d)];
     }
     return q;
   }
@@ -481,10 +520,21 @@
     for (const d of DIMS) q[d.key] = d.type === "ord" ? d.winDef : [d.winDef];
     return q;
   }
-  function effQuery(w) {
-    const q = w ? baseQuery(w) : openQuery();
-    if (S.adjust) for (const k of Object.keys(S.adjust)) q[k] = S.adjust[k];
-    return q;
+  const effQuery = w => w ? baseQuery(w) : openQuery();
+
+  // Toggling a value edits the window itself — there is no transient layer any more.
+  // The window-side default can't be switched off: no window can express its absence.
+  function toggleDim(w, d, v) {
+    if (d.type === "ord") {
+      if (v === d.winDef) delete w.dims[d.key]; else w.dims[d.key] = v;
+      return;
+    }
+    if (v === d.winDef) return;
+    const decl = declaredOf(w, d);
+    const i = decl.indexOf(v);
+    if (i >= 0) decl.splice(i, 1); else decl.push(v);
+    if (!decl.length) delete w.dims[d.key];
+    else w.dims[d.key] = decl.length === 1 ? decl[0] : decl;
   }
   function matchesQ(t, q) {
     if (t.st !== "Active") return false;
@@ -505,9 +555,11 @@
   function boost(t, w) {
     let n = 0;
     for (const d of DIMS) {
-      const wv = w.dims[d.key];
-      if (wv === undefined || wv === d.winDef) continue;
-      if ((t.dims[d.key] ?? d.taskDef) === wv) n++;
+      const tv = t.dims[d.key] ?? d.taskDef;
+      if (d.type === "ord") {
+        const wv = w.dims[d.key];
+        if (wv !== undefined && wv !== d.winDef && tv === wv) n++;
+      } else if (declaredOf(w, d).includes(tv)) n++;
     }
     return n;
   }
@@ -540,7 +592,7 @@
     date: iso(today),
     sheet: null,
     about: false,
-    adjust: null,      // per-dimension overrides of the query, this fire only
+    adhoc: null,       // name of the unplanned window this screen minted, if any
     adjustOpen: false,
   };
   const curDate = () => { const d = new Date(S.date + "T00:00:00"); return d; };
@@ -553,7 +605,7 @@
 
   function go(screen, param) {
     S.screen = screen; S.param = param ?? null; S.sheet = null;
-    S.adjust = null; S.adjustOpen = false;   // an adjustment never outlives the screen
+    S.adhoc = null; S.adjustOpen = false;
     render();
   }
   function sheet(kind, param) { S.sheet = kind ? { kind, param } : null; render(); }
@@ -563,7 +615,8 @@
 
   function dimPills(dims, extraTags) {
     const out = DIMS.filter(d => dims[d.key] !== undefined)
-      .map(d => `<span class="pill dim">${esc(d.label.toLowerCase())}: ${esc(dims[d.key])}</span>`);
+      .map(d => `<span class="pill dim">${esc(d.label.toLowerCase())}: ${esc(
+        Array.isArray(dims[d.key]) ? dims[d.key].join(" / ") : dims[d.key])}</span>`);
     (extraTags || []).forEach(t => out.push(`<span class="pill inert">${esc(t)} · inert</span>`));
     return out.join("");
   }
@@ -634,57 +687,38 @@
   }
 
   /* ====================== screens shared by variants ====================== */
-  /* --- ad-hoc query adjustment: "actually, #while-out tasks are fine right now" --- */
+  /* --- "Matching on": reality surprised you, so say so. Writes straight through. --- */
   function qText(d, q) { return d.type === "ord" ? q[d.key] : q[d.key].join(" / "); }
-  function isAdjusted(k) { return !!(S.adjust && S.adjust[k] !== undefined); }
 
   function adjuster(w, q) {
-    const changed = !!S.adjust && Object.keys(S.adjust).length > 0;
-    const baseN = TASKS.filter(t => matchesQ(t, w ? baseQuery(w) : openQuery())).length;
-    const nowN = TASKS.filter(t => matchesQ(t, q)).length;
+    const ov = OVERRIDES.find(o => o.date === S.date);
     return `<div class="adjust">
       <button class="adjust-h" data-act="adjustopen" aria-expanded="${S.adjustOpen}">
         <span class="lbl">Matching on</span>
-        <span class="adjust-sum">${DIMS.map(d =>
-          `<span class="pill ${isAdjusted(d.key) ? "now" : "dim"}">${esc(d.label.toLowerCase())}: ${esc(qText(d, q))}</span>`).join("")}</span>
+        <span class="adjust-sum">${DIMS.map(d => {
+          const declared = w && (d.type === "ord" ? w.dims[d.key] !== undefined : declaredOf(w, d).length);
+          return `<span class="pill ${declared ? "now" : "dim"}">${esc(d.label.toLowerCase())}: ${esc(qText(d, q))}</span>`;
+        }).join("")}</span>
         <span class="chev">${S.adjustOpen ? "⌃" : "⌄"}</span>
       </button>
       ${S.adjustOpen ? `<div class="adjust-body">
         ${DIMS.map(d => `<div class="lbl">${esc(d.label)}${d.type === "ord"
             ? ` <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— ceiling</span>` : ""}</div>
-          <div class="chipset">${d.values.map(v => `<button data-act="qtoggle" data-k="${d.key}" data-v="${esc(v)}"
-            aria-pressed="${d.type === "ord" ? q[d.key] === v : q[d.key].includes(v)}">${esc(v)}${
-              d.type === "cat" && v === d.winDef ? ` <span style="opacity:.6;font-size:11px">default</span>` : ""}</button>`).join("")}</div>`).join("")}
+          <div class="chipset">${d.values.map(v => {
+            const on = d.type === "ord" ? q[d.key] === v : q[d.key].includes(v);
+            const locked = d.type === "cat" && v === d.winDef;
+            return `<button data-act="qtoggle" data-k="${d.key}" data-v="${esc(v)}" aria-pressed="${on}"
+              ${locked ? `disabled style="opacity:.75"` : ""}>${esc(v)}${
+              locked ? ` <span style="opacity:.6;font-size:11px">always</span>` : ""}</button>`;
+          }).join("")}</div>`).join("")}
         <div class="note" style="padding:12px 0 2px">Switching a value <b>on</b> lifts its exclude and boosts it —
-          the same thing the window itself does. The default is on unless you switch it off, and switching the
-          <i>default</i> off is the one move that goes beyond what a window can express.</div>
+          exactly what the window itself does. The default can't be switched off: no window can express its
+          absence, so nothing could be written. Narrow with the energy ceiling instead.</div>
       </div>` : ""}
-      ${changed ? `<div class="adjust-bar">
-        <span><b>${nowN}</b> fit, was ${baseN}</span>
-        <button class="btn ghost" style="padding:6px 10px" data-act="qreset">Reset</button>
-        <button class="btn" style="padding:6px 12px" data-act="sheet" data-kind="keep">Keep this…</button>
+      ${ov && ov.adjusted ? `<div class="adjust-bar">
+        <span>${esc(fmtShort(curDate()))} is now an override — <b>${esc(ov.label)}</b></span>
       </div>` : ""}
     </div>`;
-  }
-
-  function keepSheet() {
-    const w = findWindow(S.param);
-    const used = PATTERNS.filter(p => p.days.some(t => tpl(t).windows.some(x => x.name === w.name)));
-    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
-      <div class="grabber"></div>
-      <div class="sheet-h"><h2>Keep this change?</h2>
-        <button class="icon" data-act="closesheet" style="background:none;border:none;color:var(--accent)">Cancel</button></div>
-      <div class="note" style="padding-top:12px">By default the adjustment is <b>for this fire only</b> — it dies
-        with the reminder at end of day. Making it stick is the same fork the model already draws.</div>
-      <div class="stack">
-        <button class="btn wide" data-act="closesheet">Just ${esc(fmtShort(curDate()))}<br>
-          <span style="font-size:12px;color:var(--ink-2);font-weight:400">Writes an override — a copied one-off day. Nothing else changes.</span></button>
-        <button class="btn wide" data-act="closesheet">Every “${esc(w.name)}”<br>
-          <span style="font-size:12px;color:var(--ink-2);font-weight:400">Edits the day template. Propagates to ${used.length} pattern${used.length === 1 ? "" : "s"}.</span></button>
-      </div>
-      <div class="note">Reality vs assumption, decided at the moment you noticed the difference — which is the
-        only moment you actually know which one it was.</div>
-    </div></div>`;
   }
 
   function landingScreen(back, backLabel) {
@@ -704,20 +738,24 @@
           <button class="btn ghost" data-act="go" data-screen="${back}">Done for now</button>
         </div>
         ${footerBar()}
-        <div class="note">Snooze re-matches at the new time with current task state. <b>Open question:</b> does it
-          re-match on the window's own values, or on the adjustment you just made?</div>
+        <div class="note">Adjusting above edits <b>this date's</b> copy of the window, so a snooze re-matches
+          against the change — <i>"the original window's dimension values"</i> stays literally true, because the
+          window's values are what moved.</div>
       </div>`;
   }
 
   function fitsNowScreen(back, backLabel) {
-    const live = liveWindow();
+    const live = S.adhoc ? findWindow(S.adhoc) : liveWindow();
     const q = effQuery(live);
     const list = matchesForQ(q, live);
     return nav("Right now", { back, backLabel,
-      sub:live ? `Starting from ${live.name}` : "No window open — starting wide" }) + `
+      sub:live ? `${live.adhoc ? "Unplanned window · " : ""}${live.s}–${live.e}` : "Nothing open" }) + `
       <div class="scroll">
-        <div class="note">Asked for on purpose, not pushed. ${live ? `Seeded from the open window, then yours to bend.`
-          : `Nothing is open, so this starts from the window-side defaults and nothing else.`}</div>
+        <div class="note">${live && live.adhoc
+          ? `Reality handed you a pocket of time, so it is <b>recorded as a real window</b> running to your next
+             commitment. It never fires — you are already here.`
+          : live ? `Starting from the open window, then yours to bend.`
+          : `Nothing is open. Widen something below and this becomes a real window on today.`}</div>
         ${adjuster(live, q)}
         <div class="list">${list.length ? list.map(t => taskRow(t)).join("")
           : `<div class="empty">Nothing fits that.<br>Try widening a dimension above.</div>`}</div>
@@ -956,7 +994,8 @@
               ${DIMS.map(d => `<div class="lbl">${esc(d.label)}
                 <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— unset means "${esc(d.winDef)}"</span></div>
                 <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="${t.id}" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
-                  aria-pressed="${(w.dims[d.key] ?? d.winDef) === v}">${esc(v)}</button>`).join("")}</div>`).join("")}
+                  aria-pressed="${d.type === "ord" ? (w.dims[d.key] ?? d.winDef) === v
+                    : declaredOf(w, d).includes(v) || v === d.winDef}">${esc(v)}</button>`).join("")}</div>`).join("")}
             </div>
             <div class="sec-h">Right now this would surface</div>
             <div class="list">${matchesFor(w).slice(0, 4).map(t2 => taskRow(t2, { dims:false })).join("")
@@ -1200,8 +1239,8 @@
   /* ====================== variant D — C, merged per feedback ====================== */
   const D = {
     name:"Moment-first, merged",
-    tagline:"C's calm, A's Today layout, and a tab bar back at the bottom. Adds ad-hoc query adjustment to both "
-      + "the reminder landing page and \"Right now\" — the thing none of the first three could do.",
+    tagline:"C's calm, A's Today layout, and a tab bar back at the bottom. \"Matching on\" lets you say reality "
+      + "surprised you; the change writes through to today, and between windows it mints the window you are standing in.",
     screens:{
       home() {
         const sh = dayShape(today), live = liveWindow(), evs = eventsOn(today);
@@ -1260,7 +1299,6 @@
       else if (S.sheet.kind === "pattern") html += patternSheet();
       else if (S.sheet.kind === "overlap") html += eventOverlapSheet();
       else if (S.sheet.kind === "win") html += winSheet(S.sheet.param);
-      else if (S.sheet.kind === "keep") html += keepSheet();
     }
     document.getElementById("device").innerHTML = html;
 
@@ -1342,25 +1380,18 @@
       case "closesheet": sheet(null); break;
       case "filter": S.filter = el.dataset.v; render(); break;
       case "adjustopen": S.adjustOpen = !S.adjustOpen; render(); break;
-      case "qreset": S.adjust = null; render(); break;
       case "qtoggle": {
-        const k = el.dataset.k, v = el.dataset.v, d = dim(k);
-        const w = S.screen === "fitsnow" ? liveWindow() : findWindow(S.param);
-        const q = effQuery(w), base = w ? baseQuery(w) : openQuery();
-        S.adjust = S.adjust || {};
-        if (d.type === "ord") {
-          S.adjust[k] = v;
+        const d = dim(el.dataset.k);
+        let w;
+        if (S.screen === "fitsnow") {
+          const live = S.adhoc ? findWindow(S.adhoc) : liveWindow();
+          // nothing open? then this gesture mints the window it is talking about
+          w = live ? overrideWindow(S.date, live.name) : adHocWindow(S.date);
+          S.adhoc = w.name;
         } else {
-          const set = q[k].slice(), i = set.indexOf(v);
-          if (i >= 0) set.splice(i, 1); else set.push(v);
-          S.adjust[k] = set;
+          w = overrideWindow(S.date, S.param);
         }
-        // back to the window's own value? then it isn't an adjustment any more
-        const same = d.type === "ord"
-          ? S.adjust[k] === base[k]
-          : S.adjust[k].length === base[k].length && S.adjust[k].every(x => base[k].includes(x));
-        if (same) delete S.adjust[k];
-        if (!Object.keys(S.adjust).length) S.adjust = null;
+        toggleDim(w, d, el.dataset.v);
         render(); break;
       }
       case "setdate": S.date = el.dataset.v; render(); break;
@@ -1374,8 +1405,7 @@
       }
       case "setwdim": {
         const w = el.dataset.t ? tpl(el.dataset.t).windows.find(x => x.name === el.dataset.w) : findWindow(el.dataset.w);
-        const k = el.dataset.k, v = el.dataset.v;
-        if (w.dims[k] === v) delete w.dims[k]; else w.dims[k] = v;
+        toggleDim(w, dim(el.dataset.k), el.dataset.v);
         render(); break;
       }
       case "process": { const t = task(+el.dataset.id); const v = el.dataset.v; t.dur = v === "Longer" ? "Longer" : +v; t.st = "Active"; render(); break; }
