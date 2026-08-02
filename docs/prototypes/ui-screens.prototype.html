@@ -359,17 +359,38 @@
   const fmtDate = d => `${WDL[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
   const fmtShort = d => `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
 
+  // Two algebras. Categorical: window values OR, task values AND — i.e. the task's set must
+  // be a SUBSET of the window's. Absence is the empty set, which is why categorical
+  // dimensions need no defaults at all. Ordinal: the window carries a ceiling.
   const DIMS = [
-    { key:"location", label:"Location",      type:"cat",  taskDef:"home",   winDef:"home",   any:"anywhere",
-      values:["home","desk","garage","outside","out & about","anywhere"] },
-    { key:"who",      label:"With whom",     type:"cat",  taskDef:"nobody", winDef:"nobody", any:"anyone",
-      values:["nobody","Sam","Ana","the kids","anyone"] },
-    { key:"energy",   label:"Mental energy", type:"ord",  taskDef:"low",    winDef:"low",
+    { key:"location", label:"Location",  type:"cat", values:["home","desk","garage","outside","out & about"] },
+    { key:"who",      label:"With whom", type:"cat", values:["Sam","Ana","the kids"] },
+    { key:"weather",  label:"Weather",   type:"cat", values:["dry","fine"] },
+    { key:"energy",   label:"Mental energy", type:"ord", taskDef:"low", winDef:"low",
       values:["low","medium","high"] },
-    { key:"weather",  label:"Weather",       type:"cat",  taskDef:"any",    winDef:"any",    any:"any",
-      values:["any","dry","fine"] },
   ];
   const dim = k => DIMS.find(d => d.key === k);
+
+  // A task's or window's values on one axis, always as an array.
+  function valuesOf(holder, d) {
+    const v = holder.dims[d.key];
+    if (v === undefined) return [];
+    return Array.isArray(v) ? v.slice() : [v];
+  }
+  function setValues(holder, d, vals) {
+    if (!vals.length) delete holder.dims[d.key];
+    else holder.dims[d.key] = vals.length === 1 ? vals[0] : vals;
+  }
+  function toggleDim(holder, d, v, def) {
+    if (d.type === "ord") {
+      if (v === def) delete holder.dims[d.key]; else holder.dims[d.key] = v;
+      return;
+    }
+    const vals = valuesOf(holder, d);
+    const i = vals.indexOf(v);
+    if (i >= 0) vals.splice(i, 1); else vals.push(v);
+    setValues(holder, d, vals);
+  }
 
   const DURS = [2,10,30,60,"Longer"];
   const durMins = d => d === "Longer" ? 150 : d;
@@ -380,6 +401,9 @@
       notes:"Ask for the fixed-rate sheet before the renewal date.", dims:{ energy:"high", location:"desk" } },
     { id:2, t:"Fix the gutter bracket", dur:30, st:"Active", dims:{ location:"outside", weather:"dry", energy:"medium" } },
     { id:3, t:"Email Sam about the tournament car share", dur:2, st:"Active", dims:{ energy:"low" }, tags:["#sam"] },
+    // task-side AND: needs a window carrying BOTH people
+    { id:11, t:"Settle the summer trip dates with Sam and Ana", dur:30, st:"Active",
+      dims:{ who:["Sam","Ana"], energy:"medium" } },
     { id:4, t:"Oil the bike chain", dur:10, st:"Active", dims:{ location:"garage" } },
     { id:5, t:"Draft the Q3 numbers", dur:60, st:"Active", due:iso(dAdd(9)), dims:{ energy:"high", location:"desk" } },
     { id:6, t:"Order a new karate belt", dur:2, st:"Active", dims:{} },
@@ -407,7 +431,7 @@
     ], protos:[] },
     { id:"vol", name:"Volleyball Tuesday", windows:[
       { name:"Morning admin",  s:"07:00", e:"08:00", dims:{ location:"desk", energy:"high" } },
-      { name:"Sports hall wait", s:"18:30", e:"20:00", dims:{ location:"out & about", energy:"low", who:"anyone" } },
+      { name:"Sports hall wait", s:"18:30", e:"20:00", dims:{ location:"out & about", energy:"low" } },
       { name:"Short evening",  s:"21:15", e:"22:00", dims:{ location:"home", energy:"low" } },
     ], protos:[] },
     { id:"tour", name:"Tournament Saturday", windows:[
@@ -497,82 +521,59 @@
   const mins = hhmm => (+hhmm.slice(0,2)) * 60 + (+hhmm.slice(3));
   const winMins = w => mins(w.e) - mins(w.s);
 
-  // A window's declared values on a categorical axis. Stored as a bare string when there
-  // is one, an array when there are several — the adjuster can produce several.
-  function declaredOf(w, d) {
-    const v = w.dims[d.key];
-    if (v === undefined) return [];
-    return (Array.isArray(v) ? v.slice() : [v]).filter(x => x !== d.winDef);
-  }
-  // ADDITIVE, not replacing: the window-side default is never excluded, and a declared
-  // non-default value LIFTS the exclude for that value (and boosts it). So the admitted
-  // set is {window default} ∪ {declared} — derived at query time, never stored as a set.
+  // Duration's window-side ceiling is DERIVED from the window's length — nothing to
+  // declare, nothing to keep in sync, and it can never contradict the clock.
   function baseQuery(w) {
     const q = { mins:winMins(w), label:w.name };
-    for (const d of DIMS) {
-      if (d.type === "ord") { q[d.key] = w.dims[d.key] ?? d.winDef; continue; }
-      q[d.key] = [d.winDef, ...declaredOf(w, d)];
-    }
+    for (const d of DIMS) q[d.key] = d.type === "ord" ? (w.dims[d.key] ?? d.winDef) : valuesOf(w, d);
     return q;
   }
   function openQuery() {
     const q = { mins:600, label:"Right now" };
-    for (const d of DIMS) q[d.key] = d.type === "ord" ? d.winDef : [d.winDef];
+    for (const d of DIMS) q[d.key] = d.type === "ord" ? d.winDef : [];
     return q;
   }
   const effQuery = w => w ? baseQuery(w) : openQuery();
-
-  // Toggling a value edits the window itself — there is no transient layer any more.
-  // The window-side default can't be switched off: no window can express its absence.
-  function toggleDim(w, d, v) {
-    if (d.type === "ord") {
-      if (v === d.winDef) delete w.dims[d.key]; else w.dims[d.key] = v;
-      return;
-    }
-    if (v === d.winDef) return;
-    const decl = declaredOf(w, d);
-    const i = decl.indexOf(v);
-    if (i >= 0) decl.splice(i, 1); else decl.push(v);
-    if (!decl.length) delete w.dims[d.key];
-    else w.dims[d.key] = decl.length === 1 ? decl[0] : decl;
-  }
   function matchesQ(t, q) {
     if (t.st !== "Active") return false;
-    if (durMins(t.dur) > q.mins) return false;
+    if (durMins(t.dur) > q.mins) return false;          // duration ceiling, derived
     for (const d of DIMS) {
-      const tv = t.dims[d.key] ?? d.taskDef;
       if (d.type === "ord") {
+        const tv = t.dims[d.key] ?? d.taskDef;
         if (d.values.indexOf(tv) > d.values.indexOf(q[d.key])) return false;
       } else {
-        const set = q[d.key];
-        if (set.includes(d.any) || tv === d.any) continue;
-        if (!set.includes(tv)) return false;
+        // task values AND, window values OR  ==  task set ⊆ window set
+        if (!valuesOf(t, d).every(v => q[d.key].includes(v))) return false;
       }
     }
     return true;
   }
   const matches = (t, w) => matchesQ(t, baseQuery(w));
-  function boost(t, w) {
-    let n = 0;
-    for (const d of DIMS) {
-      const tv = t.dims[d.key] ?? d.taskDef;
-      if (d.type === "ord") {
-        const wv = w.dims[d.key];
-        if (wv !== undefined && wv !== d.winDef && tv === wv) n++;
-      } else if (declaredOf(w, d).includes(tv)) n++;
-    }
+
+  // SCARCITY: how many windows in the active pattern's week would admit this task.
+  // Fewest first — the rarest opportunity is the one worth spending on. Replaces the
+  // old per-dimension boost, and unifies both algebras: long, high-energy and
+  // oddly-located windows are all simply rare.
+  let _scarce = new Map();
+  function weekWindows() { return pattern().days.flatMap(tid => tpl(tid).windows); }
+  function scarcity(t) {
+    if (_scarce.has(t.id)) return _scarce.get(t.id);
+    const n = weekWindows().filter(w => matchesQ(t, baseQuery(w))).length;
+    _scarce.set(t.id, n);
     return n;
   }
-  function rank(list, w) {
+  const orphans = () => TASKS.filter(t => t.st === "Active" && scarcity(t) === 0);
+
+  function rank(list) {
     return list.sort((a, b) => {
       const ad = a.due ? new Date(a.due) - today : 1e9;
       const bd = b.due ? new Date(b.due) - today : 1e9;
       if (ad !== bd) return ad - bd;
-      return (w ? boost(b, w) - boost(a, w) : 0);
+      return scarcity(a) - scarcity(b);
     });
   }
-  const matchesFor = w => rank(TASKS.filter(t => matchesQ(t, baseQuery(w))), w);
-  const matchesForQ = (q, w) => rank(TASKS.filter(t => matchesQ(t, q)), w);
+  const matchesFor = w => rank(TASKS.filter(t => matchesQ(t, baseQuery(w))));
+  const matchesForQ = q => rank(TASKS.filter(t => matchesQ(t, q)));
   const countBy = st => TASKS.filter(t => t.st === st).length;
 
   // dated events surface in the footer for the 3 days up to and including the day
@@ -636,6 +637,10 @@
           ${t.dur ? `<span class="pill dur">${durLabel(t.dur)}</span>` : `<span class="pill due">no duration</span>`}
           ${duePill(t)}
           ${opts.dims === false ? "" : dimPills(t.dims, t.tags)}
+          ${t.st !== "Active" ? ""
+            : scarcity(t) === 0 ? `<span class="pill due">never fits this pattern</span>`
+            : scarcity(t) <= 3 ? `<span class="pill now">rare · ${scarcity(t)} window${scarcity(t) === 1 ? "" : "s"}/wk</span>`
+            : ""}
         </div>
       </button>
       <span class="chev">›</span>
@@ -646,6 +651,7 @@
     return `<div class="footer-count">
       <span class="pill">${countBy("Unprocessed")} to process</span>
       <span class="pill">${countBy("Stale")} stale</span>
+      ${orphans().length ? `<span class="pill due">${orphans().length} never fit any window</span>` : ""}
       ${ev.map(e => `<span class="pill now">${esc(e.name)} · ${WDL[new Date(e.date + "T00:00:00").getDay()]}</span>`).join("")}
     </div>`;
   }
@@ -696,7 +702,7 @@
       <button class="adjust-h" data-act="adjustopen" aria-expanded="${S.adjustOpen}">
         <span class="lbl">Matching on</span>
         <span class="adjust-sum">${DIMS.map(d => {
-          const declared = w && (d.type === "ord" ? w.dims[d.key] !== undefined : declaredOf(w, d).length);
+          const declared = w && (d.type === "ord" ? w.dims[d.key] !== undefined : valuesOf(w, d).length);
           return `<span class="pill ${declared ? "now" : "dim"}">${esc(d.label.toLowerCase())}: ${esc(qText(d, q))}</span>`;
         }).join("")}</span>
         <span class="chev">${S.adjustOpen ? "⌃" : "⌄"}</span>
@@ -706,7 +712,7 @@
             ? ` <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— ceiling</span>` : ""}</div>
           <div class="chipset">${d.values.map(v => {
             const on = d.type === "ord" ? q[d.key] === v : q[d.key].includes(v);
-            const locked = d.type === "cat" && v === d.winDef;
+            const locked = false;
             return `<button data-act="qtoggle" data-k="${d.key}" data-v="${esc(v)}" aria-pressed="${on}"
               ${locked ? `disabled style="opacity:.75"` : ""}>${esc(v)}${
               locked ? ` <span style="opacity:.6;font-size:11px">always</span>` : ""}</button>`;
@@ -724,7 +730,7 @@
   function landingScreen(back, backLabel) {
     const w = findWindow(S.param);
     const q = effQuery(w);
-    const list = matchesForQ(q, w);
+    const list = matchesForQ(q);
     const snoozeMin = Math.min(30, Math.max(5, Math.round(winMins(w) * .25)));
     return nav(w.name, { back, backLabel, sub:`${w.s}–${w.e} · ${fmtShort(curDate())}` }) + `
       <div class="scroll">
@@ -747,7 +753,7 @@
   function fitsNowScreen(back, backLabel) {
     const live = S.adhoc ? findWindow(S.adhoc) : liveWindow();
     const q = effQuery(live);
-    const list = matchesForQ(q, live);
+    const list = matchesForQ(q);
     return nav("Right now", { back, backLabel,
       sub:live ? `${live.adhoc ? "Unplanned window · " : ""}${live.s}–${live.e}` : "Nothing open" }) + `
       <div class="scroll">
@@ -786,10 +792,10 @@
         <div class="sec-h">Tags</div>
         <div class="stack" style="padding-top:4px">
           ${DIMS.map(d => `
-            <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— unset means "${esc(d.taskDef)}"</span></div>
+            <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— ${d.type === "ord" ? `unset means &quot;${esc(d.taskDef)}&quot;` : "all of these must be true of the window"}</span></div>
             <div class="chipset">${d.values.map(v =>
               `<button data-act="setdim" data-id="${t.id}" data-k="${d.key}" data-v="${esc(v)}"
-                 aria-pressed="${(t.dims[d.key] ?? d.taskDef) === v}">${esc(v)}</button>`).join("")}</div>`).join("")}
+                 aria-pressed="${d.type === "ord" ? (t.dims[d.key] ?? d.taskDef) === v : valuesOf(t, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
           ${(t.tags || []).length ? `<div class="lbl">Unresolved</div><div class="chipset">
             ${t.tags.map(x => `<span class="pill inert">${esc(x)} · kept but inert</span>`).join("")}</div>` : ""}
         </div>
@@ -804,13 +810,25 @@
       <div class="scroll">
         <div class="list">${DIMS.map(d => `<div class="row"><div class="body">
           <div class="title">${esc(d.label)}</div>
-          <div class="meta"><span class="pill">${d.type === "ord" ? "ordinal" : "categorical"}</span>
-            <span class="pill dim">task default: ${esc(d.taskDef)}</span>
-            <span class="pill dim">window default: ${esc(d.winDef)}</span></div>
+          <div class="meta"><span class="pill">${d.type === "ord" ? "ordinal — ceiling" : "categorical — subset"}</span>
+            ${d.type === "ord"
+              ? `<span class="pill dim">task default: ${esc(d.taskDef)}</span>
+                 <span class="pill dim">window default: ${esc(d.winDef)}</span>`
+              : `<span class="pill dim">no defaults — absence is the empty set</span>`}</div>
           <div class="meta">${d.values.map(v => `<span class="pill">${esc(v)}</span>`).join("")}</div>
-        </div></div>`).join("")}</div>
-        <div class="note">There is deliberately <b>no UI for managing dimensions</b>. Adding one is a code change.
-          This screen exists so a wrong reminder can be debugged — the two defaults are otherwise invisible.</div>
+        </div></div>`).join("")}
+        <div class="row"><div class="body">
+          <div class="title">Duration</div>
+          <div class="meta"><span class="pill">ordinal — ceiling</span>
+            <span class="pill dim">window value derived from its length</span></div>
+          <div class="meta">${DURS.map(v => `<span class="pill">${durLabel(v)}</span>`).join("")}</div>
+        </div></div></div>
+        <div class="note">Two algebras. <b>Ordinal</b> axes compare a task against the window's ceiling.
+          <b>Categorical</b> axes ask whether the task's values are a <b>subset</b> of the window's — window
+          values OR together, task values AND together. Absence is the empty set, which is why categorical
+          axes need no defaults: an untagged task is a subset of everything.</div>
+        <div class="note">There is deliberately <b>no UI for managing dimensions</b>. Adding one is a code
+          change. This screen exists so a wrong reminder can be debugged.</div>
       </div>`;
   }
 
@@ -992,10 +1010,10 @@
             <div class="sec-h">What can be done here</div>
             <div class="stack" style="padding-top:4px">
               ${DIMS.map(d => `<div class="lbl">${esc(d.label)}
-                <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— unset means "${esc(d.winDef)}"</span></div>
+                <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— ${d.type === "ord" ? `ceiling, unset means &quot;${esc(d.winDef)}&quot;` : "any one of these is enough"}</span></div>
                 <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="${t.id}" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
                   aria-pressed="${d.type === "ord" ? (w.dims[d.key] ?? d.winDef) === v
-                    : declaredOf(w, d).includes(v) || v === d.winDef}">${esc(v)}</button>`).join("")}</div>`).join("")}
+                    : valuesOf(w, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
             </div>
             <div class="sec-h">Right now this would surface</div>
             <div class="list">${matchesFor(w).slice(0, 4).map(t2 => taskRow(t2, { dims:false })).join("")
@@ -1291,6 +1309,7 @@
 
   /* ============================== render ============================== */
   function render() {
+    _scarce = new Map();          // windows, tasks and the pattern all move under us
     const V = VARIANTS[S.variant] || A;
     const fn = V.screens[S.screen] || V.screens.home;
     let html = fn();
@@ -1345,7 +1364,7 @@
         <div style="display:flex;gap:9px"><input class="field" type="time" value="${w.s}"><input class="field" type="time" value="${w.e}"></div>
         ${DIMS.map(d => `<div class="lbl">${esc(d.label)}</div>
           <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
-            aria-pressed="${(w.dims[d.key] ?? d.winDef) === v}">${esc(v)}</button>`).join("")}</div>`).join("")}
+            aria-pressed="${d.type === "ord" ? (w.dims[d.key] ?? d.winDef) === v : valuesOf(w, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
       </div>
       <div class="note"><b>${matchesFor(w).length}</b> tasks fit as configured.
         Saving this on a future date writes an override for that date alone.</div>
@@ -1391,7 +1410,7 @@
         } else {
           w = overrideWindow(S.date, S.param);
         }
-        toggleDim(w, d, el.dataset.v);
+        toggleDim(w, d, el.dataset.v, d.winDef);
         render(); break;
       }
       case "setdate": S.date = el.dataset.v; render(); break;
@@ -1399,13 +1418,14 @@
       case "setdur": { const t = task(+el.dataset.id); const v = el.dataset.v; t.dur = v === "Longer" ? "Longer" : +v; render(); break; }
       case "setst": { task(+el.dataset.id).st = el.dataset.v; render(); break; }
       case "setdim": {
-        const t = task(+el.dataset.id), k = el.dataset.k, v = el.dataset.v;
-        if (t.dims[k] === v) delete t.dims[k]; else t.dims[k] = v;
+        const d = dim(el.dataset.k);
+        toggleDim(task(+el.dataset.id), d, el.dataset.v, d.taskDef);
         render(); break;
       }
       case "setwdim": {
         const w = el.dataset.t ? tpl(el.dataset.t).windows.find(x => x.name === el.dataset.w) : findWindow(el.dataset.w);
-        toggleDim(w, dim(el.dataset.k), el.dataset.v);
+        const d = dim(el.dataset.k);
+        toggleDim(w, d, el.dataset.v, d.winDef);
         render(); break;
       }
       case "process": { const t = task(+el.dataset.id); const v = el.dataset.v; t.dur = v === "Longer" ? "Longer" : +v; t.st = "Active"; render(); break; }
