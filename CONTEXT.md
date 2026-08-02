@@ -324,23 +324,50 @@ drifts to High — and a field that only works if it is groomed will be wrong.
 
 ### Scarcity
 
-> **How many Availability Windows in the active Pattern's week would admit this Task. Fewest first.**
+> **How many Availability Windows *ahead of now* would admit this Task. Fewest first.**
 
-The governing idea is **spend the rarest opportunity**. A Task that only one Window all week can
-accommodate should outrank one that fits eighteen — you will get another chance at the second today.
+The governing idea is **spend the rarest opportunity**. A Task that only one Window can accommodate
+should outrank one that fits eighteen — you will get another chance at the second today.
 
 Scarcity replaces an earlier rule that ranked by *how many Dimensions the Window positively matched*,
 which counted matches without ever justifying why a count should mean importance. Scarcity also
 **unifies the two algebras**: long Windows, high-energy Windows and oddly-located Windows are all
 simply rare, so nothing needs special-casing per axis.
 
-It is computed against the **active Pattern**, so it is a claim about a typical week rather than about
-today specifically, and it moves whenever Windows, Day templates or the active Pattern change.
+#### The horizon
 
-**Orphan Task** — a Task whose scarcity is **zero**: no Window in the active Pattern can ever admit it.
-It will never surface, and nothing else in the system would say so. Orphans are surfaced as a count
-alongside `Unprocessed` and `Stale`. This falls out of the scarcity computation for free and is the
-only defence against the tagging drift described under **Dimension**.
+**A rolling `min(7 days, time to Deadline)`, measured from now** — *not* the Pattern's Sun–Sat week.
+
+- Without a Deadline it is a true rolling 7 × 24h, running to the same clock time eight days out.
+  A once-a-week opportunity is therefore counted **exactly once** whatever hour you ask.
+- With a Deadline it runs to the end of that day, so the number reads *"3 chances before it is due"*.
+
+Two reasons for rolling rather than a fixed week. The small one: a fixed week is a lie by Friday
+afternoon, when half its Windows are already spent. The large one: **computing a rolling horizon means
+walking real dates, which applies Overrides and Events.** A Pattern is deliberately never reified into
+a calendar, so a Pattern-week count is structurally blind to the fact that *this* week is unusual —
+a travel-day Override can remove the only Window that admits a Task, and a Pattern-week count would
+still confidently report "1 this week" and rank that Task first.
+
+Scarcity therefore moves with the clock as well as with Windows, Day templates, Overrides, Events and
+the active Pattern.
+
+#### Two kinds of zero
+
+They look identical to the user and mean opposite things, so they are distinguished by also computing
+the Pattern-week count:
+
+- **Orphan Task** — no Window in the active Pattern can *ever* admit it. Something is malformed:
+  either the Task carries a Tag nothing declares, or the schedule is missing a Window. Orphans surface
+  as a count alongside `Unprocessed` and `Stale`, and are the only defence against the tagging drift
+  described under **Dimension**.
+- **None in this stretch** — normally doable, but every admitting Window falls outside the horizon,
+  usually because an Override or Event displaced it. **Nothing is wrong**; the Task should simply not
+  be ranked as though this were its big chance.
+
+> **Open:** with the horizon now Deadline-bounded, scarcity has absorbed much of what *Deadline
+> urgency* was doing as the primary sort key. Whether the two collapse into a single key is left to
+> the matching-and-selection ticket, which owns ranking. Both are still listed above.
 
 **Age is not a ranking input.** Older Tasks are lower-value, but the `Stale` gate already encodes that
 judgement. Applying it a second time as a ranking penalty would double-count *and* be self-fulfilling:

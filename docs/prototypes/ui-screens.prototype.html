@@ -572,37 +572,62 @@
   }
   const matches = (t, w) => matchesQ(t, baseQuery(w));
 
-  // SCARCITY: how many windows in the active pattern's week would admit this task.
-  // Fewest first — the rarest opportunity is the one worth spending on. Replaces the
-  // old per-dimension boost, and unifies both algebras: long, high-energy and
-  // oddly-located windows are all simply rare.
-  let _scarce = new Map();
-  function weekWindows() { return pattern().days.flatMap(tid => tpl(tid).windows); }
-  function scarcity(t) {
-    if (_scarce.has(t.id)) return _scarce.get(t.id);
-    const n = weekWindows().filter(w => matchesQ(t, baseQuery(w))).length;
-    _scarce.set(t.id, n);
-    return n;
-  }
-  const orphans = () => TASKS.filter(t => t.st === "Active" && scarcity(t) === 0);
-
-  // For the authoring screen: answer as if the task were Active, so status doesn't
-  // masquerade as "nothing fits", and name the windows while there are few enough to name.
+  // SCARCITY: how many windows AHEAD would admit this task. Fewest first — the rarest
+  // opportunity is the one worth spending on. Replaces the old per-dimension boost, and
+  // unifies both algebras: long, high-energy and oddly-located windows are all simply rare.
+  //
+  // The horizon is a ROLLING min(7 days, time to deadline) measured from now, not the
+  // pattern's Sun–Sat week. Two reasons: a fixed week is a lie by Friday afternoon, and —
+  // the bigger one — walking real dates applies Overrides and Events, which a Pattern
+  // cannot express because it is deliberately never reified into a calendar (#8).
   const asActive = t => ({ ...t, dims:{ ...t.dims }, st:"Active" });
-  function admittingWindows(t) {
-    const probe = asActive(t), out = new Map();
-    pattern().days.forEach((tid, i) => {
-      tpl(tid).windows.forEach(w => {
-        if (!matchesQ(probe, baseQuery(w))) return;
-        const k = tid + "|" + w.name;
-        if (!out.has(k)) out.set(k, { w, days:[] });
-        out.get(k).days.push(WD[i]);
-      });
-    });
-    return [...out.values()];
+  function horizonDays(t) {
+    if (!t.due) return 7;
+    const d = Math.ceil((new Date(t.due + "T23:59:59") - Date.now()) / DAY);
+    return Math.max(1, Math.min(7, d));
   }
-  const fitCount = t => pattern().days
-    .reduce((n, tid) => n + tpl(tid).windows.filter(w => matchesQ(asActive(t), baseQuery(w))).length, 0);
+  const horizonLabel = t => t.due ? "before due" : "in 7d";
+
+  // Every window in the horizon. Without a deadline this is a true rolling 7 x 24h — it runs
+  // to the same clock time eight days out, so a once-a-week opportunity is counted exactly
+  // once no matter what time of day you ask. With a deadline it runs to the end of that day.
+  function horizonWindows(t) {
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    const rolling = !t.due;
+    const lastDay = rolling ? 7
+      : Math.min(7, Math.max(0, Math.round((new Date(t.due + "T00:00:00") - today) / DAY)));
+    const out = [];
+    for (let i = 0; i <= lastDay; i++) {
+      const d = dAdd(i);
+      for (const w of dayShape(d).windows) {
+        if (i === 0 && mins(w.s) < nowMin) continue;                  // already gone today
+        if (rolling && i === lastDay && mins(w.s) >= nowMin) continue; // past the horizon's end
+        out.push({ d, w });
+      }
+    }
+    return out;
+  }
+  let _ahead = new Map();
+  function admittingAhead(t) {
+    if (_ahead.has(t.id)) return _ahead.get(t.id);
+    const probe = asActive(t);
+    const out = horizonWindows(t).filter(x => matchesQ(probe, baseQuery(x.w)));
+    _ahead.set(t.id, out);
+    return out;
+  }
+  const scarcity = t => admittingAhead(t).length;
+  const nextChance = t => admittingAhead(t)[0] || null;
+  const chanceLabel = c => `${WD[c.d.getDay()]} ${c.w.s} ${c.w.name}`;
+
+  // The pattern-week count, kept only to tell two very different zeros apart:
+  // "never fits this pattern" (malformed) vs "none in this stretch" (just not now).
+  function weekWindows() { return pattern().days.flatMap(tid => tpl(tid).windows); }
+  const structuralFit = t => weekWindows().filter(w => matchesQ(asActive(t), baseQuery(w))).length;
+
+  const orphans = () => TASKS.filter(t => t.st === "Active" && structuralFit(t) === 0);
+
+  // Denominator, over exactly the same horizon.
+  const windowsAhead = t => horizonWindows(t).length;
   // Which single axis, relaxed on its own, would rescue a task nothing can admit?
   function blockingAxes(t) {
     const fixes = d => {
@@ -677,10 +702,12 @@
   function rarityPill(t) {
     if (t.st !== "Active") return "";
     const n = scarcity(t);
-    if (n === 0) return `<span class="pill due">never fits this pattern</span>`;
-    if (n === 1) return `<span class="pill now">only window this week</span>`;
-    if (n <= 3) return `<span class="pill now">rare · ${n} windows/wk</span>`;
-    return `<span class="pill">${n} windows/wk</span>`;
+    if (n === 0) return structuralFit(t) === 0
+      ? `<span class="pill due">never fits this pattern</span>`
+      : `<span class="pill due">none ${horizonLabel(t)}</span>`;
+    if (n === 1) return `<span class="pill now">only chance · ${esc(chanceLabel(nextChance(t)).replace(/ \S+$/, ""))}</span>`;
+    if (n <= 3) return `<span class="pill now">rare · ${n} ${horizonLabel(t)}</span>`;
+    return `<span class="pill">${n} ${horizonLabel(t)}</span>`;
   }
   function duePill(t) {
     if (!t.due) return "";
@@ -832,17 +859,20 @@
 
   // Live answer to "will this ever come up?", recomputed on every property change.
   function fitBar(t) {
-    const n = fitCount(t), tot = weekWindows().length;
-    const which = admittingWindows(t);
-    const blockers = n === 0 ? blockingAxes(t) : [];
+    const ahead = admittingAhead(t), n = ahead.length;
+    const tot = windowsAhead(t), struct = structuralFit(t);
+    const span = t.due ? `before it is due` : `in the next 7 days`;
+    const blockers = struct === 0 ? blockingAxes(t) : [];
     return `<div class="fitbar ${n === 0 ? "zero" : n <= 3 ? "rare" : ""}">
       <span class="n">${n}</span>
       <span class="of">${n === 0
-        ? "windows fit — as written, this can never come up"
-        : `of ${tot} windows this week${n === 1 ? " — its only chance" : ""}`}</span>
-      ${n > 0 && which.length <= 3 ? `<span class="which">${which.map(x =>
-        `<span class="pill dim">${esc(x.w.name)} · ${x.days.join(" ")} ${x.w.s}</span>`).join("")}</span>` : ""}
-      ${n === 0 ? `<span class="which">${blockers.length
+        ? `of ${tot} windows ${span} fit this`
+        : `of ${tot} windows ${span}${n === 1 ? " — its only chance" : ""}`}</span>
+      ${n > 0 ? `<span class="which">Next: <b>${esc(chanceLabel(ahead[0]))}</b>${
+        n > 1 && n <= 3 ? ` · then ${ahead.slice(1).map(c => esc(chanceLabel(c))).join(" · ")}` : ""}</span>` : ""}
+      ${n === 0 && struct > 0 ? `<span class="which">Normally <b>${struct}</b> a week, but an override or event
+        has taken them all out of this stretch. Nothing is wrong with the task.</span>` : ""}
+      ${struct === 0 ? `<span class="which">${blockers.length
         ? `No window declares ${blockers.map(b => `<b>${esc(b)}</b>`).join(" or ")} — relax one, or declare it on a window`
         : `No single property is to blame; the combination has no home in this pattern`}</span>` : ""}
       ${t.st !== "Active" ? `<span class="which">Counted as if <b>Active</b> — it is <b>${esc(t.st)}</b>, so it is not being matched at all right now.</span>` : ""}
@@ -1389,7 +1419,7 @@
 
   /* ============================== render ============================== */
   function render() {
-    _scarce = new Map();          // windows, tasks and the pattern all move under us
+    _ahead = new Map();           // windows, tasks, overrides and the clock all move under us
     const V = VARIANTS[S.variant] || A;
     const fn = V.screens[S.screen] || V.screens.home;
     let html = fn();
