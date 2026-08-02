@@ -464,11 +464,15 @@
   // A query is what matching actually runs against. A window yields one; the landing page
   // may then adjust it for this fire only. Categorical axes hold a SET of values —
   // "carries the value" is set membership, which is what makes ad-hoc widening expressible.
+  // ADDITIVE, not replacing: the window-side default is never excluded, and a declared
+  // non-default value LIFTS the exclude for that value (and boosts it). So the admitted
+  // set is {window default} ∪ {declared} — derived, never stored as a set.
   function baseQuery(w) {
     const q = { mins:winMins(w), label:w.name };
     for (const d of DIMS) {
-      const v = w.dims[d.key] ?? d.winDef;
-      q[d.key] = d.type === "ord" ? v : [v];
+      if (d.type === "ord") { q[d.key] = w.dims[d.key] ?? d.winDef; continue; }
+      const declared = w.dims[d.key];
+      q[d.key] = (declared === undefined || declared === d.winDef) ? [d.winDef] : [d.winDef, declared];
     }
     return q;
   }
@@ -649,10 +653,11 @@
         ${DIMS.map(d => `<div class="lbl">${esc(d.label)}${d.type === "ord"
             ? ` <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— ceiling</span>` : ""}</div>
           <div class="chipset">${d.values.map(v => `<button data-act="qtoggle" data-k="${d.key}" data-v="${esc(v)}"
-            aria-pressed="${d.type === "ord" ? q[d.key] === v : q[d.key].includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
-        <div class="note" style="padding:12px 0 2px">Widening is the common case — you are out and about anyway,
-          or Carrie turned out to be around. Narrowing works too: switch a value off to hide what you can't
-          face right now.</div>
+            aria-pressed="${d.type === "ord" ? q[d.key] === v : q[d.key].includes(v)}">${esc(v)}${
+              d.type === "cat" && v === d.winDef ? ` <span style="opacity:.6;font-size:11px">default</span>` : ""}</button>`).join("")}</div>`).join("")}
+        <div class="note" style="padding:12px 0 2px">Switching a value <b>on</b> lifts its exclude and boosts it —
+          the same thing the window itself does. The default is on unless you switch it off, and switching the
+          <i>default</i> off is the one move that goes beyond what a window can express.</div>
       </div>` : ""}
       ${changed ? `<div class="adjust-bar">
         <span><b>${nowN}</b> fit, was ${baseN}</span>
