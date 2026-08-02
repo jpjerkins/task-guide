@@ -2,8 +2,9 @@
 
 Ubiquitous language for `task-guide`, a single-user opportunistic task reminder system.
 
-Decisions recorded here were settled in [Task property model](https://github.com/jpjerkins/task-guide/issues/2)
-and [Weekly schedule and availability window model](https://github.com/jpjerkins/task-guide/issues/7).
+Decisions recorded here were settled in [Task property model](https://github.com/jpjerkins/task-guide/issues/2),
+[Weekly schedule and availability window model](https://github.com/jpjerkins/task-guide/issues/7),
+and [Override / dated-event model](https://github.com/jpjerkins/task-guide/issues/8).
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -106,9 +107,21 @@ volleyball-season evenings are short. Editing one never propagates to the other.
 
 ### Day template
 
-A **named, reusable set of Availability Windows** — "Ordinary weekday", "Volleyball Tuesday",
-"Tournament Saturday", "Travel day". The unit of substitution: swapping one day of a week means
-pointing that day at a different Day template.
+A **named, reusable day shape** — "Ordinary weekday", "Volleyball Tuesday", "Tournament Saturday",
+"Travel day". It holds a set of Availability Windows and, optionally, **Event prototypes**. The unit
+of substitution: swapping one day of a week means pointing that day at a different Day template.
+
+**Event prototype** — a dateless Event (name + clock times) held by the template, instantiating into
+a real dated **Event** when the template is applied. This is the same relationship a Window already
+has: a Window inside a template is dateless and becomes a per-day instance on application. Prototypes
+let a template record *why* it has its shape — "Band concert night" ends karate at 6:30 because the
+concert prototype sits at 7:00 — instead of carrying an unexplained hole. Instantiated Events detach
+from the prototype, so renaming or moving one edits that date only.
+
+A Day template is used **two different ways**, and the difference is load-bearing:
+
+- **By reference**, in a **Pattern** — the Pattern stores a pointer; edits propagate.
+- **By value**, in an **Override** — the date stores copied Windows; edits never reach it.
 
 ### Pattern
 
@@ -120,6 +133,87 @@ propagation is the point. The risk is handled by visibility, not by prevention: 
 template shows its usage list** ("used by 3 Patterns: Volleyball, Summer, School year") before saving.
 To diverge, clone the template under a new name. There is no versioning and no copy-on-assign.
 
+**A Pattern is an assumption, not a calendar.** It is never reified into dated records. Any future
+date's shape is *computed* on demand from the active Pattern; the only stored dated records are the
+sparse **Overrides** and **Events** layered on top.
+
+A Day template carrying an Event prototype **may** be assigned to a Pattern slot, which generates a
+weekly recurring Event. This is deliberately **not blocked** — several ordinary weekly commitments
+(church, karate) are event-shaped, and a validation rule would foreclose an experiment worth running.
+See **Event** for how recurring Events surface differently from dated ones.
+
+### Override
+
+**A single date whose day shape differs from what the active Pattern assumes.**
+
+> **A Pattern describes the assumption; an Override describes reality.**
+> Editing an assumption must never retroactively rewrite a reality already recorded.
+
+- **The date is the unit.** There is no multi-day Override object — "college kid home for the
+  weekend" is *two* dated Overrides created in one authoring gesture. A date has exactly one shape,
+  so **conflicts are unrepresentable rather than resolved**: no nesting, no precedence rule, no
+  "what wins" edge case. Applying an Override to an already-overridden date is a replacement, and
+  the UI confirms before clobbering.
+- **An Override always stores copied Windows, never a reference.** Applying a named Day template is
+  a **stamp**, not a link — it lays the shape down and the connection ends there. Subsequent edits
+  to that template do not reach the date, and edits to the date do not reach the template or any
+  other date using it.
+- **Per-day variation falls out free.** Each date in a span names its own Day template or its own
+  one-off day; nothing has to express "different on day 3".
+
+**One-off day** — an Override whose Windows belong to that date alone, with no named template behind
+them. Created when an **Event** overlaps an existing Window (see below), or by editing a stamped date
+directly. A one-off day may be **promoted** to a named Day template afterwards; promotion copies the
+shape *outward* and the source date keeps its own copy — it does **not** re-link, because that would
+put a hand-tailored date back under live propagation as a silent side effect of naming something.
+
+Rejected alternatives: a **live diff** ("Ordinary weekday, minus the 6–10pm window") survives template
+edits but becomes nonsense once the referenced Window changes shape, and debugging a wrong reminder
+means replaying a patch mentally. **Copy-on-write** (live until first edit) recovers "fix the
+template, unedited future stamps update", at the price of a date's shape changing while it still
+*looks* assigned, plus a storage model persisting two states of the same thing.
+
+### Event
+
+**A dated, clock-timed thing the user must attend** — a band concert, a trip departure. Not a Task
+and not an Availability Window.
+
+An Event cannot be modelled as a Window: a Window fires only when Tasks match it, so an obligation
+expressed as a Window would be silently swallowed by the restraint mechanism. It cannot be modelled
+as a Task either — every Task in this system is *opportunistic*, and a concert is the opposite:
+fixed time, single obligation, must not be missed.
+
+| Property | Type | Notes |
+|---|---|---|
+| Name | text | "Band concert" |
+| Date | date | Instantiated from a prototype, or entered directly |
+| Start / End | clock times | Bounded span, used for Window overlap resolution |
+| Tags | dimension-qualified | Same mechanism as a Task's — registry resolution on write, unresolved Tags kept but inert |
+
+**Overlap resolution.** Creating an Event that overlaps an existing Window — *even partially* —
+prompts for how to handle that Window: **replace** it, **truncate** it (at either end; truncating the
+start moves the fire time, truncating the end does not), or **split** it around the Event. The result
+is a one-off day for that date. So an Event *generates* an Override — one user action, one question,
+two artifacts.
+
+**Surfacing.** An Event has **no notification of its own**. It appears as a brief note plus weekday
+(**no time** — the weekday is what makes it stick) in the reminder footer, alongside the
+`Unprocessed`/`Stale` counts. Riding an existing channel means an Event costs zero additional pushes.
+
+- **Dated Event** — footer for the **3 days up to and including the day**, and during that span the
+  **first Availability Window of each day fires unconditionally**, matching Tasks or not. That is the
+  guaranteed carrier: without it, three quiet days would surface the obligation nowhere at all.
+  Later Windows keep the normal rule, so a busy day surfaces the Event repeatedly and naturally.
+- **Recurring Event** (instantiated from a prototype in a Pattern slot) — footer **on its own day
+  only**, with **no unconditional firing**. The 3-day runway exists for the irregular thing that would
+  otherwise be forgotten, which a weekly commitment is not. Without this distinction, one weekly
+  prototype would put every day within 3 days of an Event and silently convert the whole system to
+  always-fire.
+
+Rejected: a dedicated lead-time notification per Event — an extra push for something the footer
+already carries. Rejected: firing *every* Window during the 3-day span — up to a dozen Task-less
+pushes per Event, which trains the footer to be swiped away unread.
+
 ### Firing
 
 **Every Availability Window fires at its start time.** There is no per-Window notify flag and no
@@ -129,6 +223,11 @@ Notification restraint comes from a different lever: **if no Tasks match, no not
 Silence is therefore always truthful — no push means nothing fit. This decouples restraint from
 authoring fidelity, so the week can be authored honestly without deleting Windows to quiet the phone
 (which would also destroy a matchable moment).
+
+**"Silence is truthful" is a claim about opportunity, not obligation.** Windows offer opportunities
+and stay silent when nothing fits; **Events** are obligations and always speak. The one exception to
+the rule above follows from that: during the 3 days before a **dated Event**, the day's *first* Window
+fires whether or not Tasks match, because it is carrying the Event's footer. See **Event**.
 
 A Window is **not** re-fired automatically part-way through, however long it is. A second push
 carrying no new information is noise, and it would destroy the truthfulness of silence.
@@ -162,9 +261,15 @@ Rules are per-Dimension only; they do not read other Dimensions' values.
 
 ### Derived-obligation rule
 
-A rule that reads a Tag and produces a **new obligation with its own deadline** — e.g. a Task tagged
-with a person may derive "have them ask off work before the preceding Friday". Neither filter nor
-rank; a third mechanism. Scope and design are open (see the derived-obligation ticket on the map).
+A rule that reads a Tag and produces a **new obligation with its own deadline** — e.g. something
+tagged with a person may derive "have them ask off work before the preceding Friday". Neither filter
+nor rank; a third mechanism. Scope and design are open (see the derived-obligation ticket on the map).
+
+**Events** now carry Tags too, so they are candidate triggers alongside Tasks. Note the asymmetry the
+ticket must resolve: a derived obligation needs **a date to count back from**, which an Event always
+has and a Task has only when it carries a Deadline. What a rule *produces* can be an ordinary **Task
+with a deadline**, re-entering the system through normal matching and ranking — no third notification
+path.
 
 ### Rules generally
 
