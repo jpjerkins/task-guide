@@ -4,7 +4,9 @@ Ubiquitous language for `task-guide`, a single-user opportunistic task reminder 
 
 Decisions recorded here were settled in [Task property model](https://github.com/jpjerkins/task-guide/issues/2),
 [Weekly schedule and availability window model](https://github.com/jpjerkins/task-guide/issues/7),
-and [Override / dated-event model](https://github.com/jpjerkins/task-guide/issues/8).
+[Override / dated-event model](https://github.com/jpjerkins/task-guide/issues/8),
+and [UI scope and screens](https://github.com/jpjerkins/task-guide/issues/12) — which, in the course of
+prototyping, revised the Dimension, Tag, Matching rule and Ranking entries.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -17,9 +19,9 @@ A thing to do. Carries a small set of typed fields plus **Tag** values across **
 |---|---|---|---|
 | Title | text | yes | |
 | Notes | free text | no | A URL or a sentence of context, so it doesn't get crammed into the Title |
-| Duration | bucket — `2` / `10` / `30` / `60` / `Longer` (minutes) | to be `Active` | The one property with no safe default |
+| Duration | bucket — `2` / `10` / `30` / `60` / `Longer` (minutes) | to be `Active` | An **ordinal Dimension**, not a plain field. The one property with no safe default |
 | Status | `Unprocessed` \| `Active` \| `Done` \| `Stale` | yes | Typed field, never a Tag |
-| Tags | dimension-qualified values | no | See **Tag** |
+| Tags | dimension-qualified values; a categorical axis may carry **several** | no | See **Tag** |
 | Deadline | date | no | Ranking input, not a Dimension |
 | Defer | offset relative to Deadline | no | Earliest surface time; detail scoped to issue #10 |
 | Recurrence | — | no | Detail scoped to issue #10 |
@@ -46,44 +48,74 @@ either pile.
 **An axis that both a Task and an Availability Window carry a value on.** Dimensions are the only
 thing matching looks at.
 
-Each Dimension declares, in code:
+**Dimensions do not all work the same way.** There are **two algebras**, and which one a Dimension uses
+determines everything about how it is declared, stored and matched.
 
-- its **value type** — categorical (set membership) or ordinal (comparison),
-- its **task-side default**, applied when the Task carries no value on that axis,
-- its **window-side default**, applied when the Availability Window declares no value on that axis,
-- its **matching rule**.
+#### Categorical Dimensions — subset
 
-**Two defaults, not one.** Both sides of the comparison may be silent, and silence means something
-different on each. Both are chosen as the *least constrained, most common* case for that side, so a
-zero-tag Task and a ten-second Window still match correctly.
+Location, With whom, Weather. Both sides carry a **set** of values.
 
-There is deliberately **no UI for managing Dimensions or their defaults**. Adding one is a code change.
+> **Window values OR together. Task values AND together.**
+> A Task fits when its set on that axis is a **subset** of the Window's.
+
+| Task | Window | Fits? | Why |
+|---|---|---|---|
+| `{}` | `{}` | yes | ∅ ⊆ ∅ — the untagged Task in an unremarkable Window |
+| `{}` | `{garage}` | yes | an untagged Task still fits a garage Window |
+| `{garage}` | `{}` | **no** | the Window said nothing about location |
+| `{garage}` | `{garage, outside}` | yes | the Window ORs |
+| `{Sam, Ana}` | `{Sam}` | **no** | the Task ANDs — Ana isn't there |
+| `{Sam, Ana}` | `{Sam, Ana, the kids}` | yes | both required people are present |
+
+**Categorical Dimensions declare no defaults on either side.** Absence is the empty set, and the empty
+set already does everything a default was doing: ∅ is a subset of everything, so an untagged Task fits
+everywhere, and a Window that declares nothing admits only untagged Tasks. An earlier version of this
+document gave every categorical axis a task-side and window-side default (`Location: home`); no case
+exists where those defaults change an outcome versus absence.
+
+#### Ordinal Dimensions — ceiling
+
+Mental energy, Duration. Each side carries **one** value, and the Window's is a ceiling.
+
+> **Task value ≤ Window value → fits.**
+
+Ordinal Dimensions **do** declare a task-side and a window-side default, applied when that side is
+silent. Both are the least-constrained common case.
+
+**Duration is an ordinal Dimension, not a special field.** Its window-side value is **derived from the
+Window's length** — a 45-minute Window admits the 30-minute bucket and below. Nothing to declare,
+nothing to keep in sync, and it can never contradict the clock.
+
+Each Dimension declares, in code: its **algebra** (categorical or ordinal), its **value set**, and —
+for ordinal axes only — its **two defaults**. There is deliberately **no UI for managing Dimensions**.
+Adding one is a code change.
 
 Known Dimensions (illustrative — the registry is authoritative):
 
-| Dimension | Value type | Default |
+| Dimension | Algebra | Defaults |
 |---|---|---|
-| Location | categorical | home |
-| With whom | categorical | nobody |
-| Mental energy | ordinal | low |
-| Weather | categorical | any |
-| Duration | ordinal | — (required) |
-
-(The table lists task-side defaults; window-side defaults are declared alongside them in the registry.)
-
-Defaults are **per-Dimension**, not global. A blanket "absent means unconstrained" or "absent means
-default" rule gets some axes wrong. Every default is chosen to be the *least constrained, most common*
-case, so an untagged Task correctly lands in ordinary at-home windows — that is why the common case
-carries zero Tags.
+| Location | categorical — subset | none (absence = ∅) |
+| With whom | categorical — subset | none (absence = ∅) |
+| Weather | categorical — subset | none (absence = ∅) |
+| Mental energy | ordinal — ceiling | task `low`, window `low` |
+| Duration | ordinal — ceiling | task: required; window: derived from length |
 
 **Not Dimensions:** Deadline, Defer, Recurrence, Status, age. A Window has no value on those axes,
 so there is nothing to compare against.
+
+**The drift is always toward orphans.** A tagged Task is doable *only* if some Window declares that
+tag. Tags are cheap to add to a Task and Windows are edited rarely, so tagging outruns declaring —
+and switching the active Pattern can orphan a whole class of Tasks at once. See **Scarcity**.
 
 ### Tag
 
 A **value belonging to exactly one Dimension**. Tags are stored **dimension-qualified**, not as bare
 strings, so that absence is explicit per Dimension and two Dimensions cannot collide on a name. Entry
 may be loose (type `#sam`); the Dimension registry resolves it on write.
+
+A Task or Window may carry **several Tags on one categorical Dimension**, and the two sides mean
+different things: on a Task they **AND** (all must be satisfied), on a Window they **OR** (any is
+enough). See **Dimension**. Ordinal axes carry exactly one value per side.
 
 **Inert Tag** — a Tag that resolves to no Dimension. It is **kept but inert**: stored, visible in the
 UI, ignored by matching. This is the intended path for a new idea — invent the Tag now, add the rule
@@ -252,12 +284,15 @@ separate on-demand feature of the UI.
 
 ### Matching rule
 
-One per Dimension, evaluated against a Window. The common shape is the **gated boost**:
+A Dimension's matching rule is fixed by its **algebra**, not written per Dimension: categorical axes
+compare by **subset**, ordinal axes by **ceiling**. See **Dimension** for both, with worked cases.
 
-> Window carries the value → **include the Task and rank it higher**
-> Window lacks the value → **exclude the Task**
+Rules are per-Dimension only; they do not read other Dimensions' values. A Task must satisfy **every**
+Dimension to be eligible — matching is a conjunction across axes, whatever each axis's algebra.
 
-Rules are per-Dimension only; they do not read other Dimensions' values.
+An earlier version of this document described a single **gated boost** shape ("Window carries the value
+→ include and rank higher; Window lacks it → exclude"). The filtering half of that is what the subset
+rule now says precisely; the ranking half is replaced by **Scarcity**.
 
 ### Derived-obligation rule
 
@@ -281,11 +316,31 @@ UI**. New behaviour arrives as a new rule, not as configuration.
 After Dimension filtering, eligible Tasks are ranked by:
 
 1. **Deadline urgency**
-2. **Dimension boost** — how many Dimensions the Window positively matched
+2. **Scarcity** — see below
 3. Tiebreak
 
 There is deliberately **no priority/importance field**. Self-assigned priorities rot — everything
 drifts to High — and a field that only works if it is groomed will be wrong.
+
+### Scarcity
+
+> **How many Availability Windows in the active Pattern's week would admit this Task. Fewest first.**
+
+The governing idea is **spend the rarest opportunity**. A Task that only one Window all week can
+accommodate should outrank one that fits eighteen — you will get another chance at the second today.
+
+Scarcity replaces an earlier rule that ranked by *how many Dimensions the Window positively matched*,
+which counted matches without ever justifying why a count should mean importance. Scarcity also
+**unifies the two algebras**: long Windows, high-energy Windows and oddly-located Windows are all
+simply rare, so nothing needs special-casing per axis.
+
+It is computed against the **active Pattern**, so it is a claim about a typical week rather than about
+today specifically, and it moves whenever Windows, Day templates or the active Pattern change.
+
+**Orphan Task** — a Task whose scarcity is **zero**: no Window in the active Pattern can ever admit it.
+It will never surface, and nothing else in the system would say so. Orphans are surfaced as a count
+alongside `Unprocessed` and `Stale`. This falls out of the scarcity computation for free and is the
+only defence against the tagging drift described under **Dimension**.
 
 **Age is not a ranking input.** Older Tasks are lower-value, but the `Stale` gate already encodes that
 judgement. Applying it a second time as a ranking penalty would double-count *and* be self-fulfilling:
