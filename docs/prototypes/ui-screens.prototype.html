@@ -74,11 +74,19 @@
 
   /* ---- shared app chrome ---- */
   .nav {
-    display:flex; align-items:center; gap:10px; padding:14px 16px 10px;
+    display:flex; flex-direction:column; padding:14px 16px 10px;
     background:var(--surface); border-bottom:1px solid var(--line); flex:none;
   }
-  .nav h1 { font-size:21px; letter-spacing:-.02em; margin:0; flex:1; text-wrap:balance; }
-  .nav .sub { font-size:12px; color:var(--ink-2); margin:2px 0 0; }
+  /* fixed-height title row: the right-slot control sits at the same offset from the top
+     of the bar on every screen, with or without a subtitle */
+  .nav-main { display:flex; align-items:center; gap:10px; min-height:32px; }
+  .nav h1 { font-size:21px; letter-spacing:-.02em; margin:0; flex:1; min-width:0; text-wrap:balance; }
+  .nav .sub { font-size:12px; color:var(--ink-2); margin:3px 0 0; }
+  .nav-add {
+    flex:none; width:32px; height:32px; border-radius:50%; padding:0;
+    background:var(--accent); color:var(--accent-ink); border:none;
+    font-size:19px; line-height:1; display:grid; place-items:center;
+  }
   .nav button.icon {
     background:none; border:none; padding:4px 6px; color:var(--accent);
     font-size:15px; border-radius:8px;
@@ -584,14 +592,18 @@
       ${ev.map(e => `<span class="pill now">${esc(e.name)} · ${WDL[new Date(e.date + "T00:00:00").getDay()]}</span>`).join("")}
     </div>`;
   }
+  const addBtn = `<button class="nav-add" data-act="sheet" data-kind="capture" aria-label="Quick add a task">＋</button>`;
   function nav(title, o = {}) {
+    // In D the quick-add circle owns the nav's right slot on EVERY screen — screens that
+    // want that slot for something else have to put it somewhere better.
+    const right = S.variant === "D" ? addBtn : (o.right || "");
     return `<div class="nav">
-      ${o.back ? `<button class="icon" data-act="go" data-screen="${o.back}" data-param="${o.backParam || ""}">‹ ${esc(o.backLabel || "Back")}</button>` : ""}
-      <div style="flex:1;min-width:0">
+      <div class="nav-main">
+        ${o.back ? `<button class="icon" data-act="go" data-screen="${o.back}" data-param="${o.backParam || ""}">‹ ${esc(o.backLabel || "Back")}</button>` : ""}
         <h1>${esc(title)}</h1>
-        ${o.sub ? `<div class="sub">${esc(o.sub)}</div>` : ""}
+        ${right}
       </div>
-      ${o.right || ""}
+      ${o.sub ? `<div class="sub">${esc(o.sub)}</div>` : ""}
     </div>`;
   }
   function tabbar(_items, active) {
@@ -712,7 +724,7 @@
 
   function taskDetail(back, backLabel) {
     const t = task(+S.param) || TASKS[0];
-    return nav("Task", { back, backLabel, right:`<button class="icon" data-act="noop">Save</button>` }) + `
+    return nav("Task", { back, backLabel }) + `
       <div class="scroll">
         <div class="stack">
           <div class="lbl">Title</div>
@@ -738,6 +750,7 @@
           ${(t.tags || []).length ? `<div class="lbl">Unresolved</div><div class="chipset">
             ${t.tags.map(x => `<span class="pill inert">${esc(x)} · kept but inert</span>`).join("")}</div>` : ""}
         </div>
+        <div class="btn-row"><button class="btn primary wide" data-act="go" data-screen="${back}">Save</button></div>
         <div class="note">Dimensions themselves are declared in code. This screen picks <b>values</b> on them,
           never edits the axes.</div>
       </div>`;
@@ -948,8 +961,7 @@
           </div>`;
       },
       dates() {
-        return nav("Overrides & events", { back:"schedule", backLabel:"Schedule",
-          right:`<button class="icon" data-act="sheet" data-kind="overlap">＋</button>` }) + `
+        return nav("Overrides & events", { back:"schedule", backLabel:"Schedule" }) + `
           <div class="scroll">
             <div class="sec-h">Dates that differ from the pattern</div>
             <div class="list">${OVERRIDES.map(o => `<button class="row" data-act="noop"><div class="body">
@@ -957,7 +969,10 @@
               <div class="meta"><span class="pill dim">${esc(o.label)}</span>
                 <span class="pill">${o.from ? "stamped copy" : "one-off day"}</span></div></div><span class="chev">›</span></button>`).join("")}</div>
             <div class="sec-h">Events</div>
-            <div class="list">${EVENTS.map(e => `<button class="row" data-act="noop"><div class="body">
+            <div class="list">
+              <button class="row" data-act="sheet" data-kind="overlap"><div class="body">
+                <div class="title" style="color:var(--accent)">＋ New event</div></div></button>
+              ${EVENTS.map(e => `<button class="row" data-act="noop"><div class="body">
               <div class="title">${esc(e.name)}</div>
               <div class="meta"><span class="pill dur">${esc(fmtShort(new Date(e.date + "T00:00:00")))} ${e.s}</span>${dimPills(e.dims)}</div>
             </div><span class="chev">›</span></button>`).join("")}</div>
@@ -1185,8 +1200,7 @@
     screens:{
       home() {
         const sh = dayShape(today), live = liveWindow(), evs = eventsOn(today);
-        return nav("Today", { sub:`${fmtDate(today)} · ${sh.label}`,
-          right:`<button class="icon" data-act="sheet" data-kind="capture">＋</button>` }) + `
+        return nav("Today", { sub:`${fmtDate(today)} · ${sh.label}` }) + `
           <div class="scroll col">
             ${live ? `<button class="livecard" data-act="landing" data-win="${esc(live.name)}">
               <div class="eyebrow">Open now</div>
@@ -1206,7 +1220,7 @@
       },
       tasks() {
         const list = TASKS.filter(t => t.st === S.filter);
-        return nav("Tasks", { right:`<button class="icon" data-act="sheet" data-kind="capture">＋</button>` }) + `
+        return nav("Tasks") + `
           <div class="filterbar">${["Active","Unprocessed","Stale","Done"].map(f =>
             `<button data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${f} ${TASKS.filter(t => t.st === f).length}</button>`).join("")}</div>
           <div class="scroll">
