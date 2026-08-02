@@ -728,9 +728,10 @@
               ${locked ? `disabled style="opacity:.75"` : ""}>${esc(v)}${
               locked ? ` <span style="opacity:.6;font-size:11px">always</span>` : ""}</button>`;
           }).join("")}</div>`).join("")}
-        <div class="note" style="padding:12px 0 2px">Switching a value <b>on</b> lifts its exclude and boosts it —
-          exactly what the window itself does. The default can't be switched off: no window can express its
-          absence, so nothing could be written. Narrow with the energy ceiling instead.</div>
+        <div class="note" style="padding:12px 0 2px">Switching a value <b>on</b> widens what this window admits.
+          A task fits when <b>every</b> value it carries on an axis is among the window's — so these values OR
+          together here, and AND together on the task. Energy is a ceiling instead. Nothing is "boosted":
+          order comes from how rare the opportunity is.</div>
       </div>` : ""}
       ${ov && ov.adjusted ? `<div class="adjust-bar">
         <span>${esc(fmtShort(curDate()))} is now an override — <b>${esc(ov.label)}</b></span>
@@ -1029,8 +1030,9 @@
             <div class="sec-h">Right now this would surface</div>
             <div class="list">${matchesFor(w).slice(0, 4).map(t2 => taskRow(t2, { dims:false })).join("")
               || `<div class="empty">Nothing — so it would stay silent.</div>`}</div>
-            <div class="note">Live preview is the only defence against a mis-set default: the two-sided
-              comparison is otherwise invisible until a reminder is wrong.</div>
+            <div class="note">Live preview is the only defence against a window that declares too little.
+              A tagged task is doable <i>only</i> if some window declares that tag, and tags are cheap to add
+              to tasks while windows are edited rarely — so the drift is always toward orphans.</div>
           </div>`;
       },
       dates() {
