@@ -542,6 +542,12 @@
 
   const mins = hhmm => (+hhmm.slice(0,2)) * 60 + (+hhmm.slice(3));
   const winMins = w => mins(w.e) - mins(w.s);
+  // Display format: "3p", "7:30a", "12p". Storage and <input type="time"> stay 24h.
+  function hm(t) {
+    const h = +t.slice(0, 2), m = +t.slice(3);
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return (m ? `${h12}:${String(m).padStart(2, "0")}` : `${h12}`) + (h < 12 ? "a" : "p");
+  }
 
   // Duration's window-side ceiling is DERIVED from the window's length — nothing to
   // declare, nothing to keep in sync, and it can never contradict the clock.
@@ -617,7 +623,7 @@
   }
   const scarcity = t => admittingAhead(t).length;
   const nextChance = t => admittingAhead(t)[0] || null;
-  const chanceLabel = c => `${WD[c.d.getDay()]} ${c.w.s} ${c.w.name}`;
+  const chanceLabel = c => `${WD[c.d.getDay()]} ${hm(c.w.s)} ${c.w.name}`;
 
   // The pattern-week count, kept only to tell two very different zeros apart:
   // "never fits this pattern" (malformed) vs "none in this stretch" (just not now).
@@ -767,7 +773,7 @@
       <div class="body">
         <div class="title">${esc(w.name)}</div>
         <div class="meta">
-          <span class="pill dur">${w.s}–${w.e}</span>
+          <span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>
           ${n ? `<span class="pill dim">${n} task${n === 1 ? "" : "s"} fit</span>` : `<span class="pill">silent — nothing fits</span>`}
           ${dimPills(w.dims)}
         </div>
@@ -818,7 +824,7 @@
     const q = effQuery(w);
     const list = matchesForQ(q);
     const snoozeMin = Math.min(30, Math.max(5, Math.round(winMins(w) * .25)));
-    return nav(w.name, { back, backLabel, sub:`${w.s}–${w.e} · ${fmtShort(curDate())}` }) + `
+    return nav(w.name, { back, backLabel, sub:`${hm(w.s)}–${hm(w.e)} · ${fmtShort(curDate())}` }) + `
       <div class="scroll">
         <div class="note">Opened from the notification. This is where triage lives — the push itself is
           <b>a doorbell carrying one URL</b>.</div>
@@ -841,7 +847,7 @@
     const q = effQuery(live);
     const list = matchesForQ(q);
     return nav("Right now", { back, backLabel,
-      sub:live ? `${live.adhoc ? "Unplanned window · " : ""}${live.s}–${live.e}` : "Nothing open" }) + `
+      sub:live ? `${live.adhoc ? "Unplanned window · " : ""}${hm(live.s)}–${hm(live.e)}` : "Nothing open" }) + `
       <div class="scroll">
         <div class="note">${live && live.adhoc
           ? `Reality handed you a pocket of time, so it is <b>recorded as a real window</b> running to your next
@@ -965,15 +971,15 @@
       <div class="grabber"></div>
       <div class="sheet-h"><h2>This clashes with a window</h2></div>
       <div class="note" style="padding-top:12px">
-        <b>Band concert, 19:00–20:30</b> overlaps <b>Evening prep, 18:00–20:00</b> on ${esc(fmtShort(dAdd(2)))}.
+        <b>Band concert, 7–8:30p</b> overlaps <b>Evening prep, 6–8p</b> on ${esc(fmtShort(dAdd(2)))}.
         A date has one shape, so choose what happens to the window.</div>
       <div class="stack">
         <button class="btn wide" data-act="overlap" data-v="replace">Replace the window<br>
           <span style="font-size:12px;color:var(--ink-2);font-weight:400">Evening prep disappears that day</span></button>
-        <button class="btn wide" data-act="overlap" data-v="truncate">Truncate it to 18:00–19:00<br>
+        <button class="btn wide" data-act="overlap" data-v="truncate">Truncate it to 6–7p<br>
           <span style="font-size:12px;color:var(--ink-2);font-weight:400">Fire time unchanged</span></button>
         <button class="btn wide" data-act="overlap" data-v="split">Split it around the event<br>
-          <span style="font-size:12px;color:var(--ink-2);font-weight:400">18:00–19:00 and 20:30–20:00 → second half dropped</span></button>
+          <span style="font-size:12px;color:var(--ink-2);font-weight:400">6–7p, and nothing after the concert → second half dropped</span></button>
       </div>
       <div class="note">Whichever you pick, ${esc(fmtShort(dAdd(2)))} becomes a <b>one-off day</b>.
         One action, one question, two artifacts.</div>
@@ -1050,7 +1056,7 @@
             <div class="list">${sh.windows.map(w => windowLine(w)).join("")}</div>
             ${eventsOn(today).length ? `<div class="sec-h">Events</div><div class="list">
               ${eventsOn(today).map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
-                <div class="meta"><span class="pill dur">${e.s}–${e.e}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+                <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
             <div class="sec"><button class="btn wide" data-act="go" data-screen="fitsnow">What fits right now?</button></div>
             ${footerBar()}
           </div>` + tabbar(TABS_A, "today");
@@ -1087,11 +1093,11 @@
             <div class="sec-h">Windows</div>
             <div class="list">${t.windows.map(w => `<button class="row" data-act="go" data-screen="window" data-param="${esc(t.id)}|${esc(w.name)}">
               <div class="body"><div class="title">${esc(w.name)}</div>
-              <div class="meta"><span class="pill dur">${w.s}–${w.e}</span>${dimPills(w.dims)}</div></div><span class="chev">›</span></button>`).join("")}
+              <div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div></div><span class="chev">›</span></button>`).join("")}
               <button class="row" data-act="noop"><div class="body"><div class="title" style="color:var(--accent)">＋ Add a window</div></div></button></div>
             ${t.protos.length ? `<div class="sec-h">Event prototypes</div><div class="list">
               ${t.protos.map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
-              <div class="meta"><span class="pill dur">${e.s}–${e.e}</span><span class="pill">dateless</span></div></div></div>`).join("")}</div>` : ""}
+              <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span><span class="pill">dateless</span></div></div></div>`).join("")}</div>` : ""}
             <div class="sec-h">Used by</div>
             <div class="list">${used.map(p => `<div class="row"><div class="body"><div class="title">${esc(p.name)}</div>
               <div class="meta">${p.days.map((x, i) => x === t.id ? `<span class="pill dim">${WD[i]}</span>` : "").join("")}</div></div></div>`).join("")}</div>
@@ -1113,7 +1119,7 @@
               <div class="lbl">Span</div>
               <div style="display:flex;gap:9px"><input class="field" type="time" value="${w.s}">
                 <input class="field" type="time" value="${w.e}"></div>
-              <div class="note" style="padding:2px 0 0">Fires at <b>${w.s}</b>. ${winMins(w)} minutes long, so
+              <div class="note" style="padding:2px 0 0">Fires at <b>${hm(w.s)}</b>. ${winMins(w)} minutes long, so
                 snooze is ${Math.min(30, Math.max(5, Math.round(winMins(w) * .25)))} min.</div>
             </div>
             <div class="sec-h">What can be done here</div>
@@ -1146,7 +1152,7 @@
                 <div class="title" style="color:var(--accent)">＋ New event</div></div></button>
               ${EVENTS.map(e => `<button class="row" data-act="noop"><div class="body">
               <div class="title">${esc(e.name)}</div>
-              <div class="meta"><span class="pill dur">${esc(fmtShort(new Date(e.date + "T00:00:00")))} ${e.s}</span>${dimPills(e.dims)}</div>
+              <div class="meta"><span class="pill dur">${esc(fmtShort(new Date(e.date + "T00:00:00")))} ${hm(e.s)}</span>${dimPills(e.dims)}</div>
             </div><span class="chev">›</span></button>`).join("")}</div>
             <div class="note">"College kid home for the weekend" is <b>two dated overrides</b> made in one gesture —
               there is no multi-day object, so per-day variation is free and conflicts can't be represented.</div>
@@ -1185,17 +1191,17 @@
         const H0 = 6, H1 = 23, PX = 34;
         const y = m => (m - H0 * 60) / 60 * PX;
         const hrs = [];
-        for (let h = H0; h <= H1; h++) hrs.push(`<div class="hr"><span>${String(h).padStart(2,"0")}</span></div>`);
+        for (let h = H0; h <= H1; h++) hrs.push(`<div class="hr"><span>${hm(String(h).padStart(2,"0") + ":00")}</span></div>`);
         const blocks = sh.windows.map(w => {
           const live = isToday && liveWindow() && liveWindow().name === w.name;
           const n = matchesFor(w).length;
           return `<button class="blk ${live ? "live" : ""}" style="top:${y(mins(w.s)) + 12}px;height:${Math.max(30, (winMins(w) / 60) * PX - 4)}px"
             data-act="sheet" data-kind="win" data-param="${esc(w.name)}">
             <div class="bt">${esc(w.name)}</div>
-            <div class="bm">${w.s}–${w.e} · ${n ? n + " fit" : "silent"}</div></button>`;
+            <div class="bm">${hm(w.s)}–${hm(w.e)} · ${n ? n + " fit" : "silent"}</div></button>`;
         }).join("");
         const evBlocks = evs.map(e => `<div class="blk event" style="top:${y(mins(e.s)) + 12}px;height:${Math.max(28, ((mins(e.e) - mins(e.s)) / 60) * PX - 4)}px">
-          <div class="bt">${esc(e.name)}</div><div class="bm">${e.s}–${e.e} · event</div></div>`).join("");
+          <div class="bt">${esc(e.name)}</div><div class="bm">${hm(e.s)}–${hm(e.e)} · event</div></div>`).join("");
         const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
         const days = [];
         for (let i = -1; i < 8; i++) {
@@ -1238,7 +1244,7 @@
             <div class="sec-h">This week uses</div>
             <div class="list">${pattern().days.map((tid, i) => `<button class="row" data-act="go" data-screen="template" data-param="${tid}">
               <div class="body"><div class="title">${WDL[i]} — ${esc(tpl(tid).name)}</div>
-              <div class="meta">${tpl(tid).windows.map(w => `<span class="pill dur">${w.s}</span>`).join("")}</div></div>
+              <div class="meta">${tpl(tid).windows.map(w => `<span class="pill dur">${hm(w.s)}</span>`).join("")}</div></div>
               <span class="chev">›</span></button>`).join("")}</div>
             <div class="sec-h">All shapes</div>
             <div class="list">${TEMPLATES.map(t => `<button class="row" data-act="go" data-screen="template" data-param="${t.id}">
@@ -1286,8 +1292,8 @@
             <div class="moment">
               <div class="eyebrow">${live ? "Open now" : "Nothing open"}</div>
               <h1>${esc(live ? live.name : next ? "Next: " + next.name : "Done for today")}</h1>
-              <div class="when">${live ? `${live.s}–${live.e} · ${list.length} of ${countBy("Active")} tasks fit`
-                : next ? `starts ${next.s}` : "no more windows today"}</div>
+              <div class="when">${live ? `${hm(live.s)}–${hm(live.e)} · ${list.length} of ${countBy("Active")} tasks fit`
+                : next ? `starts ${hm(next.s)}` : "no more windows today"}</div>
             </div>
             ${live ? `<div class="stream">${list.map(t => `<button class="streamitem" data-act="task" data-id="${t.id}">
                 <span class="tick" data-done="0">✓</span>
@@ -1343,7 +1349,7 @@
                 ${t.windows.map(w => `<button class="row" style="padding:9px 0;border:none;border-bottom:1px solid var(--line-soft)"
                     data-act="go" data-screen="window" data-param="${esc(t.id)}|${esc(w.name)}">
                   <div class="body"><div class="title" style="font-size:14px">${esc(w.name)}</div>
-                  <div class="meta"><span class="pill dur">${w.s}–${w.e}</span>${dimPills(w.dims)}</div></div>
+                  <div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div></div>
                   <span class="chev">›</span></button>`).join("")}
                 <button class="btn ghost" style="padding:9px 0" data-act="noop">＋ Add a window to ${esc(t.name)}</button>
               </div></details>`; }).join("")}
@@ -1377,13 +1383,13 @@
             ${live ? `<button class="livecard" data-act="landing" data-win="${esc(live.name)}">
               <div class="eyebrow">Open now</div>
               <div class="t">${esc(live.name)}</div>
-              <div class="m">${live.s}–${live.e} · ${matchesFor(live).length} of ${countBy("Active")} tasks fit</div>
+              <div class="m">${hm(live.s)}–${hm(live.e)} · ${matchesFor(live).length} of ${countBy("Active")} tasks fit</div>
             </button>` : ""}
             <div class="sec-h">Windows today</div>
             <div class="list">${sh.windows.map(w => windowLine(w)).join("")}</div>
             ${evs.length ? `<div class="sec-h">Events</div><div class="list">
               ${evs.map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
-                <div class="meta"><span class="pill dur">${e.s}–${e.e}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+                <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
             <div class="fitspace">
               <button class="btn fits" data-act="go" data-screen="fitsnow">What fits right now?</button>
             </div>
@@ -1470,7 +1476,7 @@
       <div class="sheet-h"><h2>${esc(w.name)}</h2>
         <button class="icon" data-act="landing" data-win="${esc(w.name)}" style="background:none;border:none;color:var(--accent)">Preview</button></div>
       <div class="stack">
-        <div class="lbl">Span on ${esc(fmtShort(curDate()))}</div>
+        <div class="lbl">Span on ${esc(fmtShort(curDate()))} — ${hm(w.s)}–${hm(w.e)}</div>
         <div style="display:flex;gap:9px"><input class="field" type="time" value="${w.s}"><input class="field" type="time" value="${w.e}"></div>
         ${DIMS.map(d => `<div class="lbl">${esc(d.label)}</div>
           <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
