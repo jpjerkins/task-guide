@@ -7,8 +7,10 @@ Decisions recorded here were settled in [Task property model](https://github.com
 [Override / dated-event model](https://github.com/jpjerkins/task-guide/issues/8),
 [UI scope and screens](https://github.com/jpjerkins/task-guide/issues/12) — which, in the course of
 prototyping, revised the Dimension, Tag, Matching rule and Ranking entries —
-and [Recurrence and deadline model](https://github.com/jpjerkins/task-guide/issues/10), which added
-Deadline, Defer and Recurrence and corrected the `Stale` and Scarcity entries.
+[Recurrence and deadline model](https://github.com/jpjerkins/task-guide/issues/10), which added
+Deadline, Defer and Recurrence and corrected the `Stale` and Scarcity entries,
+and [Matching and selection algorithm](https://github.com/jpjerkins/task-guide/issues/11), which
+completed Ranking, added Notification, and extended Firing and Snooze.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -342,6 +344,10 @@ two artifacts.
   **first Availability Window of each day fires unconditionally**, matching Tasks or not. That is the
   guaranteed carrier: without it, three quiet days would surface the obligation nowhere at all.
   Later Windows keep the normal rule, so a busy day surfaces the Event repeatedly and naturally.
+  A runway day with **no Windows at all** — a travel-day Override, say — has no first Window to carry
+  the Event, so a **fallback push** carries it instead. See **Firing**. This is not a rare corner: the
+  Events most likely to have windowless runway days are trips, and the days before a trip are exactly
+  when travel-day Overrides get stamped.
 - **Recurring Event** (instantiated from a prototype in a Pattern slot) — footer **on its own day
   only**, with **no unconditional firing**. The 3-day runway exists for the irregular thing that would
   otherwise be forgotten, which a weekly commitment is not. Without this distinction, one weekly
@@ -370,6 +376,72 @@ fires whether or not Tasks match, because it is carrying the Event's footer. See
 A Window is **not** re-fired automatically part-way through, however long it is. A second push
 carrying no new information is noise, and it would destroy the truthfulness of silence.
 
+**There is no daily ceiling, cap or rate limit**, and restraint is enforced in exactly one place: the
+matcher. Today the rule is a biconditional — `no push ⟺ nothing fit` — and that is what makes silence
+*information*. Any cap weakens it to `no push ⟺ nothing fit OR budget spent`, at which point a quiet
+afternoon is unreadable. Volume is already self-limiting, because pushes are bounded by the Windows
+the user authored; if the volume feels wrong, the honest fix is editing the schedule. Ranking never
+changes *whether* a push happens, so **Scarcity did not reopen this question**.
+
+Suppressing a push whose shortlist duplicates the previous one was considered and rejected: two
+Windows are two genuinely separate chances at the same Tasks, and withholding the second one reasons
+about the Task's content when the only question is whether an opportunity exists.
+
+#### Fallback push
+
+**The one push with no Window behind it.** On a day inside a **dated Event's** runway that has **no
+Availability Windows at all**, a push fires at **11:00a** carrying the Event.
+
+- Scoped narrowly — windowless *and* inside a dated Event's runway. It can never become a daily alarm.
+- Content is the Event and the footer counts. **No Window is named**, because none exists.
+- The time is a **constant in the rules layer**, not a setting. It adds no surface to the UI
+  inventory, and is consistent with *new behaviour arrives as a new rule, not as configuration*.
+
+Deriving the time instead (the first Window start of the Day template the Pattern assumes for that
+weekday) was considered and set aside as more machinery than the case earns. Blocking creation of an
+Event with no carrier was rejected on the standing precedent that blast radius is made **visible, not
+prevented**.
+
+### Notification
+
+**A notification is a doorbell carrying one URL** — Pushover has no actionable notifications
+(see issue #3), so every control lives on the landing page it opens.
+
+```
+Fix the shelf bracket (60m)          ← title: the top-ranked Task
+
+  Garage — until 3p                  ← Window context
+  Band concert — Thursday            ← Events, above Tasks
+  Sort the paint shelf (30m)         ← ranks 2 and 3
+  Return the borrowed jack (10m)
+  + 2 more
+  6 to process · 3 stale · 2 orphans ← footer counts
+```
+
+- **Title — the top-ranked Task**, in full, with its Duration. The title is the one line never
+  truncated on a lock screen, so it is spent on the most actionable thing rather than on context.
+  The push is a *suggestion*, not an inbox.
+- **Shortlist of three**, then `+N more` when N ≥ 1. Three is what survives lock-screen truncation
+  while still offering a choice when the top pick doesn't appeal. The **landing page shows all
+  matches**; the push is deliberately not at parity with it.
+- **Events sit above the Tasks**, one line each, date ascending. Obligation outranks opportunity, and
+  this is what keeps the Event inside the visible lines — otherwise the runway that the unconditional
+  fire exists to guarantee is invisible without expanding the notification.
+- **Footer counts last**, and **zero-valued components are omitted**; if all are zero the line
+  disappears. Counts are a nudge, not news, so they are the right thing to lose off the bottom edge.
+
+**When nothing matches, the shape changes rather than the push being faked.** A Window that matches
+nothing sends nothing at all. The two cases that still send are both obligations or requests:
+
+| Case | Title | Body |
+|---|---|---|
+| Unconditional fire, no matches | the **Event** and its weekday | "Nothing fits *Window* right now", then counts |
+| **Fallback push** (windowless day) | the **Event** and its weekday | counts only — no Window exists to name |
+| Empty snooze re-fire | "Nothing fits *Window* now" | counts |
+
+Leading an empty push with the Window (*"Garage — until 3p"*) is rejected: it advertises an
+opportunity that isn't there, which is precisely the failure the restraint rule exists to prevent.
+
 ### Snooze
 
 The **only** re-fire path, always user-initiated from the landing page a notification opens.
@@ -387,6 +459,44 @@ The **only** re-fire path, always user-initiated from the landing page a notific
 Re-matching against *whatever Window is live* at the re-fire time is explicitly rejected: it silently
 changes the filter, has no answer when no Window is live, and is really "show me what fits now" — a
 separate on-demand feature of the UI.
+
+**An adjusted Window needs no special rule.** "Matching on" writes straight through to that date's copy
+of the Window, so *"the original Window's Dimension values"* stays literally true after an adjustment —
+the Window's values are simply what moved.
+
+#### Duration is the one value that moves
+
+Every Dimension value is frozen at the original Window's, **except Duration**, whose ceiling is
+re-derived at each re-fire from the time **actually remaining**:
+
+```
+remaining > 0   →  ceiling derived from now → Window end
+remaining ≤ 0   →  ceiling floors at the smallest bucket
+```
+
+```
+Garage 2p–3p
+  2:00p  fire      60 min left  → ceiling 60
+  2:45p  re-fire   15 min left  → ceiling 10
+  3:05p  re-fire   past end     → ceiling 2
+  3:25p  re-fire   past end     → ceiling 2
+```
+
+This is not an exception to *"derived from the Window's length"* so much as its honest reading — the
+length still available. Holding the original ceiling would offer a 60-minute Task with 15 minutes left,
+and because the tiebreak is **longest Duration first** and the title is the **top-ranked Task**, that
+error would land in the most-read line of the push.
+
+The floor matters for two reasons. A ceiling of zero would empty the list, and an empty list on a
+**user-requested** re-fire is not truthful silence — nobody asked for the Window to stay quiet, but
+they did ask for this. And flooring at the *smallest bucket* rather than at whatever was last derived
+keeps the rule **stateless** — no snooze chain has to remember anything — and makes it independent of
+when the user happened to snooze. Past the authored span, only trivial Tasks are offered, which is a
+firm statement that the opportunity is spent.
+
+**An empty re-fire pushes once, then ends the chain.** The request is answered rather than silently
+dropped, and it cannot become repetitive: once the ceiling has floored, every later re-fire runs a
+strictly narrower query and can only repeat the same emptiness.
 
 ### Matching rule
 
@@ -419,14 +529,53 @@ UI**. New behaviour arrives as a new rule, not as configuration.
 
 ## Ranking
 
-After Dimension filtering, eligible Tasks are ranked by:
+After Dimension filtering, eligible Tasks are ranked by four keys, in order. The sort is **total** —
+every step is derived from data already on screen, so any Task's position is explainable in a sentence.
 
-1. **Deadline urgency**
-2. **Scarcity** — see below
-3. Tiebreak
+1. **Urgency band** — see below
+2. **Scarcity**, fewest first — see below
+3. **Longest Duration first**
+4. **Oldest `CreatedAt`** — backstop, reached only on an exact three-way tie
 
 There is deliberately **no priority/importance field**. Self-assigned priorities rot — everything
 drifts to High — and a field that only works if it is groomed will be wrong.
+
+### Urgency band
+
+Deadline enters the sort **bucketed, not continuous** — three bands, and Scarcity sorts within each:
+
+| Band | Condition |
+|---|---|
+| 1 | Deadline **passed** |
+| 2 | Deadline **within the horizon** — i.e. it clipped the rolling 7 days |
+| 3 | **No deadline pressure** — no Deadline, or one beyond the horizon |
+
+**The bands invent no thresholds.** They are exactly the three cases the Scarcity horizon rule already
+distinguishes (see **The horizon**), so there is nothing to tune and nothing that can fall out of sync
+with it.
+
+A **continuous** deadline key was rejected: any Task carrying a Deadline would outrank every Task
+without one, and exact dates rarely tie, so Scarcity would never get to speak and *spend the rarest
+opportunity* would stop paying rent. **Collapsing to Scarcity alone** was also rejected: it makes a
+Task due Tuesday tie with an undeadlined Task of the same window count, which erases the fact that one
+of them has a consequence. A **weighted score** of the two was rejected as this project rejects knobs
+generally — the weights have no principled value and "why did this rank first" becomes unanswerable.
+
+Note that inside band 2, a sooner Deadline yields a shorter horizon, hence fewer admitting Windows,
+hence a higher rank. **Deadline order largely falls out of Scarcity** rather than being imposed on
+top of it.
+
+### Duration as tiebreak
+
+> **The biggest Task that fits leads.**
+
+This is *spend the rarest opportunity* applied one level down: a rare 60-minute Window should go to the
+60-minute Task, because the 2-minute Task fits nearly everywhere and will find another slot. Shortest-
+first was rejected as the exact inversion — it systematically spends long Windows on Tasks any Window
+could have taken, and the long Tasks starve.
+
+The tiebreak is **not a minor slot**. There are only three bands and Scarcity is a small integer, so
+ties are routine, and in an ordinary Window this key often chooses which Tasks are visible.
 
 ### Scarcity
 
@@ -475,17 +624,17 @@ the Pattern-week count:
   usually because an Override or Event displaced it. **Nothing is wrong**; the Task should simply not
   be ranked as though this were its big chance.
 
-> **Open:** with the horizon now Deadline-bounded, scarcity has absorbed much of what *Deadline
-> urgency* was doing as the primary sort key. Whether the two collapse into a single key is left to
-> the matching-and-selection ticket, which owns ranking. Both are still listed above.
-
 Only **eligible** Tasks are ranked, so a deferred Task has no Scarcity — it is not merely ranked low,
 it is absent. See **Defer**.
 
-**Age is not a ranking input.** Older Tasks are lower-value, but the `Stale` gate already encodes that
-judgement. Applying it a second time as a ranking penalty would double-count *and* be self-fulfilling:
-an aging Task would surface less, so get done less, so age out — the penalty would cause the rot it
-claims to measure. Below the threshold, a Task competes on its merits.
+**Age is not a ranking *penalty*.** Older Tasks are lower-value, but the `Stale` gate already encodes
+that judgement. Applying it a second time as a penalty would double-count *and* be self-fulfilling: an
+aging Task would surface less, so get done less, so age out — the penalty would cause the rot it claims
+to measure. Below the threshold, a Task competes on its merits.
+
+Age does serve as the **final tiebreak**, oldest first — the opposite direction, so it carries none of
+that failure mode. It exists only to make the sort total; by the time it is reached, band, Scarcity and
+Duration have all tied exactly.
 
 ## Capture
 
@@ -500,6 +649,5 @@ that is almost always answered "no":
 
 Both write the **same** Task through the same endpoint; the details path simply sends more fields.
 
-A notification is a **doorbell carrying one URL** — Pushover has no actionable notifications
-(see issue #3). Any inline triage ("one unprocessed Task + five Duration buttons") therefore lives on
-the **landing page** the notification opens, not in the notification itself.
+Any inline triage ("one unprocessed Task + five Duration buttons") lives on the **landing page** the
+notification opens, not in the notification itself. See **Notification**.
