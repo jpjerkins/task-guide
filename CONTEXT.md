@@ -9,8 +9,10 @@ Decisions recorded here were settled in [Task property model](https://github.com
 prototyping, revised the Dimension, Tag, Matching rule and Ranking entries —
 [Recurrence and deadline model](https://github.com/jpjerkins/task-guide/issues/10), which added
 Deadline, Defer and Recurrence and corrected the `Stale` and Scarcity entries,
-and [Matching and selection algorithm](https://github.com/jpjerkins/task-guide/issues/11), which
-completed Ranking, added Notification, and extended Firing and Snooze.
+[Matching and selection algorithm](https://github.com/jpjerkins/task-guide/issues/11), which
+completed Ranking, added Notification, and extended Firing and Snooze,
+and [Window firing engine](https://github.com/jpjerkins/task-guide/issues/16), which added Day
+boundary and Fire record, amended the Event carrier and the fallback push, and settled DST resolution.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -245,6 +247,28 @@ A Window is a **per-day instance**, not a shared definition. "Evening" on Tuesda
 Saturday are two different Windows that happen to share a label and may have very different spans —
 volleyball-season evenings are short. Editing one never propagates to the other.
 
+A Window is bounded **within a single day** — it never crosses the **Day boundary**.
+
+**Clock times are authored; instants are derived.** Start and End are stored as clock times against
+one fixed zone for the service (`America/Chicago`), and each date resolves them to real instants. That
+resolution is where *"real arithmetic, not a vibe"* is actually enforced, and it makes the two DST
+days fall out with no special rule:
+
+| Case | Resolution |
+|---|---|
+| Ambiguous start (fall back, 1a–2a happens twice) | the **first** occurrence — a Window fires at its start |
+| Nonexistent start (spring forward, 2a–3a never happens) | **clamp** to the first valid instant, i.e. the gap's end |
+| Span crossing a transition | measured between instants, so it is **honestly** an hour shorter or longer |
+
+A Window lying *entirely* inside the spring gap clamps to zero length, and a zero-length Window is no
+opportunity at all, so it does not fire. The degenerate case needs no rule of its own.
+
+Freezing each Window to a UTC instant at authoring time was rejected: nothing would need re-resolving,
+but every Window would silently shift an hour twice a year, so an "Evening prep" authored in July
+starts at 4:30p in November. Treating the wall clock as authoritative for duration was rejected for
+handing the matcher a 60-minute ceiling on a day that only contains 60 — the "vibe" the entry above
+already refuses.
+
 ### Day template
 
 A **named, reusable day shape** — "Ordinary weekday", "Volleyball Tuesday", "Tournament Saturday",
@@ -298,6 +322,12 @@ See **Event** for how recurring Events surface differently from dated ones.
   a **stamp**, not a link — it lays the shape down and the connection ends there. Subsequent edits
   to that template do not reach the date, and edits to the date do not reach the template or any
   other date using it.
+  **The copy preserves each Window's id.** Copying is not minting: a Window carries the same id
+  whether it is being read through a Pattern or out of an Override. This is load-bearing for the
+  **Fire record**, which is keyed on `(date, windowId)` — "Matching on" can materialise a date
+  *mid-day*, after that day's Windows have already fired, and fresh ids would make an already-fired
+  Window read as unfired and push again a minute later. `(date, windowId)` is unique regardless, so
+  preserving the id costs nothing.
 - **Per-day variation falls out free.** Each date in a span names its own Day template or its own
   one-off day; nothing has to express "different on day 3".
 
@@ -341,13 +371,20 @@ two artifacts.
 `Unprocessed`/`Stale` counts. Riding an existing channel means an Event costs zero additional pushes.
 
 - **Dated Event** — footer for the **3 days up to and including the day**, and during that span the
-  **first Availability Window of each day fires unconditionally**, matching Tasks or not. That is the
-  guaranteed carrier: without it, three quiet days would surface the obligation nowhere at all.
-  Later Windows keep the normal rule, so a busy day surfaces the Event repeatedly and naturally.
-  A runway day with **no Windows at all** — a travel-day Override, say — has no first Window to carry
-  the Event, so a **fallback push** carries it instead. See **Firing**. This is not a rare corner: the
-  Events most likely to have windowless runway days are trips, and the days before a trip are exactly
-  when travel-day Overrides get stamped.
+  **first Availability Window of each day that *actually fires* fires unconditionally**, matching
+  Tasks or not. That is the guaranteed carrier: without it, three quiet days would surface the
+  obligation nowhere at all. Later Windows keep the normal rule, so a busy day surfaces the Event
+  repeatedly and naturally.
+
+  *Actually fires* rather than *the day's first* because a Window whose whole span passes while the
+  service is down never fires at all (see **Firing**), and the carrier duty must then slide to the
+  next chance rather than evaporating. The obligation lands on whatever chance is left, and downtime
+  needs no catch-up mechanism of its own.
+
+  A runway day where **no Window carried the Event** — a windowless travel-day Override, or a day
+  whose every Window was eaten by downtime — gets a **fallback push** instead. See **Firing**. This is
+  not a rare corner: the Events most likely to have windowless runway days are trips, and the days
+  before a trip are exactly when travel-day Overrides get stamped.
 - **Recurring Event** (instantiated from a prototype in a Pattern slot) — footer **on its own day
   only**, with **no unconditional firing**. The 3-day runway exists for the irregular thing that would
   otherwise be forgotten, which a weekly commitment is not. Without this distinction, one weekly
@@ -357,6 +394,24 @@ two artifacts.
 Rejected: a dedicated lead-time notification per Event — an extra push for something the footer
 already carries. Rejected: firing *every* Window during the 3-day span — up to a dozen Task-less
 pushes per Event, which trains the footer to be swiped away unread.
+
+### Day boundary
+
+**Local midnight, in the service's fixed zone.** One definition, used identically everywhere the
+system needs to know what day it is: **Snooze** expiry, obligation catch-up and the **fallback push**
+bound (**Firing**), the 3-day Event runway (**Event**), Recurrence due dates (**Recurrence**), and the
+`Stale` age rule (**Status**). Nothing in the model may disagree about what day it is.
+
+Midnight also survives DST for free — US transitions happen at 2a, so 00:00 is never ambiguous and
+never missing, unlike every other candidate boundary.
+
+> **Accepted consequence.** A Snooze taken at 11:50p schedules a re-fire at 12:20a that simply never
+> happens. That is *"show me this again later today"* read literally.
+
+Ending the day at the last Window's close was rejected — it disagrees with every other boundary in the
+model, and it is undefined on a windowless day, which is precisely the day the fallback push exists
+for. A configurable rollover hour was rejected as a tunable that would make "what day is it"
+answerable two different ways.
 
 ### Firing
 
@@ -387,20 +442,140 @@ Suppressing a push whose shortlist duplicates the previous one was considered an
 Windows are two genuinely separate chances at the same Tasks, and withholding the second one reasons
 about the Task's content when the only question is whether an opportunity exists.
 
+#### Missed fires
+
+The service will be down or restarting at some Window's start time. The governing line:
+
+> **Opportunities die with their span. Obligations die at midnight.**
+
+A missed **Window** fires **late, any time it is still inside its own span**, with the Duration ceiling
+re-derived from `now → Window end` — the identical rule **Snooze** already uses. Once the span has
+closed, it is silent.
+
+```
+Evening prep 5:30p–7p, service down at 5:30p
+  5:45p  back  →  FIRE, ceiling from 5:45p → 7p (75 min)
+  7:10p  back  →  silent, the span is spent
+```
+
+**The Window's own span is the grace period** — there is no grace constant to tune. The asymmetry with
+Snooze's floor-at-the-smallest-bucket rule is deliberate and is that rule's own reasoning read in
+reverse: an empty *user-requested* re-fire still pushes because they asked for it; nobody asked for a
+missed fire, so a spent opportunity stays quiet.
+
+A consequence worth naming: a long outage produces **no burst on return**. Every Window whose span
+closed while the service was down is silent, so only a currently-live Window fires.
+
+An **obligation** is not bounded by any span — see the carrier rule under **Event**, and the fallback
+push below.
+
 #### Fallback push
 
-**The one push with no Window behind it.** On a day inside a **dated Event's** runway that has **no
-Availability Windows at all**, a push fires at **11:00a** carrying the Event.
+**The one push with no Window behind it.** On a day inside a **dated Event's** runway where **no Window
+carried the Event**, a push fires carrying it.
 
-- Scoped narrowly — windowless *and* inside a dated Event's runway. It can never become a daily alarm.
-- Content is the Event and the footer counts. **No Window is named**, because none exists.
-- The time is a **constant in the rules layer**, not a setting. It adds no surface to the UI
-  inventory, and is consistent with *new behaviour arrives as a new rule, not as configuration*.
+- **Trigger** — no carrier, whether because the day has no Windows at all (a travel-day Override) or
+  because every Window's span passed while the service was down.
+- **Due at** `max(11:00a, the moment no Window can still carry it)`. On a windowless day "no chance
+  left" is true from midnight, so it lands at exactly **11:00a**; on a day whose Windows were eaten it
+  lands when the last span closes. It is never due after the **Day boundary**.
+- Because it is an obligation, **it fires late on return** any time up to the Day boundary.
+- Scoped narrowly — uncarried *and* inside a dated Event's runway. It can never become a daily alarm.
+- Content is the Event and the footer counts. **No Window is named**, because none is carrying it.
+- 11:00a is a **constant in the rules layer**, not a setting. It adds no surface to the UI inventory,
+  and is consistent with *new behaviour arrives as a new rule, not as configuration*.
 
-Deriving the time instead (the first Window start of the Day template the Pattern assumes for that
-weekday) was considered and set aside as more machinery than the case earns. Blocking creation of an
+Evaluating only at 11:00a sharp was rejected: on a day whose morning Window was eaten but whose
+afternoon Window will carry the Event perfectly well, it produces a redundant push followed by the
+real one. A single end-of-day sweep was rejected for delivering the obligation when there is nothing
+left to do about it. Deriving the time instead (the first Window start of the Day template the Pattern
+assumes for that weekday) was set aside as more machinery than the case earns. Blocking creation of an
 Event with no carrier was rejected on the standing precedent that blast radius is made **visible, not
 prevented**.
+
+#### The engine
+
+**One loop, recomputing on a ~30-second tick.** No timers, no scheduled jobs, no startup catch-up
+sweep.
+
+```
+every ~30s:
+  shape = Override[today] ?? Pattern[weekday]
+  for each Window in shape:
+      due?      start <= now
+      alive?    now < end
+      unfired?  no Fire record for (today, windowId, kind)
+      → match, and push if the result is non-empty
+  for each pending Snooze where dueAt <= now:
+      → re-match, push, record
+  fallback: runway day && uncarried && no chance left && now >= 11:00a
+```
+
+Every rule above is a **predicate about a moment**, not an event on a calendar — "is now inside the
+span and unfired", "has any Window carried it yet", "is any chance left today" — so recomputation is
+the natural shape rather than an implementation convenience.
+
+What that buys, and why it was chosen over per-fire timers or a scheduler-plus-sweep hybrid:
+
+- **Downtime is indistinguishable from a slow tick**, so the missed-fire policy *is* the normal path.
+  There is no catch-up code, and therefore no second implementation of the policy that can drift out
+  of agreement with the first.
+- **Nothing to rebuild on restart** — no timer state, no in-memory snooze chain.
+- **DST-safe**, because instants are re-derived from clock times each tick rather than computed once.
+- **A pending Snooze is just another row** the same loop picks up, so it survives a restart for free.
+
+30 seconds because the unit of authoring is a clock minute; sub-minute precision buys nothing, and
+correctness rests on the **Fire record**'s idempotency rather than on tick accuracy.
+
+#### Delivery failure
+
+`firedAt` is written **only when Pushover accepts the message**. A failed push therefore reads as
+still-unfired on the next tick and is simply retried, bounded by the rules already in force — an
+opportunity stops retrying when its span closes, an obligation at the **Day boundary**. Retry is the
+ordinary path, not a retry subsystem, and every failed attempt is logged.
+
+This is **at-least-once**, chosen to protect the biconditional. If a transient network blip could
+silently eat a push, `no push ⟺ nothing fit` quietly becomes `no push ⟺ nothing fit OR the wifi
+hiccuped`, and silence stops being information — the same argument that rejected a daily cap.
+
+Accepted risk: if Pushover accepts a message but the response is lost, one duplicate push follows.
+Rare, and far cheaper than a silent loss. Recording on *attempt* (at-most-once) would make duplicates
+structurally impossible, at the price of a two-second blip costing an evening's reminder
+indistinguishably from "nothing matched".
+
+### Fire record
+
+**The store of what has fired and what is still owed today**, keyed `(date, windowId, kind)` where
+kind is `window` | `unconditional` | `snooze` | `fallback`. One file per day,
+`/data/fires/<date>.json`.
+
+**Fires and pending Snoozes are the same structure**: a fire is a row with a `firedAt`, a pending
+Snooze is a row with a future `dueAt` and a null `firedAt`. One file and one loop serve both, which is
+what lets a Snooze survive a restart with no machinery of its own.
+
+```json
+[ { "windowId": "w-evening", "kind": "window",
+    "firedAt": "17:45", "matched": 4 },
+
+  { "windowId": "w-evening", "kind": "snooze",
+    "dueAt": "18:07", "firedAt": null },
+
+  { "windowId": "w-morning", "kind": "unconditional",
+    "firedAt": "07:00", "matched": 0, "carried": "evt-concert" } ]
+```
+
+- `unfired?` — no row with a `firedAt` for that key. This is the engine's whole idempotency guarantee.
+- **Retention: 30 days**, and because the day is the unit that is one `rm` of whole files, not a
+  rewrite. This is an instance of the standing logging-retention rule, not an exception to it.
+- It **never materialises an Override**, so the Pattern stays unreified per **Override** — a day that
+  merely *fired* creates a fire file, not a dated day-shape record.
+- It doubles as the audit trail for *"why did I not get a reminder?"*, the same debuggability concern
+  that put the read-only dimensions viewer in the UI inventory.
+
+Storing fires on the date's Override was rejected because it forces an Override into existence for
+every day that fires anything, turning the sparse-Override design into a fully reified calendar. A
+single rolling append-only log was rejected for unbounded growth, no cheap retention, and a
+`unfired?` check that must scan or index it on every tick.
 
 ### Notification
 
@@ -436,11 +611,34 @@ nothing sends nothing at all. The two cases that still send are both obligations
 | Case | Title | Body |
 |---|---|---|
 | Unconditional fire, no matches | the **Event** and its weekday | "Nothing fits *Window* right now", then counts |
-| **Fallback push** (windowless day) | the **Event** and its weekday | counts only — no Window exists to name |
+| **Fallback push** (uncarried day) | the **Event** and its weekday | counts only — no Window is carrying it |
 | Empty snooze re-fire | "Nothing fits *Window* now" | counts |
 
 Leading an empty push with the Window (*"Garage — until 3p"*) is rejected: it advertises an
 opportunity that isn't there, which is precisely the failure the restraint rule exists to prevent.
+
+#### `ttl`
+
+Every push carries a Pushover `ttl`, derived from **the same boundary that governs the fire** — so it
+introduces no new concept, only applies the governing line to the notification's afterlife rather than
+just its arrival:
+
+| Push | `ttl` runs to |
+|---|---|
+| Window fire, including a late one | the Window's end |
+| Snooze re-fire, still inside the span | the Window's end |
+| Snooze re-fire, past the span | the **Day boundary** |
+| Unconditional fire (Event runway) | the **Day boundary** |
+| Fallback push | the **Day boundary** |
+
+A push about a spent opportunity sitting in the notification shade is the accumulating noise this
+design exists to prevent. A single fixed `ttl` was rejected as a knob with no principle behind it,
+simultaneously too long for a 30-minute Window and too short for a morning obligation.
+
+**Unverified:** issue #3 established `ttl` as a restraint lever but could not confirm whether it clears
+an **already-delivered iOS notification** or only Pushover's own message list. The choice above is
+correct under either reading — if only the in-app list self-cleans, that is still worth having and
+costs nothing — so nothing here waits on the answer. Testing it is an on-device empirical question.
 
 ### Snooze
 
@@ -449,8 +647,13 @@ The **only** re-fire path, always user-initiated from the landing page a notific
 - **Interval** — `clamp(25% of Window duration, 5 minutes, 30 minutes)`. Proportional, floored so a
   short Window cannot buzz again almost immediately, capped at 30 minutes.
 - **Repeats** — unlimited, same interval each time. No escalation, no cap.
-- **Expiry** — the reminder dies at end of day. Snooze means "show me this again *later today*".
+- **Expiry** — the reminder dies at the **Day boundary** (local midnight). Snooze means "show me this
+  again *later today*". A re-fire scheduled past midnight never happens.
 - **Past Window end** — allowed. Work sometimes continues past the authored span.
+- **Storage** — a pending Snooze is a row in the day's **Fire record** with a future `dueAt`, picked up
+  by the same loop that fires Windows. It therefore survives a restart, and the "stateless chain"
+  property below is about the *interval and ceiling* rules, not about holding the pending re-fire in
+  memory.
 - **Content** — **re-matched at the re-fire time against the original Window's Dimension values, using
   current Task state.** Same filter, fresh list: Tasks completed since the first fire drop off, newly
   captured Tasks that fit appear. Snoozing while actively working a long list is the motivating case.
