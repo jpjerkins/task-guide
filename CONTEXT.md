@@ -165,6 +165,37 @@ determines everything about how it is declared, stored and matched.
 
 Location, With whom, Weather. Both sides carry a **set** of values.
 
+**A Dimension's window-side value can come from three places**, and Weather introduces the third:
+
+| Source | Meaning | Example |
+|---|---|---|
+| **Authored** | typed in by hand when the Window is built | Location, With whom |
+| **Derived** | computed from the Window's own static properties | Duration, from start/end |
+| **Fetched** | pulled live from an external source at evaluation time, never stored | Weather |
+
+**Weather is a categorical Dimension whose Window side is fetched, never authored.** The Task side
+works exactly like any other categorical Dimension — a Task carries a Weather Tag (`dry`, `sunny`) that
+is authored and stored normally, ANDing like every other Task-side value. The Window side is always
+blank in storage; there is nothing to author. At evaluation time the engine fills it in on the fly:
+a **current-conditions check** when deciding whether a Window fires right now, a **forecast check**
+when evaluating a future Window (ranking, Scarcity). **Lazy**: the check only runs if some Active Task
+actually carries a Weather Tag — no weather-tagged Tasks, no API call.
+
+**Unknown or unavailable weather resolves differently depending on who's watching:**
+
+- **Headless** (an unattended engine tick, a background Scarcity computation) — unknown is treated as
+  the **empty set**, the same rule absence already follows for every categorical Dimension. Fails
+  closed, silently — consistent with *no push ⟺ nothing fit*.
+- **UI-visible** (a firing, or the landing page) — same fail-closed match behavior, plus a **footer
+  note** naming the failure ("Weather unavailable"), so a missed weather-gated Task is visible rather
+  than silently dropped. The footer rule is **generic, not weather-specific**: any fetched Dimension
+  whose check failed gets named in the footer, so a second fetched Dimension (air quality, say) needs
+  no new UI. Failure visibility rides the **existing** footer — no standalone health-check surface.
+
+No new top-level domain concept was needed: "live external condition" collapses entirely into the
+existing Dimension/Tag machinery once the Window side is allowed to be fetched instead of authored or
+derived. See #9.
+
 > **Window values OR together. Task values AND together.**
 > A Task fits when its set on that axis is a **subset** of the Window's.
 
@@ -604,6 +635,10 @@ Fix the shelf bracket (60m)          ← title: the top-ranked Task
   fire exists to guarantee is invisible without expanding the notification.
 - **Footer counts last**, and **zero-valued components are omitted**; if all are zero the line
   disappears. Counts are a nudge, not news, so they are the right thing to lose off the bottom edge.
+- **A failed fetched-Dimension check** (see **Dimension** — Weather) is named in the footer when the
+  moment is UI-visible ("Weather unavailable"), so a silently-dropped weather-gated Task is still
+  discoverable. Headless evaluation (an unattended tick) fails closed with no footer note — nobody is
+  there to read it.
 
 **When nothing matches, the shape changes rather than the push being faked.** A Window that matches
 nothing sends nothing at all. The two cases that still send are both obligations or requests:
