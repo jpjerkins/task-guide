@@ -11,8 +11,10 @@ prototyping, revised the Dimension, Tag, Matching rule and Ranking entries —
 Deadline, Defer and Recurrence and corrected the `Stale` and Scarcity entries,
 [Matching and selection algorithm](https://github.com/jpjerkins/task-guide/issues/11), which
 completed Ranking, added Notification, and extended Firing and Snooze,
-and [Window firing engine](https://github.com/jpjerkins/task-guide/issues/16), which added Day
-boundary and Fire record, amended the Event carrier and the fallback push, and settled DST resolution.
+[Window firing engine](https://github.com/jpjerkins/task-guide/issues/16), which added Day
+boundary and Fire record, amended the Event carrier and the fallback push, and settled DST resolution,
+and [Derived-obligation rules](https://github.com/jpjerkins/task-guide/issues/14), which settled that
+entry, added Offset and an Event's Absence notice, and sharpened what an inert Tag means.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -77,7 +79,7 @@ this" — which is the exact opposite of the truth.
 value:
 
 - an **absolute date** — "not until January"
-- an **offset from the Deadline** — "weekly, due Sunday, surface the Monday prior"
+- an **Offset** from the Deadline — "weekly, due Sunday, surface the Monday prior"
 
 **Recurring Tasks must use the offset form.** Not a restriction so much as what it means for a rule to
 regenerate: an absolute date would apply to one instance and be wrong forever after.
@@ -98,6 +100,24 @@ A deferred Task appears in **no match-driven surface** — no notification, no l
 "Matching on" preview — but stays browsable in the task list marked with its surface date, so it
 remains findable. It is never an **Orphan**: orphan detection keys on the Pattern-week count, which
 asks whether any Window can *ever* admit the Task and is blind to timing.
+
+### Offset
+
+**A date expressed relative to another date.** A closed set of exactly two forms:
+
+- **`N days` / `N weeks` / `N months` before**
+- **the last `<weekday>` strictly before** — "the Friday preceding". *Strictly*, so an anchor that
+  falls on a Friday resolves to the week before, not to its own morning.
+
+Three parts of the model had each invented their own spelling for the same idea: **Defer**'s
+offset-from-Deadline form, an Event's **Absence notice**, and the deadlines that
+**derived-obligation rules** compute. One value type serves all three, and the corpus of obligations
+that motivated it needs no third form.
+
+**Deliberately not unified with Recurrence.** A Recurrence rule is a *generator* — "what date comes
+next, repeatedly". An Offset is a *function of one date* — "what date is this much before that one".
+They look alike and are not; collapsing them is how the RRULE-shaped mistake gets made a second time,
+and full RRULE was already rejected once on exactly that ground.
 
 ### Recurrence
 
@@ -262,6 +282,14 @@ enough). See **Dimension**. Ordinal axes carry exactly one value per side.
 UI, ignored by matching. This is the intended path for a new idea — invent the Tag now, add the rule
 in code later. Inert Tags act as a staging area for future functionality.
 
+> **Inert means inert to *matching*, not unread.**
+
+A **derived-obligation rule** may read a Tag that no Dimension claims — `#TimeOff` on a trip is
+exactly that, and is the first thing the staging area above was holding open. Giving such Tags a
+Dimension of their own was rejected: a Window would then have to declare `#PlaneTickets` for a tagged
+Event to match anything, which is meaningless, and it would make trigger Tags into matching inputs
+when triggering is their whole purpose.
+
 ### Availability Window
 
 A **clock-bounded span within a day**, carrying a name and a set of Dimension values. The day's
@@ -389,7 +417,8 @@ fixed time, single obligation, must not be missed.
 | Name | text | "Band concert" |
 | Date | date | Instantiated from a prototype, or entered directly |
 | Start / End | clock times | Bounded span, used for Window overlap resolution |
-| Tags | dimension-qualified | Same mechanism as a Task's — registry resolution on write, unresolved Tags kept but inert |
+| Tags | dimension-qualified | Same mechanism as a Task's — registry resolution on write, unresolved Tags kept but inert. **Events are never matched**, so an Event's Tags exist to trigger **derived-obligation rules** |
+| Absence notice | **Offset**, optional | Advance warning owed to this commitment if it is missed. Null — the common case — means nobody needs telling. Held by a **prototype** and inherited by its instances, so it is authored once. Drives the absence family of **derived-obligation rules** |
 
 **Overlap resolution.** Creating an Event that overlaps an existing Window — *even partially* —
 prompts for how to handle that Window: **replace** it, **truncate** it (at either end; truncating the
@@ -750,20 +779,124 @@ rule now says precisely; the ranking half is replaced by **Scarcity**.
 
 ### Derived-obligation rule
 
-A rule that reads a Tag and produces a **new obligation with its own deadline** — e.g. something
-tagged with a person may derive "have them ask off work before the preceding Friday". Neither filter
-nor rank; a third mechanism. Scope and design are open (see the derived-obligation ticket on the map).
+A rule that reads a **dated record** and produces an obligation carrying its own Deadline. Neither
+filter nor rank — a third mechanism.
 
-**Events** now carry Tags too, so they are candidate triggers alongside Tasks. Note the asymmetry the
-ticket must resolve: a derived obligation needs **a date to count back from**, which an Event always
-has and a Task has only when it carries a Deadline. What a rule *produces* can be an ordinary **Task
-with a deadline**, re-entering the system through normal matching and ranking — no third notification
-path.
+> **A rule is an assumption; the dated record is the fact.**
+> Derived obligations are **computed on read and never stored.**
+
+This is the Pattern/Override architecture applied a third time — the Pattern is never reified,
+recurrence instances are never reified, **Defer** and **Scarcity** are computed on read. It is what
+makes the mechanism nearly free: a derived obligation has **no lifecycle**.
+
+| When the trigger… | the obligation… |
+|---|---|
+| moves its date | moves its Deadline with it |
+| loses the triggering Tag | ceases to exist |
+| is deleted, or completed | ceases to exist |
+
+There is no cascade, no cleanup pass, and no "don't re-create the one I dismissed" flag, because
+nothing is stored for any of them to act on.
+
+#### What a rule produces
+
+**A read-only derived Task**, re-entering the system through normal matching, **Scarcity** and
+**Ranking** — there is no third notification path. It cannot be renamed, retagged or deleted; it is a
+projection of the trigger through the rule. **Marking it done is the only interaction.**
+
+Each rule **hard-codes the shape** of the Task it produces — Title, Duration, Tags, Defer — because a
+given rule always generates the same kind of Task. **Tags are never inherited from the trigger.**
+Inheritance is a guess about meaning that is wrong as often as right, and it is the one default that
+can silently manufacture **Orphans**: a "buy plane tickets" obligation derived from a tournament
+tagged `With whom: Sam` would inherit `Sam` and become near-unmatchable.
+
+A derived Task carries its **provenance** — which rule, which trigger — so *"why is this here, and
+where do I go to change it"* is answerable on the Task itself. The same debuggability concern that put
+the read-only dimensions viewer in the UI inventory.
+
+It is never `Unprocessed` (the rule supplies Duration) and never `Stale` (its lifetime is bounded by
+construction — see below), but it **is** subject to Orphan detection: an orphaned derived Task means a
+badly written rule, which is exactly the thing worth surfacing.
+
+#### Completion
+
+Logged as `{ ruleId, triggerId, due, done }` — sparse, and the same `{ due, done }` shape
+**Recurrence** already uses.
+
+Keying on `due` earns a case for free: complete "have Sam ask off work", then move the tournament, and
+the logged `due` no longer matches the live one — so the obligation correctly re-derives. Nothing had
+to notice the move.
+
+#### Lifetime
+
+> **A derived obligation dies with the thing that derived it.**
+
+Past **its own** Deadline it stays live at maximum urgency like any overdue Task — asking late beats
+not asking. Past the **trigger's** date it simply stops being derived: silently, with no `Stale` and no
+count, because an obligation you can no longer act on is not an obligation. *"Opportunities die with
+their span, obligations die at midnight"*, extended one step.
+
+#### Triggers
+
+**Dated Events.** A rule needs a date to count back from, which an Event always has and a Task has only
+when it carries a Deadline. Tasks are formally permitted as triggers and in practice trigger nothing —
+Tasks are what rules *produce*.
+
+**Recurring Events never trigger.** A weekly commitment tagged for an obligation would derive one every
+week forever. Same cut **Event** already makes between dated and recurring, for the same reason.
+
+Triggers are found by **scanning the sparse stored records** — dated Events and Overrides — never by
+walking a calendar. The Pattern staying unreified therefore costs this mechanism nothing, however many
+months ahead an obligation reaches.
+
+#### Two families
+
+**Tag-declared.** The rule reads a Tag on a dated Event and produces its Task with an **Offset**
+deadline: `#TimeOff`, `#PlaneTickets`, `#PlaceToStay`. Each is a small rule in code. New ones arrive
+rarely, and each words its Task differently, so there is nothing to generalise.
+
+**Absence.** One generic rule, no Tag involved:
+
+> The active **Pattern** assumes Event E on this date · E declares an **Absence notice** · the date's
+> actual shape does not contain E → *"Tell E you'll be out"*, due `E's date − Absence notice`.
+
+Both standing commitments this exists for — serving in student ministry on Sunday, instructing karate
+on Tuesday and Thursday — fall out of the Event's own name and notice value, so **joining a third thing
+is authoring, not a code change.** Weekday-and-time literals in the rule ("any Event on Tuesday or
+Thursday night") were rejected: the Pattern already owns that knowledge, and a hard-coded weekday goes
+silently wrong the day karate moves.
+
+*"A Pattern describes the assumption; an Override describes reality"*, read one layer up — **the gap
+between assumption and reality is the obligation.**
+
+**Absence, not overlap.** A dated Event that merely overlaps the commitment does **not** trigger it: a
+tournament starting at 10 does not mean the 9:00 service was skipped, only that it was left early. The
+date's shape lacks E in exactly two ways — an **Override** stamped a day without it, or that date's
+instance was deleted, which is the honest *"I'm not going"* gesture. There is deliberately no
+Event-vs-Event overlap prompt mirroring the Event-vs-Window one; overlap is not absence.
+
+**Contiguous absences coalesce.** A trip spanning three Sundays derives **one** obligation, due before
+the first — you tell them once. Contiguity is a structural fact of the recurrence rather than a
+proximity threshold, so the merge introduces no knob.
+
+#### What this is not
+
+Not a general automation engine. A rule reads one dated record and produces one Task; it never reads
+another rule's output, never chains, and never learns. Several obligations from one trigger are
+several independent rules firing, with no grouping concept between them.
+
+`#PaymentDueOn` and `#RegisterBy` are **not** derived obligations. Their dates are imposed by the
+outside world and no rule can compute them from the trip's date, so they are ordinary Tasks with
+Deadlines, authored by hand alongside the Event.
 
 ### Rules generally
 
 Both rule kinds live **in code**, written with the open/closed principle in mind, with **no management
 UI**. New behaviour arrives as a new rule, not as configuration.
+
+One nuance the **absence** rule introduces: the rule is in code, but its *instances* are authored as
+data — a commitment declaring an **Absence notice** adds one without a code change. This is not
+configuration of behaviour. The behaviour is fixed; the Event is stating a fact about itself.
 
 ## Ranking
 
