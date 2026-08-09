@@ -13,8 +13,10 @@ Deadline, Defer and Recurrence and corrected the `Stale` and Scarcity entries,
 completed Ranking, added Notification, and extended Firing and Snooze,
 [Window firing engine](https://github.com/jpjerkins/task-guide/issues/16), which added Day
 boundary and Fire record, amended the Event carrier and the fallback push, and settled DST resolution,
-and [Derived-obligation rules](https://github.com/jpjerkins/task-guide/issues/14), which settled that
-entry, added Offset and an Event's Absence notice, and sharpened what an inert Tag means.
+[Derived-obligation rules](https://github.com/jpjerkins/task-guide/issues/14), which settled that
+entry, added Offset and an Event's Absence notice, and sharpened what an inert Tag means, and
+[Orphan tasks — surfacing and prevention](https://github.com/jpjerkins/task-guide/issues/18), which
+corrected the Orphan Task entry.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -988,9 +990,22 @@ They look identical to the user and mean opposite things, so they are distinguis
 the Pattern-week count:
 
 - **Orphan Task** — no Window in the active Pattern can *ever* admit it. Something is malformed:
-  either the Task carries a Tag nothing declares, or the schedule is missing a Window. Orphans surface
-  as a count alongside `Unprocessed` and `Stale`, and are the only defence against the tagging drift
-  described under **Dimension**.
+  either the Task carries a Tag nothing declares, or the schedule is missing a Window. **Categorically
+  worse than `Unprocessed` or `Stale`** — those are untidy, this is unfireable — so it gets more than
+  their shared footer count: a badge/filter on the Task itself, in the same debuggability spirit as the
+  read-only dimensions viewer. The **repair** is always "declare this Tag on some Window," so the badge
+  deep-links into the window editor, pre-filtered to the distinct Day templates the *active* Pattern
+  references (never dormant ones — fixing those wouldn't help today) that don't yet declare a value on
+  that Tag's Dimension. Symmetrically, the window editor shows the **inverse** before a value is
+  removed — "N Tasks depend on this and nothing else declares it" — catching the drift at the edit that
+  causes it, rather than after. Switching the active Pattern can orphan many Tasks at once, so the
+  switch **warns up front with a count before committing**, not after the damage is done. **Scarcity =
+  1** ("near-orphan") gets none of this — Ranking already surfaces it by sorting it near the front of
+  every relevant sort, and a second channel would just duplicate that signal and blur unfireable from
+  merely rare. Orphan detection is **Tasks only** (including derived Tasks, already subject to it) —
+  Events are never matched, so the concept doesn't apply to them. Computed live on read, same as
+  Scarcity itself — no caching, since the cost is already established as trivial. This is the only
+  defence against the tagging drift described under **Dimension**.
 - **None in this stretch** — normally doable, but every admitting Window falls outside the horizon,
   usually because an Override or Event displaced it. **Nothing is wrong**; the Task should simply not
   be ranked as though this were its big chance.
