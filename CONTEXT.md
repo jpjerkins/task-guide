@@ -26,7 +26,9 @@ and extended Dimension, and split the old Scarcity entry into **Opportunities** 
 Capture, added **Receipt**, and split Notification into two species — scoping the silence guarantee
 to **Reminder**, and
 [Day template lifecycle](https://github.com/jpjerkins/task-guide/issues/24), which added **`Unused`**
-and an Override's **use record**, and settled Pattern deletion.
+and an Override's **use record**, and settled Pattern deletion, and
+[Liveness](https://github.com/jpjerkins/task-guide/issues/25), which added **Liveness** and gave the
+silence guarantee its precondition.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -694,7 +696,8 @@ answerable two different ways.
 day-level notification budget.
 
 Notification restraint comes from a different lever: **if no Tasks match, no Reminder fires.**
-Silence is therefore always truthful — no Reminder means nothing fit. This decouples restraint from
+Silence is therefore always truthful — no Reminder means nothing fit, **provided the service was alive
+to notice** (see **Liveness**). This decouples restraint from
 authoring fidelity, so the week can be authored honestly without deleting Windows to quiet the phone
 (which would also destroy a matchable moment).
 
@@ -707,7 +710,8 @@ A Window is **not** re-fired automatically part-way through, however long it is.
 carrying no new information is noise, and it would destroy the truthfulness of silence.
 
 **There is no daily ceiling, cap or rate limit**, and restraint is enforced in exactly one place: the
-matcher. Today the rule is a biconditional — `no Reminder ⟺ nothing fit` — and that is what makes
+matcher. Today the rule is a biconditional — `no Reminder ⟺ nothing fit`, **given Liveness** — and
+that is what makes
 silence *information*. Any cap weakens it to `no Reminder ⟺ nothing fit OR budget spent`, at which
 point a quiet afternoon is unreadable. The biconditional is stated over **Reminders**, not over
 notifications generally, because a **Receipt** can arrive when nothing fit — but only ever as the
@@ -824,6 +828,81 @@ Accepted risk: if Pushover accepts a message but the response is lost, one dupli
 Rare, and far cheaper than a silent loss. Recording on *attempt* (at-most-once) would make duplicates
 structurally impossible, at the price of a two-second blip costing an evening's reminder
 indistinguishably from "nothing matched".
+
+### Liveness
+
+**The service was capable of firing a Reminder recently.**
+
+Liveness exists because the silence guarantee has always had an unstated precondition. `no Reminder ⟺
+nothing fit` reads a quiet evening as a fact about your Tasks — but a crashed, crash-looping or wedged
+service produces exactly the same quiet, and under **Firing**'s deliberate refusal of caps, budgets and
+rate limits there is nothing else that could have suppressed the push. **A bad deploy at 6p is
+indistinguishable from an evening when nothing fit**, and stays so until the app is next opened.
+
+> **A dead service cannot report its own death.**
+
+That line decides the whole shape. Any signal *originating* from the service goes quiet in precisely
+the case it exists to detect, so a daily summary push, an ambient count and an unpolled health endpoint
+are each half a mechanism. Liveness is therefore always **an absence noticed from outside**: the
+service emits a heartbeat, and something external alerts when the heartbeat stops.
+
+Stating the precondition is **not** the weakening that a cap would have been. A cap makes silence
+mean *"nothing fit, or the budget ran out"*, with no way to tell which. Liveness is **externally
+verified**, so the biconditional gains a witness rather than an ambiguity — the same move **Receipt**
+made in scoping the guarantee to Reminders: the claim gets narrower and, in getting narrower, becomes
+true.
+
+#### What is in the predicate
+
+> **A component belongs to Liveness if its failure would make `no Reminder ⟺ nothing fit` a lie.**
+
+That test is the entry's durable part; without it the predicate accretes checks forever.
+
+| Component | In? | Why |
+|---|---|---|
+| **The tick loop advanced recently** | yes | **Firing**'s engine is the thing that produces Reminders. A wedged loop answers HTTP perfectly while firing nothing, so process aliveness is the wrong question |
+| **The store is readable** | yes | The matcher has nothing to match against, so every Window falls silent |
+| **The store is writable** | yes | Observed, not probed — see below |
+| Load, memory, latency | **no** | Silence stays truthful under all of them. They belong to host monitoring, which is not this system's concern |
+| Pushover reachable | **no** | **Delivery failure** already answers this with retry, and the check is unbuildable anyway: an outage at Pushover cannot be reported *through* Pushover |
+
+**Read health is a parse, not a `stat`.** A `stat` succeeds on a truncated or empty file, which is the
+state a failed write leaves behind — so the check reads and parses the one file that always exists and
+whose loss means the store is gone.
+
+**Write health is taken from work already being done.** Because the store is **memory-authoritative**,
+a read-only remount or a full disk is invisible to a read: reminders keep firing correctly from memory
+while captured Tasks evaporate on restart. The retention sweep already touches the filesystem on every
+tick, so its outcome *is* a write check on a 30-second cadence — observed rather than probed. This is
+**Firing**'s reading of downtime as a slow tick, applied to storage: prefer noticing what the system
+already does over adding a mechanism to ask.
+
+#### Two failure classes
+
+They want different answers, and only one of them wants a notification:
+
+| Class | Example | Response |
+|---|---|---|
+| **Wedged** — process up, loop stopped | deadlock, an exception that ate the loop | the predicate is the container's health check, so the orchestrator **restarts it automatically**. No alert, no surface |
+| **Dead** — container down, crash-looping, host off | bad deploy, a fatal startup assert, power cut | the heartbeat stops and the external watcher alerts |
+
+The first is the better half: a failure class converted into a non-event rather than into a
+notification, which serves restraint better than any alert could.
+
+**A fatal failure announces itself where it can.** The startup registry assert (see **Dimension**)
+deliberately refuses to run on a collision, which is a crash loop that pushes nothing. It signals
+failure outbound *before* exiting, carrying its reason, so the alert names the duplicate value rather
+than reporting only that the service went quiet. Waiting out a grace period is for when the service
+cannot speak; when it can, it says so.
+
+#### What Liveness is not
+
+Not monitoring. It answers one question — *is silence trustworthy right now* — and general host and
+service health is a separate concern with a separate home. Liveness surfaces in the app as **one line
+on a screen that already exists** (the last fire, from the **Fire record**), never as a status page, a
+health screen or an indicator light. That is **Notification**'s debuggability argument read one step
+back: the read-only dimensions viewer exists because a *wrong* reminder is otherwise undebuggable, and
+this is the same complaint with no reminder to inspect.
 
 ### Fire record
 
