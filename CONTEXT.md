@@ -24,7 +24,9 @@ and extended Dimension, and split the old Scarcity entry into **Opportunities** 
 **Scarcity** (the rule that ranks on it), and
 [Optional Use Model smart capture](https://github.com/jpjerkins/task-guide/issues/22), which rewrote
 Capture, added **Receipt**, and split Notification into two species — scoping the silence guarantee
-to **Reminder**.
+to **Reminder**, and
+[Day template lifecycle](https://github.com/jpjerkins/task-guide/issues/24), which added **`Unused`**
+and an Override's **use record**, and settled Pattern deletion.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -501,6 +503,39 @@ A Day template is used **two different ways**, and the difference is load-bearin
 - **By reference**, in a **Pattern** — the Pattern stores a pointer; edits propagate.
 - **By value**, in an **Override** — the date stores copied Windows; edits never reach it.
 
+#### `Unused`
+
+A Day template is **`Unused`** when **no Pattern references it** — active *or* dormant — **and no
+Override within ±13 months was stamped from it**. Derived and recomputed on read; there is no archive
+action and no stored flag, so the state reverses itself the moment a season points at the shape again.
+
+Both clauses are load-bearing. A shape referenced by a **dormant** Pattern is the ordinary case, not a
+stale one — "Volleyball Tuesday" is unreferenced by the *active* Pattern for eight months a year, and
+#7 keeps Patterns precisely because seasons come back round. And a shape may matter without ever
+sitting in a Pattern slot at all: "Christmas Day", "band concert day", a workday birthday are stamped
+onto individual dates and belong to no weekday.
+
+**±13 months** is one year plus a month of slack — the shortest window that guarantees an annual shape
+is seen at least once — and it is **symmetric**, so a December already stamped counts as strongly as a
+December past. The threshold is **one** use, not several: an annual shape only ever gets one.
+
+> **`Unused` ⟺ deletable.** One predicate, one name, one consequence.
+
+Because an `Unused` shape is reachable from nothing — a Pattern would be a reference, and an
+**Override** holds a copy — deleting it cannot corrupt any record. The dangerous case is therefore
+**unrepresentable rather than warned about**: a shape referenced only by a dormant Pattern simply is
+not `Unused`, so there is no blast-radius confirmation to get right. To retire "Volleyball Tuesday" for
+good you first delete or repoint the Volleyball **Pattern**, which is the honest order of operations.
+The two deletions chain in that direction only.
+
+The confirmation names any **Event prototypes** the template carries, since those hold authored
+**Absence notices** — content, not a second gate; nothing can block a delete that is safe by
+construction.
+
+An **authored archive flag** was rejected: it is a second, weaker way to say what keeping a Pattern
+already says, and it can disagree with reality — archive a shape, later assign it to a season, and the
+model holds two answers to one question.
+
 ### Pattern
 
 **Seven Day template references**, one per weekday. Exactly one Pattern is active at a time; a
@@ -510,6 +545,12 @@ References are **live** — editing a Day template propagates to every Pattern u
 propagation is the point. The risk is handled by visibility, not by prevention: **editing a Day
 template shows its usage list** ("used by 3 Patterns: Volleyball, Summer, School year") before saving.
 To diverge, clone the template under a new name. There is no versioning and no copy-on-assign.
+
+**Any Pattern that is not the active one may be deleted**, confirmed by name. There is no `Unused`
+notion here: nothing references a Pattern, so there is no count to gate on, and seasons accrue at two
+or three a year rather than at the rate shapes do. The confirmation deliberately does **not** report
+which Day templates the deletion strands — they become `Unused`, which loses nothing, and a
+confirmation that reports harmless consequences trains the reader to dismiss the ones that don't.
 
 **A Pattern is an assumption, not a calendar.** It is never reified into dated records. Any future
 date's shape is *computed* on demand from the active Pattern; the only stored dated records are the
@@ -544,12 +585,31 @@ See **Event** for how recurring Events surface differently from dated ones.
   preserving the id costs nothing.
 - **Per-day variation falls out free.** Each date in a span names its own Day template or its own
   one-off day; nothing has to express "different on day 3".
+- **An Override records the Day template it used** — `{ templateId, templateName }`, the **name
+  captured at write time**, exactly as the **Fire record** stores a Window's name and span *as they
+  were*. This is a **use record, not a reference and not a provenance**: it is **never followed to
+  resolve a shape**, only counted and displayed, so the stamp remains a stamp and the bullet above is
+  untouched. Its one job is answering *"does this shape still matter?"* — it is what makes a Day
+  template **`Unused`** or not.
+
+  A **one-off day** built from scratch has none — nothing was stamped. **Promotion writes one** onto
+  the source date (see below). It is **single-valued**: re-stamping a date replaces it, because a
+  stamp visibly overwritten within the minute is not evidence a template earns its keep, and an
+  accumulating log has no reader. It **survives the date becoming a one-off day** — nudging one Window
+  on a stamped Christmas does not un-happen the fact that you reached for that shape. Because the name
+  is stored, history stays readable after the template is deleted.
 
 **One-off day** — an Override whose Windows belong to that date alone, with no named template behind
 them. Created when an **Event** overlaps an existing Window (see below), or by editing a stamped date
 directly. A one-off day may be **promoted** to a named Day template afterwards; promotion copies the
 shape *outward* and the source date keeps its own copy — it does **not** re-link, because that would
 put a hand-tailored date back under live propagation as a silent side effect of naming something.
+Promotion **does** write the source date's **use record**, which is a statement of history rather than
+a link — that date is in fact wearing that shape. Without it the one gesture meaning *"keep this"*
+would produce something born **`Unused`**, and the "Christmas Day" case — promoted from one December,
+never assigned to a weekday, stamped each following year — would sit deletable for the eleven months
+before its first stamp. The accepted cost is that a mis-named promotion cannot be deleted for 13
+months.
 
 Rejected alternatives: a **live diff** ("Ordinary weekday, minus the 6–10pm window") survives template
 edits but becomes nonsense once the referenced Window changes shape, and debugging a wrong reminder
