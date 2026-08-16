@@ -31,7 +31,9 @@ authored values are clock times while recorded facts are instants, and
 [Day template lifecycle](https://github.com/jpjerkins/task-guide/issues/24), which added **`Unused`**
 and an Override's **use record**, and settled Pattern deletion, and
 [Liveness](https://github.com/jpjerkins/task-guide/issues/25), which added **Liveness** and gave the
-silence guarantee its precondition.
+silence guarantee its precondition, and
+[Backup integration](https://github.com/jpjerkins/task-guide/issues/31), which added **Backup**,
+distinguished it from **Snapshot**, and settled that a restore requires the service stopped.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -945,6 +947,91 @@ on a screen that already exists** (the last fire, from the **Fire record**), nev
 health screen or an indicator light. That is **Notification**'s debuggability argument read one step
 back: the read-only dimensions viewer exists because a *wrong* reminder is otherwise undebuggable, and
 this is the same complaint with no reminder to inspect.
+
+### Backup
+
+**A copy of the facts, held off the volume that stores them.**
+
+Two mechanisms in this system copy the store, and the word for each has to carry which failure it
+answers, because neither one covers the other's:
+
+> A **Snapshot** sits *on* the protected volume and guards against **this service's own writes**.
+> A **Backup** sits *off* it and guards against **losing the volume**.
+
+A Snapshot is what the startup sweep takes before a migration or a registry demotion touches anything
+— the failure it anticipates is a bad deploy, and the volume is intact throughout, so living beside
+the store costs it nothing. A Backup anticipates the drive. Against that failure a Snapshot is worth
+exactly zero, which is why the two are never one word.
+
+*(The concurrency sense — the immutable view a read takes so it never blocks on the write lock — is a
+**read view**. It is not a copy of anything durable and has no business holding a durability word.)*
+
+#### What a Backup contains
+
+**The facts, and nothing derived, diagnostic, or already a copy**: the collection files, the
+completion logs, and `manifest.json`.
+
+| Excluded | Because |
+|---|---|
+| the log files | diagnostics with their own retention; restoring stale logs into a running service actively misleads |
+| the **Fire record** | 30-day retention, self-heals, and its loss cannot corrupt anything — see below |
+| Snapshots | copies taken by an *older* binary before it migrated, so their version disagrees with the `manifest.json` beside them. Including them nests the two mechanisms and loads a footgun for exactly the 11pm restore they exist to serve |
+
+**`manifest.json` travels with the collections, always.** It carries the store-wide version, so a set
+restored without it is handed to a binary that migrates already-migrated data. Omitting it is
+**corrupting, not merely lossy** — the one way to get this wrong that does not announce itself.
+
+**No quiescing.** A copy taken while the service runs has *precisely* the crash consistency already
+accepted for the store itself: every file is individually atomic, the set is not, so a copy can catch
+one collection post-write and another pre-write — which is the case the write-order rule (write the
+record whose survival makes the inconsistency detectable, first) already handles. Requiring the
+service to stop for a *copy* would be a new constraint answering a risk that was accepted long ago.
+A copy is therefore a plain recursive `cp`, which is what makes this satisfiable by a generic host
+backup rather than by something built here.
+
+#### Restoring requires the service stopped
+
+This is the entry's load-bearing half, and it follows from the store being **memory-authoritative**:
+
+> Files restored under a running service are invisible, and then destroyed.
+
+Reads are served from memory, so the restore appears to have silently failed; the next mutation
+rewrites that collection *from memory*, overwriting what was just restored. A restore is only real
+across a restart. This is the failure mode that looks like success — someone restores a lost Task,
+sees the old state, assumes propagation lag, and by the time they restart, the mirror is gone.
+
+It also means **a restore is never something generic**: whatever backs up the host can copy this
+store without knowing anything about it, but cannot *restore* it without stopping the service first.
+That asymmetry is this system's to declare, because nothing outside it knows.
+
+Two consequences of leaving the **Fire record** out, both benign and both already covered:
+
+- **A restored day has no memory of what fired.** Bounded by *opportunities die with their span*: a
+  Window fires late only while still inside its span and is silent past the end, so at most the one
+  or two Windows still open can re-fire — arriving immediately after a deliberate restart, which is
+  not a surprising moment to hear from the system.
+- **The Liveness line reads empty**, since it shows the last fire. It self-heals on the next tick.
+  Worth knowing so it is not mistaken for the thing Liveness exists to detect.
+
+#### What this system does not own
+
+Taking the copy, scheduling it, and noticing that it stopped happening all belong to host backup,
+which is a separate concern with a separate home. This system's whole obligation is the contract
+above: **what to copy, what restoring requires, and how much loss is tolerable.**
+
+**Nightly** is the stated tolerance — up to a day of captured Tasks. Everything else in the store is
+authored a few times a year; capture is the only thing accumulating daily. Note that this is a
+constant the system *requests* and cannot check, unlike every other constant here, which it enforces.
+
+Watching whether backups still happen fails the Liveness inclusion test — a missed Backup does not
+make `no Reminder ⟺ nothing fit` a lie, since Reminders keep firing correctly right up until the
+drive dies — and is unobservable from inside besides, since the copy is taken by another process.
+
+**Verified once, by restoring for real.** A Backup is the one mechanism here that looks identical
+working and broken, and resolves the ambiguity only at the moment of need. One deliberate restore
+drill against a store nobody minds losing is the only step that produces evidence rather than
+intention — and it is where the stopped-service requirement above gets discovered on a calm
+afternoon instead of on the night the data is gone.
 
 ### Fire record
 
