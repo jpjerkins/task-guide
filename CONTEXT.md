@@ -1324,16 +1324,26 @@ which carries a **source** identifying the path:
 | Siri name | Asks for | Notes |
 |---|---|---|
 | `Quick Task` | Title, then the five Duration buckets | Two interactions; the Task is `Active` |
-| `Create Task With Details` | Title, Duration, mental energy, deadline | Also `Active` — taking the time to enter details *is* processing |
+| `Detailed Task` | Title, Duration, mental energy, deadline | Also `Active` — taking the time to enter details *is* processing |
 | `Smart Add Task` | one free-text utterance | Optional. See below |
 
 **A Shortcut's name is the entire voice interface**, so naming is a constraint rather than a
-presentation choice (issue #15). Names must use ordinary, high-frequency words; must not begin with a
-verb the built-in Siri handler claims (`task`, `remind`, `add`, `note`, `search`, …), which is
-silently swallowed; and — because Siri matches the **whole utterance** — must be acoustically distinct
-**from each other**, sharing no leading word. A near-miss does not invoke the near neighbour; it falls
-through to a web search. The names above are candidates carrying these properties, and remain subject
-to on-device verification.
+presentation choice (issue #15). Names must use ordinary, high-frequency words; must not **begin** with
+a verb the built-in Siri handler claims (`create`, `task`, `remind`, `add`, `note`, `search`, …), which
+is silently swallowed; and — because Siri matches the **whole utterance** — must be acoustically
+distinct **from each other**, sharing no leading word. A near-miss does not invoke the near neighbour;
+it falls through to a web search.
+
+The rule binds the **leading word only** — a claimed verb elsewhere in the name is harmless, since a
+leading ordinary word reaches the Shortcuts handler before the built-in one claims the utterance.
+`Smart Add Task` carries `add` in second position and never collides; `Create Task With Details`, the
+one candidate with nothing in front of its verb, was heard as a Reminders command and is why the
+second Shortcut is named `Detailed Task`. **The three names above are verified on-device** (issue #28).
+
+**Untested, and deliberately so:** whether one name being a strict **prefix** of another is safe.
+`Quick Task With Details` would have created the case; `Detailed Task` does not, so no shipping name
+raises it. A fourth capture path must either avoid a prefix relation or probe it, because the failure
+mode is invoking the *wrong* Shortcut — silent, unlike every other naming failure here.
 
 #### Smart Add Task
 
