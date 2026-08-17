@@ -1204,6 +1204,83 @@ no way to tell them apart without looking. The separate title costs no character
 and putting the Task's Title *verbatim* in the body lets the Receipt double as parse verification for
 **Smart Add Task**, doing silently what that Shortcut's spoken read-back does aloud.
 
+### Glance
+
+**A silent readout of current state on a watch complication — never a claim, never a doorbell.**
+
+**A Glance is not a Notification.** **Notification** is the genus over **Reminder** and **Receipt**; a
+Glance is neither species and not a member of the genus. It carries no URL, opens nothing, makes no
+sound and promises no delivery — the Glances API is a separate endpoint that updates widget data only,
+so nothing reaches Notification Center. Three things follow:
+
+- **The silence guarantee is untouched.** `no Reminder ⟺ nothing fit` needs no restatement, unlike the
+  **Receipt**, which forced one.
+- **Liveness does not read it.** A stale Glance is indistinguishable from an unchanged one, so it can
+  never be a heartbeat — see **Liveness**.
+- **It is disposable by construction.** The vendor's watchOS floor, the hardware's ceiling, and its
+  supersession by any future native client all mean **nothing in this system may depend on it**.
+
+Because a Glance is a *readout you chose to look at* rather than a *claim about this moment*, the
+restraint rules do not reach it. It may show a Window that has not started yet, which **Notification**
+forbids a push from doing.
+
+#### What it carries
+
+Four fields, of which **which ones render is a property of the watch face**, not of this system. The
+practical display budget is **~20 characters a line**, not the API's 100.
+
+**`count` — the to-process backlog.** It is the only field that renders unlabelled in a small slot, so
+it must mean something with no words attached, and it is deliberately **window-independent**: it reads
+correctly in every state and never blanks.
+
+The three text lines take one of two shapes:
+
+| State | Line 1 | Line 2 | Line 3 |
+|---|---|---|---|
+| Inside a Window, ≥1 match | rank 1 | rank 2 | `+N more doable now` |
+| Between Windows, **or** inside a Window with no match | next Window's start — with weekday if not today | that Window's rank 1 | its rank 2 |
+
+The second row's fall-through is why **the Glance is never blank**: a dead-looking complication is the
+one state that cannot be distinguished from a broken one. It also serves the reason the preview exists
+at all — seeing what is coming is what lets a task be started early.
+
+**No Durations**, diverging from the **Reminder**'s format deliberately: a Reminder's title is *the one
+line never truncated*, whereas on a complication every line is. Duration is a choosing-aid, not an
+eligibility fact — the list is already filtered to what fits — and the wrist is the surface with the
+least room for aids.
+
+**No fetched-Dimension failure note** (see **Dimension** — Weather). That note is scoped to moments
+where someone is being *told* something; a Glance is neither a firing nor a page navigated to.
+
+**`+N more doable now` is required, not decorative.** Because `count` carries the backlog, the
+matching-now total appears nowhere else on the face, so it cannot be recovered by arithmetic.
+
+#### When it is sent
+
+Recomputed **every tick**, and sent only when the payload differs from the last one **sent** *and* at
+least **30 minutes** have elapsed. No timer, no queue, no schedule — the same shape as the engine in
+**Firing**, with the spacing coalescing bursts for free. A quiet day spends nothing.
+
+**Thirty minutes is derived, not chosen.** watchOS grants 50 widget updates a day, and 24h ÷ 50 = 28.8
+minutes. (This budget is **watchOS's, not the vendor's** — a native complication would be subject to
+the identical ceiling.) Worst-case staleness is ~40 minutes, including the platform's delivery lag.
+
+**A Window start preempts the floor; a Window end does not.** The start is the moment the payload flips
+wholesale. The end is not, because *the system's model of a span ending is not the same as the user's
+opportunity ending* — continuing to work an ended Window's list is the user's call, which is
+**Notification**'s "Matching on" read onto the wrist.
+
+**Not in the Fire record** — application log only, as with the **Receipt**. It has no Window and makes
+no decision the tick loop revisits.
+
+**One retry, at the next tick, ignoring the floor.** The floor guards the *watch's* delivered-update
+budget, and a failed send delivered nothing to the watch, so it spent none of it — the retry is free
+against the thing the floor protects. The bound of one exists for the ambiguous case: a send that
+succeeded but lost its response is indistinguishable from a failure, so an unbounded retry would
+double-spend real updates against a sustained outage.
+
+**Not configurable.**
+
 ### Snooze
 
 The **only** re-fire path, always user-initiated from the landing page a notification opens.
