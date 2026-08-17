@@ -86,7 +86,8 @@ Exclusive, typed, and an eligibility gate: **only `Active` tasks are matched.**
 
 `Unprocessed` and `Stale` counts are surfaced as a **footer count** on reminders
 ("6 to process, 3 stale"). That footer is the only nudge — there is no dedicated notification for
-either pile.
+either pile. **Neither pile can also be an Orphan** — orphan-ness is a claim about an `Active` Task
+only, so the two never appear on one Task at once. See **Scarcity**.
 
 ### Deadline
 
@@ -411,6 +412,13 @@ Constraint is deliberately **not** the same idea as an **eligibility gate**. `St
 **Postpone** decide *whether* a Task is a candidate at all; constraints decide *where* a candidate
 fits. A Task failing a gate is absent from every match-driven surface; a Task whose constraints go
 unmet is present, eligible, and simply has fewer **Opportunities**.
+
+The two **can** be read as one in the abstract — a gate resembles a constraint on an axis no Window
+ever declares — and the distinction is kept for what that reading *does*, not for tidiness. It would
+give every gated Task **Opportunities = 0**, making each deferred, postponed and unprocessed Task an
+**Orphan**: the same false-orphan defect **Deadline** records as already repaired once. What holds the
+line is therefore not the abstraction failing but two invariants about what the user sees, recorded
+under **Scarcity** — only an `Active` Task can be an Orphan, and orphan-ness never consults the clock.
 
 A Task or Window may carry **several Tags on one categorical Dimension**. Ordinal axes carry exactly
 one value per side, so the constraint is a ceiling rather than a set — *"needs no more than this
@@ -1707,7 +1715,32 @@ the Pattern-week count:
   be ranked as though this were its big chance.
 
 Only **eligible** Tasks are ranked, so a deferred or postponed Task has no Opportunities — it is not merely
-ranked low, it is absent. See **Defer** and **Postpone**.
+ranked low, it is absent. See **Defer** and **Postpone**. That absence is **not** a zero: it is the
+*lack of a value*, where the two kinds of zero above are values. The difference is load-bearing,
+because **Orphan** is read from the **Pattern-week count**, which is defined for every Task whether or
+not that Task is currently eligible.
+
+#### What Orphan detection is scoped to
+
+> **Orphan detection respects the Status gate and ignores the clock gates.**
+
+**Only an `Active` Task can be an Orphan.** For an `Unprocessed` Task orphan-ness is not false but
+**undefined** — that Status means precisely that the Task lacks the information matching needs, so a
+Pattern-week count over it is computed from a missing input; supply what is missing and the question
+becomes meaningful. For a `Stale` Task it is computable but useless: the Task cannot fire regardless, so
+the badge would name a second reason while the first still stands, and the repair may well be *delete* —
+sending the user into the window editor to declare a Tag for a Task they are about to throw away. One
+clause covers both piles, and it is also what makes *"categorically worse than `Unprocessed` or
+`Stale`"* a coherent sentence: comparing categories presupposes a Task is only ever in one of them. An
+Orphan is therefore **never** counted in the process/stale footer counts, and an orphan count in the
+footer is a **third, disjoint** number.
+
+**The clock gates are ignored, and that asymmetry is the point.** **Defer** and **Postpone** are
+deliberately not consulted, because orphan-ness asks whether any Window could *ever* admit the Task —
+so a Task deferred to November still counts every Window that would admit it. This is **Status means
+intent; Defer is a clock fact** read one layer out: **the eligibility gates are not homogeneous**, and
+which of them Orphan detection honours is exactly the split between a fact about the Task's *form* and
+a fact about the *clock*.
 
 **Age is not a ranking *penalty*.** Older Tasks are lower-value, but the `Stale` gate already encodes
 that judgement. Applying it a second time as a penalty would double-count *and* be self-fulfilling: an
