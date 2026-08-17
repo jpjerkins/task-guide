@@ -1614,6 +1614,12 @@ Duration have all tied exactly.
 
 **No capture path collects Tags.** They are added afterwards, through the **Receipt**.
 
+**Capture is never queued.** A capture is one attempt against a reachable server; nothing on the
+client holds it for later. This is the **Receipt**'s fire-and-forget rule read on the inbound side,
+and rests on the same asymmetry — a capture that outlives the moment it was made can no longer be
+told apart from one already delivered. A capture that cannot reach the server **fails loudly**, at
+the moment of capture, and is simply made again.
+
 Three iOS Shortcuts rather than one branching Shortcut, so the fast path is never taxed by a question
 that is almost always answered "no". All three write the **same** Task through the same endpoint,
 which carries a **source** identifying the path:
@@ -1668,6 +1674,19 @@ Task lives. A non-deterministic component is entered deliberately, per capture.
   it *does* claim silently becomes a **constraint** — an utterance mentioning the garage in passing
   tags the Task `#garage`, manufacturing an **Orphan Task** in exactly the direction the model already
   identifies as the standing drift. Tags are added afterwards through the **Receipt**.
+
+#### Source
+
+`source` names the capture path, and is **open** — any value is accepted and recorded verbatim. It is
+deliberately not a closed list of blessed paths, because the only thing a closed list adds is the
+power to reject a path nobody has written yet, and a capture path bolted onto the API later is
+explicitly anticipated rather than merely tolerated.
+
+What policy reads is not the source's *identity* but one predicate derived from it: **was this capture
+made inside the app?** Only the app's own value answers yes; every other value — known, unknown or
+misspelt — answers no, and therefore earns a **Receipt**. An unrecognised source consequently has
+*defined* behaviour, and the defined behaviour is the correct one, which is precisely what a closed
+list could not offer: there, an unrecognised source is either refused or silently un-Receipted.
 
 #### Duration snapping
 
