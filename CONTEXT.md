@@ -125,7 +125,7 @@ eligible = Active AND now >= Defer AND now >= Postpone
 ```
 
 **Status means intent; Defer is a clock fact.** A truth that changes with the clock must not be
-persisted as state that can drift — the same reasoning that keeps a Pattern un-reified. It is correct
+persisted as state that can diverge from it — the same reasoning that keeps a Pattern un-reified. It is correct
 the instant the date passes, with no sweep needing to have run. A `Deferred` status is rejected: it
 requires a background sweep, is wrong between runs (a weekend of downtime surfaces Tasks late), and
 would make Status mean two different kinds of thing at once.
@@ -387,7 +387,8 @@ so there is nothing to compare against.
 
 **The drift is always toward orphans.** A tagged Task is doable *only* if some Window declares that
 tag. Tags are cheap to add to a Task and Windows are edited rarely, so tagging outruns declaring —
-and switching the active Pattern can orphan a whole class of Tasks at once. See **Scarcity**.
+and switching the active Pattern can orphan a whole class of Tasks at once. See **Drift**, of which
+this is the live instance, and **Scarcity**.
 
 ### Tag
 
@@ -452,6 +453,39 @@ exactly that, and is the first thing the staging area above was holding open. Gi
 Dimension of their own was rejected: a Window would then have to declare `#PlaneTickets` for a tagged
 Event to match anything, which is meaningless, and it would make trigger Tags into matching inputs
 when triggering is their whole purpose.
+
+### Drift
+
+> **The corpus tends one direction under human authoring, and only ever that direction.**
+
+Not a defect and never designed out — a standing force the model has to stay legible against. It
+arises wherever authoring the two halves of a fact costs different amounts: the cheap half outruns the
+expensive one, so the imbalance accumulates instead of cancelling out.
+
+The live instance is **tagging outrunning declaring**. A Tag is one tap on a Task, while a Dimension
+value must be declared on a Window and Windows are edited a few times a year — so Tasks accumulate
+Tags that no Window admits, and the drift is **always toward Orphan Tasks**, never away. Switching the
+active Pattern moves a whole set of declarations at once, which is why one act can orphan a class of
+Tasks.
+
+**Drift is also what a refused field is refused for.** A self-assigned priority field was rejected
+because everything drifts to `High`: rating one Task costs a tap and re-rating the ones around it
+costs many, so the ratings inflate together and stop distinguishing anything. A field that only works
+when it is groomed is a field that drifts.
+
+**The response is always to notice, never to prevent.** The force lives in what the author finds
+cheap, which is outside the system's reach, so every defence is a surfacing one — the Orphan badge,
+the inverse warning before a Window's value is removed, the pre-commit count on a Pattern switch.
+Preventing drift would mean refusing the cheap act, and the cheap act is the one worth having.
+
+> **Drift is the author's divergence, and is surfaced. Two representations of one fact going out of
+> agreement is the system's, and is designed out.**
+
+The second is deliberately **not** called drift anywhere in this document, because the two carry
+opposite normative charge and the shared word invited reading a defect as a signal. It has nothing
+left to name in any case: a truth that changes with the clock is never persisted, and a missed fire
+takes the normal path rather than a catch-up path, so in neither place is there a second copy left to
+disagree with.
 
 ### Availability Window
 
@@ -847,7 +881,7 @@ the natural shape rather than an implementation convenience.
 What that buys, and why it was chosen over per-fire timers or a scheduler-plus-sweep hybrid:
 
 - **Downtime is indistinguishable from a slow tick**, so the missed-fire policy *is* the normal path.
-  There is no catch-up code, and therefore no second implementation of the policy that can drift out
+  There is no catch-up code, and therefore no second implementation of the policy that can fall out
   of agreement with the first.
 - **Nothing to rebuild on restart** — no timer state, no in-memory snooze chain.
 - **DST-safe**, because instants are re-derived from clock times each tick rather than computed once.
@@ -1564,7 +1598,7 @@ every step is derived from data already on screen, so any Task's position is exp
 4. **Oldest `CreatedAt`** — backstop, reached only on an exact three-way tie
 
 There is deliberately **no priority/importance field**. Self-assigned priorities rot — everything
-drifts to High — and a field that only works if it is groomed will be wrong.
+drifts to High — and a field that only works if it is groomed will be wrong. See **Drift**.
 
 ### Urgency band
 
@@ -1667,7 +1701,7 @@ the Pattern-week count:
   merely rare. Orphan detection is **Tasks only** (including derived Tasks, already subject to it) —
   Events are never matched, so the concept doesn't apply to them. Computed live on read, same as
   Opportunities itself — no caching, since the cost is already established as trivial. This is the only
-  defence against the tagging drift described under **Dimension**.
+  defence against **Drift**.
 - **None in this stretch** — normally doable, but every admitting Window falls outside the horizon,
   usually because an Override or Event displaced it. **Nothing is wrong**; the Task should simply not
   be ranked as though this were its big chance.
@@ -1749,7 +1783,7 @@ Task lives. A non-deterministic component is entered deliberately, per capture.
 - **No Tags.** A model-invented string the registry does not claim lands loose and harmless, but one
   it *does* claim silently becomes a **constraint** — an utterance mentioning the garage in passing
   tags the Task `#garage`, manufacturing an **Orphan Task** in exactly the direction the model already
-  identifies as the standing drift. Tags are added afterwards through the **Receipt**.
+  identifies as the standing **Drift**. Tags are added afterwards through the **Receipt**.
 
 #### Source
 
