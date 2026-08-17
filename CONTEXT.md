@@ -726,8 +726,11 @@ bound (**Firing**), the 3-day Event runway (**Event**), Recurrence due dates (**
 Midnight also survives DST for free — US transitions happen at 2a, so 00:00 is never ambiguous and
 never missing, unlike every other candidate boundary.
 
-> **Accepted consequence.** A Snooze taken at 11:50p schedules a re-fire at 12:20a that simply never
-> happens. That is *"show me this again later today"* read literally.
+> **Consequence, refused rather than accepted.** A Snooze taken at 11:50p *would* schedule a re-fire
+> at 12:20a that never happens. It is instead **refused at the point of the tap** — see **Snooze →
+> Availability**. *"Show me this again later today"* read literally means there is nothing to ask for
+> once today is spent, and a control that accepts the request and silently drops it is the one thing
+> this model refuses everywhere else.
 
 Ending the day at the last Window's close was rejected — it disagrees with every other boundary in the
 model, and it is undefined on a windowless day, which is precisely the day the fallback push exists
@@ -1043,6 +1046,10 @@ kind is `window` | `unconditional` | `snooze` | `fallback`. One file per day,
 Snooze is a row with a future `dueAt` and a null `firedAt`. One file and one loop serve both, which is
 what lets a Snooze survive a restart with no machinery of its own.
 
+**Every pending Snooze row is one that will fire.** A `dueAt` past the day's **Day boundary** cannot be
+written (**Snooze → Availability**), so the file never holds a dead row for the loop to carry to
+midnight.
+
 ```json
 [ { "windowId": "w_01ARZ…", "kind": "window",
     "windowName": "Evening prep", "windowStart": "17:30", "windowEnd": "19:00",
@@ -1289,7 +1296,7 @@ The **only** re-fire path, always user-initiated from the landing page a notific
   short Window cannot buzz again almost immediately, capped at 30 minutes.
 - **Repeats** — unlimited, same interval each time. No escalation, no cap.
 - **Expiry** — the reminder dies at the **Day boundary** (local midnight). Snooze means "show me this
-  again *later today*". A re-fire scheduled past midnight never happens.
+  again *later today*". A re-fire cannot be scheduled past midnight — see **Availability**.
 - **Past Window end** — allowed. Work sometimes continues past the authored span.
 - **Storage** — a pending Snooze is a row in the day's **Fire record** with a future `dueAt`, picked up
   by the same loop that fires Windows. It therefore survives a restart, and the "stateless chain"
@@ -1307,6 +1314,75 @@ separate on-demand feature of the UI.
 **An adjusted Window needs no special rule.** "Matching on" writes straight through to that date's copy
 of the Window, so *"the original Window's Dimension values"* stays literally true after an adjustment —
 the Window's values are simply what moved.
+
+#### Availability
+
+**Snooze is offered only while its re-fire could still land inside the Reminder's own day:**
+
+```
+offered  ⟺  now + interval < the Reminder's Day boundary
+```
+
+Nothing here is a threshold. The interval is `clamp(25% of Window duration, 5 min, 30 min)` — a known
+number at the instant of the tap — so *"will this Snooze ever fire?"* is decidable rather than
+estimated, and no "near midnight" constant is invented.
+
+The boundary is **the Reminder's own**, not tonight's, and that single word covers two cases with one
+clause: a Window firing at 11:50p, and a Reminder that fired at 10:30p sitting on the lock screen
+until it is tapped at 12:05a. In the second case the boundary is already past, so the test fails for
+the same reason.
+
+**Clamping the re-fire to just before midnight was rejected.** It would manufacture exactly the buzz
+the interval's 5-minute floor exists to prevent, and by that hour the span is long spent, so
+**Duration's ceiling has floored to the smallest bucket** — the clamped re-fire would offer 2-minute
+Tasks. It buys a working control at the cost of a truthful one.
+
+**The gate is the page, not the control.** The condition is not *"can this control still do
+something"* but *"is this page still about a live day"*, which is one condition governing the landing
+page rather than a rule per control:
+
+| Control | Past the Reminder's Day boundary | Why |
+|---|---|---|
+| **Snooze** | disabled | a re-fire has nowhere to land |
+| **"Matching on"** | disabled | see below — worse than a no-op |
+| **Mark off** | live | a fact about a Task, not about the day |
+| **Postpone** | live | stored absolute; valid at any hour |
+
+**"Matching on" is disabled for a stronger reason than Snooze.** Snooze on a spent day is inert;
+"Matching on" is a *write* — it materialises that date's **Override** (see **Availability window**),
+which per **Day template** carries a **use record** that protects a Day template from deletion for
+**13 months**. On a stale landing page the adjustment can change nothing, but a dead tap would
+silently pin a template for over a year.
+
+**Suppressed, never hidden.** The control is replaced by a line stating why, extending the rule under
+**Day template** that an unavailable action *states why in its place*. Two lines, because the user's
+question differs by case: *"Snooze ends at midnight"* near the boundary, *"This reminder was for
+yesterday"* on a stale page.
+
+**The predicate is server-side and the UI reads it.** The Snooze endpoint rejects a request whose
+re-fire would cross the boundary; the landing page disables the control by asking the same domain
+rule. There is no client-side clock: a page drawn at 11:58p and tapped at 12:01a was honestly live
+when drawn, and the rejection is rendered as the same line the disabled state would have shown —
+**a rejection is just a slow tick** (**Firing → Missed fires**), read onto a button. A client timer
+would make the UI a second author of the policy, which is why device-side scheduling is out of scope.
+
+**The push carries none of this.** A Reminder firing at 11:50p says nothing about Snooze being
+unavailable; the push is deliberately not at parity with the landing page (**Notification**), and its
+lines are the scarcest space in the system.
+
+**A fallback push has no Snooze at all.** It is the one push with no Window behind it (**Firing →
+Fallback push**), so there is no span to derive an interval from and no Dimension values to re-match
+against — no filter, hence no list to re-show. The control does not exist there rather than being
+disabled. It is carrying an obligation, and an obligation is not something you ask to be shown again;
+the Event's own runway is what re-surfaces it. The **unconditional Event fire** needs nothing new by
+contrast, since it *has* a Window — an empty re-fire pushes once and ends the chain, below.
+
+**Invariant gained.** Because a boundary-crossing `dueAt` can no longer be written, the **Fire record**
+cannot hold a pending Snooze that will never fire. That row was previously representable and the tick
+loop would have carried it to midnight.
+
+A rejected Snooze needs no **Logging** entry of its own — it is neither of the Warning cases, and in
+normal use only the render-then-tap race produces one.
 
 #### Duration is the one value that moves
 
