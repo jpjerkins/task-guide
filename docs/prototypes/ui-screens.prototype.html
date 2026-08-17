@@ -1,0 +1,1626 @@
+<title>task-guide — mobile UI variants</title>
+
+<!--
+  PROTOTYPE — throwaway. Not production code.
+  Question: what does the task-guide mobile UI consist of, and where does each thing live?
+  Three radically different information architectures for the whole app shell,
+  switchable via ?variant=A|B|C and the floating bottom bar.
+  Ticket: https://github.com/jpjerkins/task-guide/issues/12
+  In-memory data only. No persistence, no tests, no error handling.
+-->
+
+<style>
+  :root, :root[data-theme="light"] {
+    --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2; --surface-3:#DFE4EA;
+    --ink:#13171C; --ink-2:#586373; --ink-3:#8A93A1;
+    --line:#DFE4EA; --line-soft:#EDF0F4;
+    --accent:#276B5B; --accent-ink:#FFFFFF; --accent-soft:#DFEDE8;
+    --now:#8A5A0B; --now-soft:#FAEFDA;
+    --danger:#A2322A; --danger-soft:#F8E5E3;
+    --scaffold-bg:#13171C; --scaffold-ink:#F4F6F8; --scaffold-line:#3A4350;
+    --shadow:0 1px 2px rgba(19,23,28,.06), 0 8px 28px rgba(19,23,28,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0E1216; --surface:#171C22; --surface-2:#20262E; --surface-3:#2A323B;
+      --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
+      --line:#252C34; --line-soft:#1E242B;
+      --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
+      --now:#D9A448; --now-soft:#3228142E;
+      --danger:#E0837A; --danger-soft:#3A211E;
+      --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1216; --surface:#171C22; --surface-2:#20262E; --surface-3:#2A323B;
+    --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
+    --line:#252C34; --line-soft:#1E242B;
+    --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
+    --now:#D9A448; --now-soft:#3228142E;
+    --danger:#E0837A; --danger-soft:#3A211E;
+    --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100dvh;
+  }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* ---- device frame: full-bleed on a phone, framed on a desktop ---- */
+  .stage { flex:1; width:100%; display:flex; justify-content:center; padding:0; }
+  .device {
+    position:relative; width:100%; max-width:430px;
+    height:calc(100dvh - 60px);
+    background:var(--ground); overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  @media (min-width:600px) {
+    .stage { padding:26px 16px 0; }
+    .device {
+      height:min(880px, calc(100dvh - 92px));
+      border:1px solid var(--line); border-radius:30px; box-shadow:var(--shadow);
+    }
+  }
+
+  .scroll { flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+
+  /* ---- shared app chrome ---- */
+  .nav {
+    display:flex; flex-direction:column; padding:14px 16px 10px;
+    background:var(--surface); border-bottom:1px solid var(--line); flex:none;
+  }
+  /* fixed-height title row: the right-slot control sits at the same offset from the top
+     of the bar on every screen, with or without a subtitle */
+  .nav-main { display:flex; align-items:center; gap:10px; min-height:32px; }
+  .nav h1 { font-size:21px; letter-spacing:-.02em; margin:0; flex:1; min-width:0; text-wrap:balance; }
+  .nav .sub { font-size:12px; color:var(--ink-2); margin:3px 0 0; }
+  .nav-add {
+    flex:none; width:32px; height:32px; border-radius:50%; padding:0;
+    background:var(--accent); color:var(--accent-ink); border:none;
+    font-size:19px; line-height:1; display:grid; place-items:center;
+  }
+  .nav button.icon {
+    background:none; border:none; padding:4px 6px; color:var(--accent);
+    font-size:15px; border-radius:8px;
+  }
+  .tabbar {
+    display:flex; background:var(--surface); border-top:1px solid var(--line); flex:none;
+  }
+  .tabbar button {
+    flex:1; background:none; border:none; padding:9px 4px 12px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    font-size:10px; letter-spacing:.02em; color:var(--ink-3);
+  }
+  .tabbar button .g { font-size:19px; line-height:1; }
+  .tabbar button[aria-current="page"] { color:var(--accent); font-weight:600; }
+
+  /* ---- shared bits ---- */
+  .sec { padding:16px 16px 4px; }
+  .sec-h {
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--ink-3); font-weight:650; padding:18px 16px 7px;
+  }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:13px; overflow:hidden; }
+  .list { background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .row {
+    display:flex; align-items:flex-start; gap:11px; padding:11px 16px;
+    border-bottom:1px solid var(--line-soft); background:var(--surface);
+    width:100%; text-align:left; border-left:none; border-right:none; border-top:none;
+  }
+  .row:last-child { border-bottom:none; }
+  .row .body { flex:1; min-width:0; }
+  .row .title { font-size:15px; line-height:1.3; letter-spacing:-.01em; }
+  .row .meta { font-size:12px; color:var(--ink-2); margin-top:4px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .row .chev { color:var(--ink-3); font-size:14px; align-self:center; }
+  .tick {
+    width:22px; height:22px; border-radius:50%; border:1.5px solid var(--ink-3);
+    background:none; flex:none; margin-top:1px; padding:0; display:grid; place-items:center;
+    font-size:12px; color:transparent;
+  }
+  .tick[data-done="1"] { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+
+  .pill {
+    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+    padding:2px 7px; border-radius:99px; background:var(--surface-2); color:var(--ink-2);
+    white-space:nowrap;
+  }
+  .pill.dur { font-variant-numeric:tabular-nums; background:var(--surface-3); color:var(--ink); }
+  .pill.dim { background:var(--accent-soft); color:var(--accent); }
+  .pill.due { background:var(--danger-soft); color:var(--danger); }
+  .pill.now { background:var(--now-soft); color:var(--now); }
+  .pill.inert { background:transparent; border:1px dashed var(--ink-3); color:var(--ink-3); }
+
+  .btn {
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    padding:11px 14px; border-radius:11px; font-size:15px; font-weight:550;
+  }
+  .btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .btn.wide { width:100%; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--accent); }
+  .btn-row { display:flex; gap:9px; padding:14px 16px; }
+  .btn-row .btn { flex:1; }
+
+  .note { font-size:12.5px; line-height:1.5; color:var(--ink-2); padding:10px 16px 16px; }
+  .note b { color:var(--ink); font-weight:600; }
+  .empty { padding:44px 24px; text-align:center; color:var(--ink-2); font-size:14px; line-height:1.55; }
+
+  .footer-count {
+    display:flex; gap:8px; flex-wrap:wrap; padding:13px 16px;
+    border-top:1px dashed var(--line); font-size:12.5px; color:var(--ink-2);
+    background:var(--surface);
+  }
+
+  .fab {
+    position:absolute; right:16px; bottom:74px; width:52px; height:52px; border-radius:50%;
+    background:var(--accent); color:var(--accent-ink); border:none; font-size:26px; line-height:1;
+    box-shadow:var(--shadow); display:grid; place-items:center; z-index:5;
+  }
+
+  /* ---- sheet / modal ---- */
+  .veil {
+    position:absolute; inset:0; background:rgba(8,12,16,.45); z-index:20;
+    display:flex; align-items:flex-end;
+  }
+  .sheet {
+    background:var(--surface); width:100%; border-radius:18px 18px 0 0;
+    max-height:88%; overflow-y:auto; padding-bottom:12px;
+  }
+  .sheet-h {
+    display:flex; align-items:center; gap:10px; padding:15px 16px 10px;
+    border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--surface);
+  }
+  .sheet-h h2 { margin:0; font-size:17px; flex:1; letter-spacing:-.01em; }
+  .grabber { width:34px; height:4px; border-radius:9px; background:var(--surface-3); margin:8px auto 0; }
+  input.field, textarea.field, select.field {
+    width:100%; font:inherit; font-size:16px; padding:11px 12px; color:var(--ink);
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+  }
+  input.field.time { max-width:118px; font-variant-numeric:tabular-nums; }
+  input.field.bad { border-color:var(--danger); background:var(--danger-soft); color:var(--danger); }
+  .chipset { display:flex; flex-wrap:wrap; gap:7px; }
+  .chipset button {
+    background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2);
+    padding:8px 12px; border-radius:99px; font-size:14px;
+  }
+  .chipset button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); font-weight:650; }
+  .stack { display:flex; flex-direction:column; gap:8px; padding:14px 16px 4px; }
+
+  /* ---- live "will this ever come up?" bar on the authoring screen ---- */
+  .fitbar {
+    position:sticky; top:0; z-index:3;
+    display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;
+    padding:12px 16px; background:var(--surface-2); border-bottom:1px solid var(--line);
+  }
+  .fitbar .n { font-size:23px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .fitbar .of { font-size:13px; color:var(--ink-2); flex:1; min-width:0; }
+  .fitbar .which {
+    flex-basis:100%; font-size:12px; line-height:1.5; color:var(--ink-2);
+    display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+  }
+  .fitbar .which b { color:var(--ink); font-weight:600; }
+  .fitbar.rare { background:var(--now-soft); }
+  .fitbar.rare .n { color:var(--now); }
+  .fitbar.zero { background:var(--danger-soft); }
+  .fitbar.zero .n { color:var(--danger); }
+
+  /* ---- ad-hoc query adjuster ---- */
+  .adjust { background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .adjust-h {
+    display:flex; align-items:center; gap:9px; width:100%; padding:11px 16px;
+    background:none; border:none; text-align:left;
+  }
+  .adjust-h .lbl { flex:none; }
+  .adjust-sum { flex:1; display:flex; flex-wrap:wrap; gap:5px; min-width:0; }
+  .adjust-body { padding:2px 16px 14px; display:flex; flex-direction:column; gap:7px; border-top:1px solid var(--line-soft); }
+  .adjust-bar {
+    display:flex; align-items:center; gap:8px; padding:9px 12px 9px 16px;
+    background:var(--now-soft); border-top:1px solid var(--line-soft); font-size:13px; color:var(--ink-2);
+  }
+  .adjust-bar span:first-child { flex:1; }
+  .adjust-bar b { color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  /* ---- variant D ---- */
+  .scroll.col { display:flex; flex-direction:column; }
+  .fitspace { flex:1; display:grid; place-items:center; padding:20px 16px; min-height:104px; }
+  .btn.fits { width:auto; border-radius:99px; padding:12px 26px; }
+  .livecard {
+    margin:14px 16px 2px; padding:15px 16px; border-radius:15px;
+    background:var(--now-soft); border:1px solid var(--now); width:auto;
+    display:block; text-align:left;
+  }
+  .livecard .eyebrow { font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--now); font-weight:700; }
+  .livecard .t { font-size:20px; letter-spacing:-.02em; margin-top:5px; }
+  .livecard .m { font-size:13px; color:var(--ink-2); margin-top:3px; font-variant-numeric:tabular-nums; }
+
+  /* ---- variant A ---- */
+  .filterbar { display:flex; gap:7px; padding:11px 16px; overflow-x:auto; background:var(--surface); border-bottom:1px solid var(--line); }
+  .filterbar button { flex:none; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2); padding:6px 12px; border-radius:99px; font-size:13px; }
+  .filterbar button[aria-pressed="true"] { background:var(--ink); color:var(--ground); border-color:var(--ink); font-weight:600; }
+
+  /* ---- variant B: timeline ---- */
+  .weekstrip { display:flex; gap:5px; padding:9px 12px 11px; background:var(--surface); border-bottom:1px solid var(--line); overflow-x:auto; }
+  .weekstrip button {
+    flex:none; width:45px; padding:6px 0 7px; border-radius:11px; border:1px solid transparent;
+    background:none; text-align:center; color:var(--ink-2);
+  }
+  .weekstrip .wd { font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
+  .weekstrip .dn { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:1px; color:var(--ink); }
+  .weekstrip button[aria-current="date"] { background:var(--ink); border-color:var(--ink); }
+  .weekstrip button[aria-current="date"] .dn,
+  .weekstrip button[aria-current="date"] .wd { color:var(--ground); }
+  .weekstrip .dot { width:4px; height:4px; border-radius:50%; background:var(--now); margin:3px auto 0; }
+
+  .timeline { position:relative; padding:12px 16px 24px 52px; }
+  .timeline .hr {
+    position:relative; height:34px; border-top:1px solid var(--line-soft);
+  }
+  .timeline .hr span {
+    position:absolute; left:-40px; top:-7px; font-size:10.5px; color:var(--ink-3);
+    font-variant-numeric:tabular-nums; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .blk {
+    position:absolute; left:52px; right:14px; border-radius:11px; padding:8px 11px;
+    background:var(--accent-soft); border:1px solid transparent; border-left:3px solid var(--accent);
+    text-align:left; color:var(--ink); overflow:hidden;
+  }
+  .blk .bt { font-size:13.5px; font-weight:600; letter-spacing:-.01em; }
+  .blk .bm { font-size:11.5px; color:var(--ink-2); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .blk.event { background:var(--surface-2); border-left-color:var(--ink-2); border-style:dashed; border-color:var(--ink-3); border-left-style:solid; }
+  .blk.live { background:var(--now-soft); border-left-color:var(--now); }
+  .nowline { position:absolute; left:38px; right:14px; height:0; border-top:1.5px solid var(--now); }
+  .nowline::before { content:""; position:absolute; left:-4px; top:-3.5px; width:7px; height:7px; border-radius:50%; background:var(--now); }
+
+  /* ---- variant C: single stream ---- */
+  .moment { padding:30px 22px 16px; }
+  .moment .eyebrow { font-size:11.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--now); font-weight:700; }
+  .moment h1 { font-size:31px; line-height:1.1; letter-spacing:-.03em; margin:9px 0 5px; text-wrap:balance; }
+  .moment .when { font-size:14px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .stream { padding:4px 12px 8px; display:flex; flex-direction:column; gap:8px; }
+  .streamitem {
+    display:flex; gap:12px; align-items:flex-start; width:100%; text-align:left;
+    background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:13px 14px;
+  }
+  .capbar {
+    position:absolute; left:0; right:0; bottom:0; padding:10px 12px 14px;
+    background:var(--surface); border-top:1px solid var(--line); display:flex; gap:8px; z-index:6;
+  }
+  .capbar input { flex:1; }
+  .overflow-btn {
+    position:absolute; top:12px; right:14px; z-index:5; width:36px; height:36px; border-radius:50%;
+    background:var(--surface); border:1px solid var(--line); color:var(--ink-2); font-size:17px;
+    display:grid; place-items:center;
+  }
+  .indexgrid { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:14px 14px 24px; }
+  .indexgrid button {
+    background:var(--surface); border:1px solid var(--line); border-radius:13px;
+    padding:15px 13px; text-align:left; min-height:82px;
+    display:flex; flex-direction:column; gap:5px; justify-content:flex-end;
+  }
+  .indexgrid .g { font-size:19px; }
+  .indexgrid .t { font-size:14px; font-weight:600; letter-spacing:-.01em; }
+  .indexgrid .d { font-size:11.5px; color:var(--ink-3); line-height:1.35; }
+
+  .weekform details {
+    background:var(--surface); border-bottom:1px solid var(--line);
+  }
+  .weekform summary {
+    padding:13px 16px; display:flex; align-items:center; gap:10px; cursor:pointer;
+    list-style:none; font-size:15px;
+  }
+  .weekform summary::-webkit-details-marker { display:none; }
+  .weekform summary .day { width:38px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:650; }
+  .weekform summary .tpl { flex:1; font-weight:550; letter-spacing:-.01em; }
+  .weekform .inner { padding:2px 16px 14px 64px; border-top:1px solid var(--line-soft); }
+
+  /* ---- prototype scaffolding: deliberately not part of the design ---- */
+  .switcher {
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px)); z-index:60;
+    display:flex; align-items:stretch; gap:0;
+    background:var(--scaffold-bg); color:var(--scaffold-ink);
+    border-radius:99px; box-shadow:0 6px 24px rgba(0,0,0,.35);
+    font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+    max-width:calc(100vw - 24px);
+  }
+  .switcher button { background:none; border:none; color:inherit; padding:0 15px; font-size:15px; }
+  .switcher .label {
+    padding:9px 4px; font-size:12px; letter-spacing:.01em; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; border-left:1px solid var(--scaffold-line);
+    border-right:1px solid var(--scaffold-line); min-width:0;
+  }
+  .switcher .label b { font-weight:700; }
+  .switcher .label .hint { opacity:.5; }
+
+  .about { position:fixed; inset:0; z-index:70; background:rgba(8,12,16,.6); display:flex; align-items:center; justify-content:center; padding:18px; }
+  .about-in {
+    background:var(--surface); color:var(--ink); border-radius:16px; max-width:460px; width:100%;
+    max-height:82dvh; overflow-y:auto; padding:20px; box-shadow:var(--shadow);
+  }
+  .about-in h2 { margin:0 0 3px; font-size:19px; letter-spacing:-.02em; }
+  .about-in .kicker { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); }
+  .about-in p { font-size:13.5px; line-height:1.6; color:var(--ink-2); }
+  .about-in ul { padding-left:17px; margin:8px 0 0; }
+  .about-in li { font-size:13px; line-height:1.6; color:var(--ink-2); margin-bottom:3px; }
+  .about-in li b { color:var(--ink); font-weight:600; }
+  .about-in code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; background:var(--surface-2); padding:1px 5px; border-radius:5px; }
+
+  @media (prefers-reduced-motion:no-preference) {
+    .veil { animation:fade .16s ease-out; }
+    .sheet { animation:rise .2s cubic-bezier(.2,.8,.3,1); }
+    @keyframes fade { from { opacity:0 } }
+    @keyframes rise { from { transform:translateY(14px) } }
+  }
+</style>
+
+<div class="stage"><div class="device" id="device"></div></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ============================ fake data ============================ */
+  const DAY = 864e5;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dAdd = n => new Date(today.getTime() + n*DAY);
+  const iso = d => d.toISOString().slice(0,10);
+  const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const WDL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fmtDate = d => `${WDL[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
+  const fmtShort = d => `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
+
+  // Two algebras. Categorical: window values OR, task values AND — i.e. the task's set must
+  // be a SUBSET of the window's. Absence is the empty set, which is why categorical
+  // dimensions need no defaults at all. Ordinal: the window carries a ceiling.
+  const DIMS = [
+    { key:"location", label:"Location",  type:"cat", values:["home","desk","garage","outside","out & about"] },
+    { key:"who",      label:"With whom", type:"cat", values:["Sam","Ana","the kids"] },
+    { key:"weather",  label:"Weather",   type:"cat", values:["dry","fine"] },
+    { key:"energy",   label:"Mental energy", type:"ord", taskDef:"low", winDef:"low",
+      values:["low","medium","high"] },
+  ];
+  const dim = k => DIMS.find(d => d.key === k);
+
+  // A task's or window's values on one axis, always as an array.
+  function valuesOf(holder, d) {
+    const v = holder.dims[d.key];
+    if (v === undefined) return [];
+    return Array.isArray(v) ? v.slice() : [v];
+  }
+  function setValues(holder, d, vals) {
+    if (!vals.length) delete holder.dims[d.key];
+    else holder.dims[d.key] = vals.length === 1 ? vals[0] : vals;
+  }
+  function toggleDim(holder, d, v, def) {
+    if (d.type === "ord") {
+      if (v === def) delete holder.dims[d.key]; else holder.dims[d.key] = v;
+      return;
+    }
+    const vals = valuesOf(holder, d);
+    const i = vals.indexOf(v);
+    if (i >= 0) vals.splice(i, 1); else vals.push(v);
+    setValues(holder, d, vals);
+  }
+
+  const DURS = [2,10,30,60,"Longer"];
+  const durMins = d => d === "Longer" ? 150 : d;
+  const durLabel = d => d === "Longer" ? "Longer" : d + "m";
+
+  let TASKS = [
+    { id:1, t:"Call the bank about the mortgage", dur:10, st:"Active", due:iso(dAdd(6)),
+      notes:"Ask for the fixed-rate sheet before the renewal date.", dims:{ energy:"high", location:"desk" } },
+    { id:2, t:"Fix the gutter bracket", dur:30, st:"Active", dims:{ location:"outside", weather:"dry", energy:"medium" } },
+    { id:3, t:"Email Sam about the tournament car share", dur:2, st:"Active", dims:{ energy:"low" }, tags:["#sam"] },
+    // task-side AND: needs a window carrying BOTH people
+    { id:11, t:"Settle the summer trip dates with Sam and Ana", dur:30, st:"Active",
+      dims:{ who:["Sam","Ana"], energy:"medium" } },
+    { id:4, t:"Oil the bike chain", dur:10, st:"Active", dims:{ location:"garage" } },
+    { id:5, t:"Draft the Q3 numbers", dur:60, st:"Active", due:iso(dAdd(9)), dims:{ energy:"high", location:"desk" } },
+    { id:6, t:"Order a new karate belt", dur:2, st:"Active", dims:{} },
+    { id:7, t:"Renew the car registration", dur:10, st:"Active", due:iso(dAdd(12)), dims:{ energy:"medium", location:"desk" } },
+    { id:8, t:"Sort out the loft", dur:"Longer", st:"Active", dims:{ location:"home", energy:"medium" } },
+    { id:9, t:"Book the dentist", dur:10, st:"Active", dims:{ energy:"medium", location:"desk" } },
+    { id:10, t:"Replace the shed padlock", dur:10, st:"Active", dims:{ location:"outside", weather:"dry" } },
+    { id:12, t:"Take the mower in for service", dur:60, st:"Active",
+      dims:{ location:"out & about", energy:"medium" } },
+    { id:20, t:"gutter thing??", dur:null, st:"Unprocessed", dims:{} },
+    { id:21, t:"look into the loft hatch", dur:null, st:"Unprocessed", dims:{} },
+    { id:22, t:"ring re: warranty", dur:null, st:"Unprocessed", dims:{} },
+    { id:23, t:"that thing Ana mentioned", dur:null, st:"Unprocessed", dims:{} },
+    { id:24, t:"bike?", dur:null, st:"Unprocessed", dims:{} },
+    { id:25, t:"tax folder", dur:null, st:"Unprocessed", dims:{} },
+    { id:30, t:"Reorganise the entire garage", dur:"Longer", st:"Stale", dims:{ location:"garage" } },
+    { id:31, t:"Learn some Portuguese", dur:30, st:"Stale", dims:{} },
+    { id:32, t:"Sort the photo backlog", dur:"Longer", st:"Stale", dims:{ location:"desk" } },
+  ];
+  const task = id => TASKS.find(t => t.id === id);
+
+  const TEMPLATES = [
+    { id:"ord", name:"Ordinary weekday", windows:[
+      { name:"Morning admin",  s:"07:00", e:"08:00", dims:{ location:"desk", energy:"high" } },
+      { name:"Lunch gap",      s:"12:15", e:"12:45", dims:{ energy:"low" } },
+      { name:"Evening prep",   s:"18:00", e:"20:00", dims:{ location:"home", energy:"medium" } },
+    ], protos:[] },
+    { id:"vol", name:"Volleyball Tuesday", windows:[
+      { name:"Morning admin",  s:"07:00", e:"08:00", dims:{ location:"desk", energy:"high" } },
+      { name:"Sports hall wait", s:"18:30", e:"20:00", dims:{ location:"out & about", energy:"low" } },
+      { name:"Short evening",  s:"21:15", e:"22:00", dims:{ location:"home", energy:"low" } },
+    ], protos:[] },
+    { id:"tour", name:"Tournament Saturday", windows:[
+      { name:"Garden hour",       s:"08:00", e:"09:30", dims:{ location:["outside","garage"], weather:"dry", energy:"medium" } },
+      { name:"Car park downtime", s:"10:00", e:"15:00", dims:{ location:"out & about", energy:"low" } },
+    ], protos:[] },
+    { id:"sat", name:"Ordinary Saturday", windows:[
+      { name:"Jobs morning",   s:"09:00", e:"12:00", dims:{ location:"outside", energy:"medium", weather:"dry" } },
+      { name:"Evening prep",   s:"18:00", e:"20:00", dims:{ location:"home", energy:"medium" } },
+    ], protos:[] },
+    { id:"trav", name:"Travel day", windows:[
+      { name:"On the road",    s:"09:00", e:"13:00", dims:{ location:"out & about", energy:"low" } },
+    ], protos:[] },
+    { id:"church", name:"Church Sunday", windows:[
+      { name:"Slow afternoon", s:"14:00", e:"17:00",
+        dims:{ location:"home", energy:"medium", who:["Sam","Ana","the kids"] } },
+    ], protos:[{ name:"Church", s:"10:00", e:"11:30" }] },
+  ];
+  const tpl = id => TEMPLATES.find(t => t.id === id);
+
+  const PATTERNS = [
+    { id:"vball",  name:"Volleyball season", days:["church","ord","vol","ord","ord","ord","tour"] },
+    { id:"school", name:"School year",       days:["church","ord","ord","ord","ord","ord","sat"] },
+    { id:"summer", name:"Summer",            days:["church","sat","sat","sat","sat","sat","sat"] },
+  ];
+  let activePattern = "vball";
+  const pattern = () => PATTERNS.find(p => p.id === activePattern);
+
+  // sparse dated records layered on top of the pattern
+  let OVERRIDES = [
+    { date:iso(dAdd(6)),  from:"trav", label:"Travel day", windows:null },
+    { date:iso(dAdd(7)),  from:null,   label:"One-off day", windows:[
+      { name:"Hotel morning", s:"08:00", e:"09:30", dims:{ location:"out & about", energy:"low" } } ] },
+  ];
+  let EVENTS = [
+    { name:"Band concert", date:iso(dAdd(2)), s:"19:00", e:"20:30", dims:{ who:"the kids" } },
+    { name:"Ana's flight", date:iso(dAdd(6)), s:"11:20", e:"12:00", dims:{} },
+  ];
+
+  /* ==================== derived: day shape + matching ==================== */
+  function dayShape(d) {
+    const key = iso(d);
+    const ov = OVERRIDES.find(o => o.date === key);
+    if (ov) {
+      const ws = ov.windows || tpl(ov.from).windows.map(w => ({ ...w, dims:{ ...w.dims } }));
+      return { source:"override", label:ov.label, stamped:ov.from, windows:ws };
+    }
+    const t = tpl(pattern().days[d.getDay()]);
+    return { source:"pattern", label:t.name, tplId:t.id, windows:t.windows };
+  }
+  const eventsOn = d => EVENTS.filter(e => e.date === iso(d));
+
+  // Adjusting a filter is a statement about the day you are living, so it writes through
+  // to that date. An Override always stores copied Windows (#8), so the first adjustment
+  // materialises the whole day and detaches it from its Day template.
+  function ensureOverride(dateKey) {
+    let ov = OVERRIDES.find(o => o.date === dateKey);
+    if (ov) {
+      if (!ov.windows) ov.windows = tpl(ov.from).windows.map(w => ({ ...w, dims:{ ...w.dims } }));
+      return ov;
+    }
+    const d = new Date(dateKey + "T00:00:00");
+    const t = tpl(pattern().days[d.getDay()]);
+    ov = { date:dateKey, from:null, label:`${t.name}, adjusted`, adjusted:true,
+           windows:t.windows.map(w => ({ ...w, dims:{ ...w.dims } })) };
+    OVERRIDES.push(ov);
+    return ov;
+  }
+  function overrideWindow(dateKey, name) {
+    const ov = ensureOverride(dateKey);
+    let w = ov.windows.find(x => x.name === name);
+    if (!w) { w = { name, s:"00:00", e:"23:59", dims:{} }; ov.windows.push(w); }
+    return w;
+  }
+  // Nothing open, and reality just handed you a pocket of time: record it as a real window
+  // running from now to whatever you are next committed to. It never fires — you are already here.
+  function adHocWindow(dateKey) {
+    const n = new Date();
+    const start = `${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;
+    const ov = ensureOverride(dateKey);
+    const next = [...ov.windows.map(w => w.s), ...eventsOn(new Date(dateKey + "T00:00:00")).map(e => e.s)]
+      .filter(t => mins(t) > mins(start)).sort()[0];
+    const w = { name:"Unplanned", s:start, e:next || "23:59", dims:{}, adhoc:true };
+    ov.windows.push(w);
+    ov.windows.sort((a, b) => mins(a.s) - mins(b.s));
+    return w;
+  }
+
+  const mins = hhmm => (+hhmm.slice(0,2)) * 60 + (+hhmm.slice(3));
+  const winMins = w => mins(w.e) - mins(w.s);
+  // Display format: "3p", "7:30a", "12p". Storage and <input type="time"> stay 24h.
+  function hm(t) {
+    const h = +t.slice(0, 2), m = +t.slice(3);
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return (m ? `${h12}:${String(m).padStart(2, "0")}` : `${h12}`) + (h < 12 ? "a" : "p");
+  }
+  // Accepts what a person actually types: 3p, 3pm, 3:30p, 7.30a, 15:00, 1500, 12a.
+  // Returns canonical "HH:MM", or null if it cannot be read.
+  function parseTime(v) {
+    const t = String(v).trim().toLowerCase().replace(/[\s.]/g, m => m === "." ? ":" : "");
+    const m = t.match(/^(\d{1,2}):?(\d{2})?\s*(am|pm|a|p)?$/);
+    if (!m) return null;
+    let h = +m[1];
+    const min = m[2] ? +m[2] : 0;
+    const ap = m[3] ? m[3][0] : null;
+    if (min > 59) return null;
+    if (ap) {
+      if (h < 1 || h > 12) return null;
+      h = (h % 12) + (ap === "p" ? 12 : 0);
+    } else if (h > 23) return null;
+    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+  function timeField(w, f, tplId) {
+    return `<input class="field time" type="text" inputmode="text" spellcheck="false" autocapitalize="off"
+      value="${hm(w[f])}" data-time data-t="${esc(tplId || "")}" data-w="${esc(w.name)}" data-f="${f}"
+      aria-label="${f === "s" ? "Start" : "End"} time">`;
+  }
+  const timeHint = `<div class="note" style="padding:4px 0 0">Type it how you say it — <b>3p</b>, <b>7:30a</b>,
+    <b>12p</b>. <span style="opacity:.75">24-hour works too.</span></div>`;
+
+  // Duration's window-side ceiling is DERIVED from the window's length — nothing to
+  // declare, nothing to keep in sync, and it can never contradict the clock.
+  function baseQuery(w) {
+    const q = { mins:winMins(w), label:w.name };
+    for (const d of DIMS) q[d.key] = d.type === "ord" ? (w.dims[d.key] ?? d.winDef) : valuesOf(w, d);
+    return q;
+  }
+  function openQuery() {
+    const q = { mins:600, label:"Right now" };
+    for (const d of DIMS) q[d.key] = d.type === "ord" ? d.winDef : [];
+    return q;
+  }
+  const effQuery = w => w ? baseQuery(w) : openQuery();
+  function matchesQ(t, q) {
+    if (t.st !== "Active") return false;
+    if (durMins(t.dur) > q.mins) return false;          // duration ceiling, derived
+    for (const d of DIMS) {
+      if (d.type === "ord") {
+        const tv = t.dims[d.key] ?? d.taskDef;
+        if (d.values.indexOf(tv) > d.values.indexOf(q[d.key])) return false;
+      } else {
+        // task values AND, window values OR  ==  task set ⊆ window set
+        if (!valuesOf(t, d).every(v => q[d.key].includes(v))) return false;
+      }
+    }
+    return true;
+  }
+  const matches = (t, w) => matchesQ(t, baseQuery(w));
+
+  // SCARCITY: how many windows AHEAD would admit this task. Fewest first — the rarest
+  // opportunity is the one worth spending on. Replaces the old per-dimension boost, and
+  // unifies both algebras: long, high-energy and oddly-located windows are all simply rare.
+  //
+  // The horizon is a ROLLING min(7 days, time to deadline) measured from now, not the
+  // pattern's Sun–Sat week. Two reasons: a fixed week is a lie by Friday afternoon, and —
+  // the bigger one — walking real dates applies Overrides and Events, which a Pattern
+  // cannot express because it is deliberately never reified into a calendar (#8).
+  const asActive = t => ({ ...t, dims:{ ...t.dims }, st:"Active" });
+  function horizonDays(t) {
+    if (!t.due) return 7;
+    const d = Math.ceil((new Date(t.due + "T23:59:59") - Date.now()) / DAY);
+    return Math.max(1, Math.min(7, d));
+  }
+  const horizonLabel = t => t.due ? "before due" : "in 7d";
+
+  // Every window in the horizon. Without a deadline this is a true rolling 7 x 24h — it runs
+  // to the same clock time eight days out, so a once-a-week opportunity is counted exactly
+  // once no matter what time of day you ask. With a deadline it runs to the end of that day.
+  function horizonWindows(t) {
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    const rolling = !t.due;
+    const lastDay = rolling ? 7
+      : Math.min(7, Math.max(0, Math.round((new Date(t.due + "T00:00:00") - today) / DAY)));
+    const out = [];
+    for (let i = 0; i <= lastDay; i++) {
+      const d = dAdd(i);
+      for (const w of dayShape(d).windows) {
+        if (i === 0 && mins(w.s) < nowMin) continue;                  // already gone today
+        if (rolling && i === lastDay && mins(w.s) >= nowMin) continue; // past the horizon's end
+        out.push({ d, w });
+      }
+    }
+    return out;
+  }
+  let _ahead = new Map();
+  function admittingAhead(t) {
+    if (_ahead.has(t.id)) return _ahead.get(t.id);
+    const probe = asActive(t);
+    const out = horizonWindows(t).filter(x => matchesQ(probe, baseQuery(x.w)));
+    _ahead.set(t.id, out);
+    return out;
+  }
+  const scarcity = t => admittingAhead(t).length;
+  const nextChance = t => admittingAhead(t)[0] || null;
+  const chanceLabel = c => `${WD[c.d.getDay()]} ${hm(c.w.s)} ${c.w.name}`;
+
+  // The pattern-week count, kept only to tell two very different zeros apart:
+  // "never fits this pattern" (malformed) vs "none in this stretch" (just not now).
+  function weekWindows() { return pattern().days.flatMap(tid => tpl(tid).windows); }
+  const structuralFit = t => weekWindows().filter(w => matchesQ(asActive(t), baseQuery(w))).length;
+
+  const orphans = () => TASKS.filter(t => t.st === "Active" && structuralFit(t) === 0);
+
+  // Denominator, over exactly the same horizon.
+  const windowsAhead = t => horizonWindows(t).length;
+  // Which single axis, relaxed on its own, would rescue a task nothing can admit?
+  function blockingAxes(t) {
+    const fixes = d => {
+      const probe = asActive(t); delete probe.dims[d.key];
+      return weekWindows().some(w => matchesQ(probe, baseQuery(w)));
+    };
+    const out = DIMS.filter(fixes).map(d => d.label.toLowerCase());
+    const shorter = asActive(t); shorter.dur = 2;
+    if (weekWindows().some(w => matchesQ(shorter, baseQuery(w)))) out.push("duration");
+    return out;
+  }
+
+  function rank(list) {
+    return list.sort((a, b) => {
+      const ad = a.due ? new Date(a.due) - today : 1e9;
+      const bd = b.due ? new Date(b.due) - today : 1e9;
+      if (ad !== bd) return ad - bd;
+      return scarcity(a) - scarcity(b);
+    });
+  }
+  const matchesFor = w => rank(TASKS.filter(t => matchesQ(t, baseQuery(w))));
+  const matchesForQ = q => rank(TASKS.filter(t => matchesQ(t, q)));
+  const countBy = st => TASKS.filter(t => t.st === st).length;
+
+  // dated events surface in the footer for the 3 days up to and including the day
+  function footerEvents() {
+    return EVENTS.filter(e => {
+      const n = Math.round((new Date(e.date) - today) / DAY);
+      return n >= 0 && n <= 2;
+    });
+  }
+
+  /* ============================== state ============================== */
+  const S = {
+    variant: new URLSearchParams(location.search).get("variant") || "D",
+    screen: "home",
+    param: null,
+    filter: "Active",
+    date: iso(today),
+    sheet: null,
+    about: false,
+    adhoc: null,       // name of the unplanned window this screen minted, if any
+    adjustOpen: false,
+  };
+  const curDate = () => { const d = new Date(S.date + "T00:00:00"); return d; };
+  const liveWindow = () => {
+    if (S.date !== iso(today)) return null;
+    const now = new Date().getHours() * 60 + new Date().getMinutes();
+    return dayShape(today).windows.find(w => mins(w.s) <= now && now < mins(w.e)) || null;
+  };
+  const nextWindow = () => dayShape(today).windows.find(w => mins(w.s) > (new Date().getHours()*60 + new Date().getMinutes())) || null;
+
+  function go(screen, param) {
+    S.screen = screen; S.param = param ?? null; S.sheet = null;
+    S.adhoc = null; S.adjustOpen = false;
+    render();
+  }
+  function sheet(kind, param) { S.sheet = kind ? { kind, param } : null; render(); }
+
+  /* ============================ components ============================ */
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+  function dimPills(dims, extraTags) {
+    const out = DIMS.filter(d => dims[d.key] !== undefined)
+      .map(d => `<span class="pill dim">${esc(d.label.toLowerCase())}: ${esc(
+        Array.isArray(dims[d.key]) ? dims[d.key].join(" / ") : dims[d.key])}</span>`);
+    (extraTags || []).forEach(t => out.push(`<span class="pill inert">${esc(t)} · inert</span>`));
+    return out.join("");
+  }
+  // Always shown on an active task. The scarcest task sorts to the top of a window's
+  // list, so the strongest wording lands exactly where the decision is being made.
+  function rarityPill(t) {
+    if (t.st !== "Active") return "";
+    const n = scarcity(t);
+    if (n === 0) return structuralFit(t) === 0
+      ? `<span class="pill due">never fits this pattern</span>`
+      : `<span class="pill due">none ${horizonLabel(t)}</span>`;
+    if (n === 1) return `<span class="pill now">only chance · ${esc(chanceLabel(nextChance(t)).replace(/ \S+$/, ""))}</span>`;
+    if (n <= 3) return `<span class="pill now">rare · ${n} ${horizonLabel(t)}</span>`;
+    return `<span class="pill">${n} ${horizonLabel(t)}</span>`;
+  }
+  function duePill(t) {
+    if (!t.due) return "";
+    const n = Math.round((new Date(t.due) - today) / DAY);
+    const cls = n <= 3 ? "pill due" : "pill";
+    return `<span class="${cls}">due ${n === 0 ? "today" : n === 1 ? "tomorrow" : "in " + n + "d"}</span>`;
+  }
+  function taskRow(t, opts = {}) {
+    return `<div class="row">
+      <button class="tick" data-done="${t.st === "Done" ? 1 : 0}" data-act="toggle" data-id="${t.id}" aria-label="Mark ${esc(t.t)} done">✓</button>
+      <button class="body" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-align:left"
+              data-act="task" data-id="${t.id}">
+        <div class="title" style="${t.st === "Done" ? "opacity:.45;text-decoration:line-through" : ""}">${esc(t.t)}</div>
+        <div class="meta">
+          ${t.dur ? `<span class="pill dur">${durLabel(t.dur)}</span>` : `<span class="pill due">no duration</span>`}
+          ${duePill(t)}
+          ${opts.dims === false ? "" : dimPills(t.dims, t.tags)}
+          ${rarityPill(t)}
+        </div>
+      </button>
+      <span class="chev">›</span>
+    </div>`;
+  }
+  function footerBar() {
+    const ev = footerEvents();
+    return `<div class="footer-count">
+      <span class="pill">${countBy("Unprocessed")} to process</span>
+      <span class="pill">${countBy("Stale")} stale</span>
+      ${orphans().length ? `<span class="pill due">${orphans().length} never fit any window</span>` : ""}
+      ${ev.map(e => `<span class="pill now">${esc(e.name)} · ${WDL[new Date(e.date + "T00:00:00").getDay()]}</span>`).join("")}
+    </div>`;
+  }
+  const addBtn = `<button class="nav-add" data-act="sheet" data-kind="capture" aria-label="Quick add a task">＋</button>`;
+  function nav(title, o = {}) {
+    // In D the quick-add circle owns the nav's right slot on EVERY screen — screens that
+    // want that slot for something else have to put it somewhere better.
+    const right = S.variant === "D" ? addBtn : (o.right || "");
+    return `<div class="nav">
+      <div class="nav-main">
+        ${o.back ? `<button class="icon" data-act="go" data-screen="${o.back}" data-param="${o.backParam || ""}">‹ ${esc(o.backLabel || "Back")}</button>` : ""}
+        <h1>${esc(title)}</h1>
+        ${right}
+      </div>
+      ${o.sub ? `<div class="sub">${esc(o.sub)}</div>` : ""}
+    </div>`;
+  }
+  function tabbar(_items, active) {
+    const items = TABS[S.variant] || TABS.A;
+    return `<div class="tabbar">${items.map(i => `
+      <button data-act="go" data-screen="${i.k}" ${i.k === active ? 'aria-current="page"' : ""}>
+        <span class="g">${i.g}</span>${esc(i.l)}
+      </button>`).join("")}</div>`;
+  }
+  function windowLine(w, d) {
+    const n = matchesFor(w).length;
+    return `<button class="row" data-act="landing" data-win="${esc(w.name)}">
+      <div class="body">
+        <div class="title">${esc(w.name)}</div>
+        <div class="meta">
+          <span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>
+          ${n ? `<span class="pill dim">${n} task${n === 1 ? "" : "s"} fit</span>` : `<span class="pill">silent — nothing fits</span>`}
+          ${dimPills(w.dims)}
+        </div>
+      </div><span class="chev">›</span></button>`;
+  }
+  function findWindow(name) {
+    return dayShape(curDate()).windows.find(w => w.name === name) || dayShape(today).windows[0];
+  }
+
+  /* ====================== screens shared by variants ====================== */
+  /* --- "Matching on": reality surprised you, so say so. Writes straight through. --- */
+  function qText(d, q) { return d.type === "ord" ? q[d.key] : q[d.key].join(" / "); }
+
+  function adjuster(w, q) {
+    const ov = OVERRIDES.find(o => o.date === S.date);
+    return `<div class="adjust">
+      <button class="adjust-h" data-act="adjustopen" aria-expanded="${S.adjustOpen}">
+        <span class="lbl">Matching on</span>
+        <span class="adjust-sum">${DIMS.map(d => {
+          const declared = w && (d.type === "ord" ? w.dims[d.key] !== undefined : valuesOf(w, d).length);
+          return `<span class="pill ${declared ? "now" : "dim"}">${esc(d.label.toLowerCase())}: ${esc(qText(d, q))}</span>`;
+        }).join("")}</span>
+        <span class="chev">${S.adjustOpen ? "⌃" : "⌄"}</span>
+      </button>
+      ${S.adjustOpen ? `<div class="adjust-body">
+        ${DIMS.map(d => `<div class="lbl">${esc(d.label)}${d.type === "ord"
+            ? ` <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— ceiling</span>` : ""}</div>
+          <div class="chipset">${d.values.map(v => {
+            const on = d.type === "ord" ? q[d.key] === v : q[d.key].includes(v);
+            const locked = false;
+            return `<button data-act="qtoggle" data-k="${d.key}" data-v="${esc(v)}" aria-pressed="${on}"
+              ${locked ? `disabled style="opacity:.75"` : ""}>${esc(v)}${
+              locked ? ` <span style="opacity:.6;font-size:11px">always</span>` : ""}</button>`;
+          }).join("")}</div>`).join("")}
+        <div class="note" style="padding:12px 0 2px">Switching a value <b>on</b> widens what this window admits.
+          A task fits when <b>every</b> value it carries on an axis is among the window's — so these values OR
+          together here, and AND together on the task. Energy is a ceiling instead. Nothing is "boosted":
+          order comes from how rare the opportunity is.</div>
+      </div>` : ""}
+      ${ov && ov.adjusted ? `<div class="adjust-bar">
+        <span>${esc(fmtShort(curDate()))} is now an override — <b>${esc(ov.label)}</b></span>
+      </div>` : ""}
+    </div>`;
+  }
+
+  function landingScreen(back, backLabel) {
+    const w = findWindow(S.param);
+    const q = effQuery(w);
+    const list = matchesForQ(q);
+    const snoozeMin = Math.min(30, Math.max(5, Math.round(winMins(w) * .25)));
+    return nav(w.name, { back, backLabel, sub:`${hm(w.s)}–${hm(w.e)} · ${fmtShort(curDate())}` }) + `
+      <div class="scroll">
+        <div class="note">Opened from the notification. This is where triage lives — the push itself is
+          <b>a doorbell carrying one URL</b>.</div>
+        ${adjuster(w, q)}
+        <div class="list">${list.length ? list.map(t => taskRow(t)).join("")
+          : `<div class="empty">Nothing fits.<br>No notification would have fired.</div>`}</div>
+        <div class="btn-row">
+          <button class="btn" data-act="snooze">Snooze ${snoozeMin} min</button>
+          <button class="btn ghost" data-act="go" data-screen="${back}">Done for now</button>
+        </div>
+        ${footerBar()}
+        <div class="note">Adjusting above edits <b>this date's</b> copy of the window, so a snooze re-matches
+          against the change — <i>"the original window's dimension values"</i> stays literally true, because the
+          window's values are what moved.</div>
+      </div>`;
+  }
+
+  function fitsNowScreen(back, backLabel) {
+    const live = S.adhoc ? findWindow(S.adhoc) : liveWindow();
+    const q = effQuery(live);
+    const list = matchesForQ(q);
+    return nav("Right now", { back, backLabel,
+      sub:live ? `${live.adhoc ? "Unplanned window · " : ""}${hm(live.s)}–${hm(live.e)}` : "Nothing open" }) + `
+      <div class="scroll">
+        <div class="note">${live && live.adhoc
+          ? `Reality handed you a pocket of time, so it is <b>recorded as a real window</b> running to your next
+             commitment. It never fires — you are already here.`
+          : live ? `Starting from the open window, then yours to bend.`
+          : `Nothing is open. Widen something below and this becomes a real window on today.`}</div>
+        ${adjuster(live, q)}
+        <div class="list">${list.length ? list.map(t => taskRow(t)).join("")
+          : `<div class="empty">Nothing fits that.<br>Try widening a dimension above.</div>`}</div>
+        ${footerBar()}
+        <div class="note">This is the "show me what fits now" feature the snooze rule was careful <i>not</i> to be.
+          It never fires a notification and never edits a window unless you ask it to.</div>
+      </div>`;
+  }
+
+  // Live answer to "will this ever come up?", recomputed on every property change.
+  function fitBar(t) {
+    const ahead = admittingAhead(t), n = ahead.length;
+    const tot = windowsAhead(t), struct = structuralFit(t);
+    const span = t.due ? `before it is due` : `in the next 7 days`;
+    const blockers = struct === 0 ? blockingAxes(t) : [];
+    return `<div class="fitbar ${n === 0 ? "zero" : n <= 3 ? "rare" : ""}">
+      <span class="n">${n}</span>
+      <span class="of">${n === 0
+        ? `of ${tot} windows ${span} fit this`
+        : `of ${tot} windows ${span}${n === 1 ? " — its only chance" : ""}`}</span>
+      ${n > 0 ? `<span class="which">Next: <b>${esc(chanceLabel(ahead[0]))}</b>${
+        n > 1 && n <= 3 ? ` · then ${ahead.slice(1).map(c => esc(chanceLabel(c))).join(" · ")}` : ""}</span>` : ""}
+      ${n === 0 && struct > 0 ? `<span class="which">Normally <b>${struct}</b> a week, but an override or event
+        has taken them all out of this stretch. Nothing is wrong with the task.</span>` : ""}
+      ${struct === 0 ? `<span class="which">${blockers.length
+        ? `No window declares ${blockers.map(b => `<b>${esc(b)}</b>`).join(" or ")} — relax one, or declare it on a window`
+        : `No single property is to blame; the combination has no home in this pattern`}</span>` : ""}
+      ${t.st !== "Active" ? `<span class="which">Counted as if <b>Active</b> — it is <b>${esc(t.st)}</b>, so it is not being matched at all right now.</span>` : ""}
+    </div>`;
+  }
+
+  function taskDetail(back, backLabel) {
+    const t = task(+S.param) || TASKS[0];
+    return nav("Task", { back, backLabel }) + `
+      <div class="scroll">
+        ${fitBar(t)}
+        <div class="stack">
+          <div class="lbl">Title</div>
+          <input class="field" value="${esc(t.t)}">
+          <div class="lbl">Notes</div>
+          <textarea class="field" rows="2" placeholder="A URL or a sentence of context">${esc(t.notes || "")}</textarea>
+          <div class="lbl">Duration</div>
+          <div class="chipset">${DURS.map(d =>
+            `<button data-act="setdur" data-id="${t.id}" data-v="${d}" aria-pressed="${String(t.dur) === String(d)}">${durLabel(d)}</button>`).join("")}</div>
+          <div class="lbl">Status</div>
+          <div class="chipset">${["Unprocessed","Active","Done","Stale"].map(s =>
+            `<button data-act="setst" data-id="${t.id}" data-v="${s}" aria-pressed="${t.st === s}">${s}</button>`).join("")}</div>
+          <div class="lbl">Deadline</div>
+          <input class="field" type="date" value="${t.due || ""}">
+        </div>
+        <div class="sec-h">Tags</div>
+        <div class="stack" style="padding-top:4px">
+          ${DIMS.map(d => `
+            <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— ${d.type === "ord" ? `unset means &quot;${esc(d.taskDef)}&quot;` : "all of these must be true of the window"}</span></div>
+            <div class="chipset">${d.values.map(v =>
+              `<button data-act="setdim" data-id="${t.id}" data-k="${d.key}" data-v="${esc(v)}"
+                 aria-pressed="${d.type === "ord" ? (t.dims[d.key] ?? d.taskDef) === v : valuesOf(t, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
+          ${(t.tags || []).length ? `<div class="lbl">Unresolved</div><div class="chipset">
+            ${t.tags.map(x => `<span class="pill inert">${esc(x)} · kept but inert</span>`).join("")}</div>` : ""}
+        </div>
+        <div class="btn-row"><button class="btn primary wide" data-act="go" data-screen="${back}">Save</button></div>
+        <div class="note">Dimensions themselves are declared in code. This screen picks <b>values</b> on them,
+          never edits the axes.</div>
+      </div>`;
+  }
+
+  function dimensionsScreen(back, backLabel) {
+    return nav("Dimensions", { back, backLabel, sub:"Read-only — declared in code" }) + `
+      <div class="scroll">
+        <div class="list">${DIMS.map(d => `<div class="row"><div class="body">
+          <div class="title">${esc(d.label)}</div>
+          <div class="meta"><span class="pill">${d.type === "ord" ? "ordinal — ceiling" : "categorical — subset"}</span>
+            ${d.type === "ord"
+              ? `<span class="pill dim">task default: ${esc(d.taskDef)}</span>
+                 <span class="pill dim">window default: ${esc(d.winDef)}</span>`
+              : `<span class="pill dim">no defaults — absence is the empty set</span>`}</div>
+          <div class="meta">${d.values.map(v => `<span class="pill">${esc(v)}</span>`).join("")}</div>
+        </div></div>`).join("")}
+        <div class="row"><div class="body">
+          <div class="title">Duration</div>
+          <div class="meta"><span class="pill">ordinal — ceiling</span>
+            <span class="pill dim">window value derived from its length</span></div>
+          <div class="meta">${DURS.map(v => `<span class="pill">${durLabel(v)}</span>`).join("")}</div>
+        </div></div></div>
+        <div class="note">Two algebras. <b>Ordinal</b> axes compare a task against the window's ceiling.
+          <b>Categorical</b> axes ask whether the task's values are a <b>subset</b> of the window's — window
+          values OR together, task values AND together. Absence is the empty set, which is why categorical
+          axes need no defaults: an untagged task is a subset of everything.</div>
+        <div class="note">There is deliberately <b>no UI for managing dimensions</b>. Adding one is a code
+          change. This screen exists so a wrong reminder can be debugged.</div>
+      </div>`;
+  }
+
+  function triageScreen(back, backLabel) {
+    const un = TASKS.filter(t => t.st === "Unprocessed");
+    const st = TASKS.filter(t => t.st === "Stale");
+    return nav("Process", { back, backLabel, sub:`${un.length} unprocessed · ${st.length} stale` }) + `
+      <div class="scroll">
+        <div class="sec-h">Missing a duration</div>
+        <div class="list">${un.map(t => `<div class="row"><div class="body">
+          <div class="title">${esc(t.t)}</div>
+          <div class="meta chipset" style="margin-top:7px">${DURS.map(d =>
+            `<button data-act="process" data-id="${t.id}" data-v="${d}"
+               style="background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2);padding:6px 11px;border-radius:99px;font-size:13px">${durLabel(d)}</button>`).join("")}</div>
+        </div></div>`).join("") || `<div class="empty">Nothing to process.</div>`}</div>
+        <div class="sec-h">Stale — reword, slice smaller, or delete</div>
+        <div class="list">${st.map(t => taskRow(t)).join("")}</div>
+        <div class="note">These two piles only ever nudge through the <b>reminder footer</b>. Neither gets a
+          notification of its own.</div>
+      </div>`;
+  }
+
+  function eventOverlapSheet() {
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>This clashes with a window</h2></div>
+      <div class="note" style="padding-top:12px">
+        <b>Band concert, 7–8:30p</b> overlaps <b>Evening prep, 6–8p</b> on ${esc(fmtShort(dAdd(2)))}.
+        A date has one shape, so choose what happens to the window.</div>
+      <div class="stack">
+        <button class="btn wide" data-act="overlap" data-v="replace">Replace the window<br>
+          <span style="font-size:12px;color:var(--ink-2);font-weight:400">Evening prep disappears that day</span></button>
+        <button class="btn wide" data-act="overlap" data-v="truncate">Truncate it to 6–7p<br>
+          <span style="font-size:12px;color:var(--ink-2);font-weight:400">Fire time unchanged</span></button>
+        <button class="btn wide" data-act="overlap" data-v="split">Split it around the event<br>
+          <span style="font-size:12px;color:var(--ink-2);font-weight:400">6–7p, and nothing after the concert → second half dropped</span></button>
+      </div>
+      <div class="note">Whichever you pick, ${esc(fmtShort(dAdd(2)))} becomes a <b>one-off day</b>.
+        One action, one question, two artifacts.</div>
+    </div></div>`;
+  }
+
+  function captureSheet() {
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>Quick add</h2>
+        <button class="icon" data-act="closesheet" style="background:none;border:none;color:var(--accent)">Cancel</button></div>
+      <div class="stack">
+        <input class="field" placeholder="What is it?" autofocus>
+        <div class="lbl">How long? — the one thing capture must ask</div>
+        <div class="chipset">${DURS.map(d => `<button data-act="capture" data-v="${d}">${durLabel(d)}</button>`).join("")}</div>
+        <button class="btn ghost wide" data-act="closesheet">Add more details…</button>
+      </div>
+      <div class="note">Mirrors the <b>Quick add</b> Shortcut exactly — same endpoint, same two interactions,
+        lands <b>Active</b>. The details path just sends more fields.</div>
+    </div></div>`;
+  }
+
+  function patternSheet() {
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>Switch pattern</h2>
+        <button class="icon" data-act="closesheet" style="background:none;border:none;color:var(--accent)">Done</button></div>
+      <div class="list">${PATTERNS.map(p => `<button class="row" data-act="setpattern" data-v="${p.id}">
+        <div class="body"><div class="title">${esc(p.name)}${p.id === activePattern ? " · active" : ""}</div>
+        <div class="meta">${p.days.map((t, i) => `<span class="pill">${WD[i]} ${esc(tpl(t).name.split(" ")[0])}</span>`).join("")}</div></div>
+        <span class="chev">${p.id === activePattern ? "✓" : "›"}</span></button>`).join("")}</div>
+      <div class="note">Seasons come back round, so previous patterns are <b>kept and named</b>, never rebuilt.
+        Switching is one tap and changes every undated future day at once.</div>
+    </div></div>`;
+  }
+
+  /* ============================ variant A ============================ */
+  const TABS_A = [
+    { k:"home", g:"☑", l:"Tasks" }, { k:"today", g:"◷", l:"Today" },
+    { k:"schedule", g:"▤", l:"Schedule" }, { k:"more", g:"⋯", l:"More" },
+  ];
+  const TABS_B = [
+    { k:"home", g:"◷", l:"Day" }, { k:"tasks", g:"☑", l:"Tasks" },
+    { k:"templates", g:"▤", l:"Shapes" }, { k:"more", g:"⋯", l:"More" },
+  ];
+  const TABS_D = [
+    { k:"home", g:"◷", l:"Now" }, { k:"tasks", g:"☑", l:"Tasks" },
+    { k:"schedule", g:"▤", l:"Schedule" }, { k:"more", g:"⋯", l:"More" },
+  ];
+  const TABS = { A:TABS_A, B:TABS_B, D:TABS_D };
+  const A = {
+    name:"Task-first",
+    tagline:"A conventional bottom tab bar. The task list is home; the schedule is a settings-like drill-down you visit rarely.",
+    screens:{
+      home() {
+        const list = TASKS.filter(t => t.st === S.filter);
+        return nav("Tasks", { right:`<button class="icon" data-act="sheet" data-kind="capture">＋</button>` }) + `
+          <div class="filterbar">${["Active","Unprocessed","Stale","Done"].map(f =>
+            `<button data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${f} ${TASKS.filter(t => t.st === f).length}</button>`).join("")}</div>
+          <div class="scroll">
+            <div class="list">${list.map(t => taskRow(t)).join("") || `<div class="empty">Nothing here.</div>`}</div>
+            <div class="note">Marking off happens <b>here</b>, deliberately — never as a side effect of dismissing
+              a reminder.</div>
+          </div>
+          <button class="fab" data-act="sheet" data-kind="capture" aria-label="Quick add">＋</button>` + tabbar(TABS_A, "home");
+      },
+      today() {
+        const sh = dayShape(today), live = liveWindow();
+        return nav("Today", { sub:`${fmtDate(today)} · ${sh.label}` }) + `
+          <div class="scroll">
+            ${live ? `<div class="sec"><button class="btn primary wide" data-act="landing" data-win="${esc(live.name)}">
+              ${esc(live.name)} is open now — ${matchesFor(live).length} fit</button></div>` : ""}
+            <div class="sec-h">Windows today</div>
+            <div class="list">${sh.windows.map(w => windowLine(w)).join("")}</div>
+            ${eventsOn(today).length ? `<div class="sec-h">Events</div><div class="list">
+              ${eventsOn(today).map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
+                <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+            <div class="sec"><button class="btn wide" data-act="go" data-screen="fitsnow">What fits right now?</button></div>
+            ${footerBar()}
+          </div>` + tabbar(TABS_A, "today");
+      },
+      schedule() {
+        const p = pattern();
+        return nav("Schedule") + `
+          <div class="scroll">
+            <div class="sec-h">Active pattern</div>
+            <div class="list"><button class="row" data-act="sheet" data-kind="pattern">
+              <div class="body"><div class="title">${esc(p.name)}</div>
+              <div class="meta"><span class="pill">${PATTERNS.length} saved patterns</span></div></div><span class="chev">›</span></button></div>
+            <div class="sec-h">The week</div>
+            <div class="list">${p.days.map((tid, i) => `<button class="row" data-act="go" data-screen="template" data-param="${tid}">
+              <div class="body"><div class="title">${WDL[i]}</div>
+              <div class="meta"><span class="pill dim">${esc(tpl(tid).name)}</span>
+                <span class="pill">${tpl(tid).windows.length} windows</span></div></div><span class="chev">›</span></button>`).join("")}</div>
+            <div class="sec-h">Dated exceptions</div>
+            <div class="list">
+              <button class="row" data-act="go" data-screen="dates"><div class="body">
+                <div class="title">Overrides &amp; events</div>
+                <div class="meta"><span class="pill">${OVERRIDES.length} overrides</span><span class="pill">${EVENTS.length} events</span></div>
+              </div><span class="chev">›</span></button>
+            </div>
+            <div class="note">Three levels deep before you reach a window's tags: <b>pattern → day template →
+              window</b>. Cheap to build, but the thing you edit most often is the furthest away.</div>
+          </div>` + tabbar(TABS_A, "schedule");
+      },
+      template() {
+        const t = tpl(S.param) || TEMPLATES[0];
+        const used = PATTERNS.filter(p => p.days.includes(t.id));
+        return nav(t.name, { back:"schedule", backLabel:"Schedule" }) + `
+          <div class="scroll">
+            <div class="sec-h">Windows</div>
+            <div class="list">${t.windows.map(w => `<button class="row" data-act="go" data-screen="window" data-param="${esc(t.id)}|${esc(w.name)}">
+              <div class="body"><div class="title">${esc(w.name)}</div>
+              <div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div></div><span class="chev">›</span></button>`).join("")}
+              <button class="row" data-act="noop"><div class="body"><div class="title" style="color:var(--accent)">＋ Add a window</div></div></button></div>
+            ${t.protos.length ? `<div class="sec-h">Event prototypes</div><div class="list">
+              ${t.protos.map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
+              <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span><span class="pill">dateless</span></div></div></div>`).join("")}</div>` : ""}
+            <div class="sec-h">Used by</div>
+            <div class="list">${used.map(p => `<div class="row"><div class="body"><div class="title">${esc(p.name)}</div>
+              <div class="meta">${p.days.map((x, i) => x === t.id ? `<span class="pill dim">${WD[i]}</span>` : "").join("")}</div></div></div>`).join("")}</div>
+            <div class="btn-row"><button class="btn" data-act="noop">Clone to diverge</button>
+              <button class="btn primary" data-act="noop">Save</button></div>
+            <div class="note">Editing this propagates to <b>every pattern above</b>. Blast radius is made visible,
+              not prevented.</div>
+          </div>`;
+      },
+      window() {
+        const [tid, wname] = String(S.param).split("|");
+        const t = tpl(tid) || TEMPLATES[0];
+        const w = t.windows.find(x => x.name === wname) || t.windows[0];
+        return nav(w.name, { back:"template", backParam:t.id, backLabel:t.name.split(" ")[0] }) + `
+          <div class="scroll">
+            <div class="stack">
+              <div class="lbl">Name — becomes the reminder's copy</div>
+              <input class="field" value="${esc(w.name)}">
+              <div class="lbl">Span</div>
+              <div style="display:flex;gap:9px;align-items:center">${timeField(w, "s", t.id)}
+                <span style="color:var(--ink-3)">to</span>${timeField(w, "e", t.id)}</div>
+              ${timeHint}
+              <div class="note" style="padding:2px 0 0">Fires at <b>${hm(w.s)}</b>. ${winMins(w)} minutes long, so
+                snooze is ${Math.min(30, Math.max(5, Math.round(winMins(w) * .25)))} min.</div>
+            </div>
+            <div class="sec-h">What can be done here</div>
+            <div class="stack" style="padding-top:4px">
+              ${DIMS.map(d => `<div class="lbl">${esc(d.label)}
+                <span style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400">— ${d.type === "ord" ? `ceiling, unset means &quot;${esc(d.winDef)}&quot;` : "any one of these is enough"}</span></div>
+                <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="${t.id}" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
+                  aria-pressed="${d.type === "ord" ? (w.dims[d.key] ?? d.winDef) === v
+                    : valuesOf(w, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
+            </div>
+            <div class="sec-h">Right now this would surface</div>
+            <div class="list">${matchesFor(w).slice(0, 4).map(t2 => taskRow(t2, { dims:false })).join("")
+              || `<div class="empty">Nothing — so it would stay silent.</div>`}</div>
+            <div class="note">Live preview is the only defence against a window that declares too little.
+              A tagged task is doable <i>only</i> if some window declares that tag, and tags are cheap to add
+              to tasks while windows are edited rarely — so the drift is always toward orphans.</div>
+          </div>`;
+      },
+      dates() {
+        return nav("Overrides & events", { back:"schedule", backLabel:"Schedule" }) + `
+          <div class="scroll">
+            <div class="sec-h">Dates that differ from the pattern</div>
+            <div class="list">${OVERRIDES.map(o => `<button class="row" data-act="noop"><div class="body">
+              <div class="title">${esc(fmtShort(new Date(o.date + "T00:00:00")))}</div>
+              <div class="meta"><span class="pill dim">${esc(o.label)}</span>
+                <span class="pill">${o.from ? "stamped copy" : "one-off day"}</span></div></div><span class="chev">›</span></button>`).join("")}</div>
+            <div class="sec-h">Events</div>
+            <div class="list">
+              <button class="row" data-act="sheet" data-kind="overlap"><div class="body">
+                <div class="title" style="color:var(--accent)">＋ New event</div></div></button>
+              ${EVENTS.map(e => `<button class="row" data-act="noop"><div class="body">
+              <div class="title">${esc(e.name)}</div>
+              <div class="meta"><span class="pill dur">${esc(fmtShort(new Date(e.date + "T00:00:00")))} ${hm(e.s)}</span>${dimPills(e.dims)}</div>
+            </div><span class="chev">›</span></button>`).join("")}</div>
+            <div class="note">"College kid home for the weekend" is <b>two dated overrides</b> made in one gesture —
+              there is no multi-day object, so per-day variation is free and conflicts can't be represented.</div>
+          </div>`;
+      },
+      more() {
+        return nav("More") + `
+          <div class="scroll">
+            <div class="list">
+              <button class="row" data-act="go" data-screen="triage"><div class="body"><div class="title">Process &amp; stale</div>
+                <div class="meta"><span class="pill">${countBy("Unprocessed")} + ${countBy("Stale")}</span></div></div><span class="chev">›</span></button>
+              <button class="row" data-act="go" data-screen="dimensions"><div class="body"><div class="title">Dimensions</div>
+                <div class="meta"><span class="pill">read-only</span></div></div><span class="chev">›</span></button>
+              <button class="row" data-act="noop"><div class="body"><div class="title">Pushover</div>
+                <div class="meta"><span class="pill">app + user key</span></div></div><span class="chev">›</span></button>
+              <button class="row" data-act="noop"><div class="body"><div class="title">Logs</div></div><span class="chev">›</span></button>
+            </div>
+          </div>` + tabbar(TABS_A, "more");
+      },
+      landing:() => landingScreen("today", "Today"),
+      fitsnow:() => fitsNowScreen("today", "Today"),
+      task:() => taskDetail("home", "Tasks"),
+      dimensions:() => dimensionsScreen("more", "More"),
+      triage:() => triageScreen("more", "More"),
+    },
+  };
+
+  /* ============================ variant B ============================ */
+  const B = {
+    name:"Day-first",
+    tagline:"The day is the home screen. You edit the schedule by editing the day in front of you; templates and patterns are derived from what you've drawn.",
+    screens:{
+      home() {
+        const d = curDate(), sh = dayShape(d), evs = eventsOn(d);
+        const isToday = iso(d) === iso(today);
+        const H0 = 6, H1 = 23, PX = 34;
+        const y = m => (m - H0 * 60) / 60 * PX;
+        const hrs = [];
+        for (let h = H0; h <= H1; h++) hrs.push(`<div class="hr"><span>${hm(String(h).padStart(2,"0") + ":00")}</span></div>`);
+        const blocks = sh.windows.map(w => {
+          const live = isToday && liveWindow() && liveWindow().name === w.name;
+          const n = matchesFor(w).length;
+          return `<button class="blk ${live ? "live" : ""}" style="top:${y(mins(w.s)) + 12}px;height:${Math.max(30, (winMins(w) / 60) * PX - 4)}px"
+            data-act="sheet" data-kind="win" data-param="${esc(w.name)}">
+            <div class="bt">${esc(w.name)}</div>
+            <div class="bm">${hm(w.s)}–${hm(w.e)} · ${n ? n + " fit" : "silent"}</div></button>`;
+        }).join("");
+        const evBlocks = evs.map(e => `<div class="blk event" style="top:${y(mins(e.s)) + 12}px;height:${Math.max(28, ((mins(e.e) - mins(e.s)) / 60) * PX - 4)}px">
+          <div class="bt">${esc(e.name)}</div><div class="bm">${hm(e.s)}–${hm(e.e)} · event</div></div>`).join("");
+        const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+        const days = [];
+        for (let i = -1; i < 8; i++) {
+          const dd = dAdd(i);
+          const has = OVERRIDES.some(o => o.date === iso(dd)) || eventsOn(dd).length;
+          days.push(`<button data-act="setdate" data-v="${iso(dd)}" ${iso(dd) === S.date ? 'aria-current="date"' : ""}>
+            <div class="wd">${WD[dd.getDay()]}</div><div class="dn">${dd.getDate()}</div>
+            ${has ? '<div class="dot"></div>' : '<div style="height:7px"></div>'}</button>`);
+        }
+        return nav(fmtDate(d), { sub:`${sh.source === "override" ? "Override · " : ""}${sh.label}`,
+          right:`<button class="icon" data-act="sheet" data-kind="capture">＋</button>` }) + `
+          <div class="weekstrip">${days.join("")}</div>
+          <div class="scroll">
+            <div class="timeline">
+              ${hrs.join("")}${blocks}${evBlocks}
+              ${isToday && nowMin > H0 * 60 && nowMin < H1 * 60 ? `<div class="nowline" style="top:${y(nowMin) + 12}px"></div>` : ""}
+            </div>
+            <div class="btn-row">
+              <button class="btn" data-act="noop">＋ Window</button>
+              <button class="btn" data-act="sheet" data-kind="overlap">＋ Event</button>
+            </div>
+            <div class="note">Editing a block on a <b>future date</b> writes an override for that date only — the
+              pattern behind it is never touched. Editing today does the same. That's the whole model, visible.</div>
+            ${footerBar()}
+          </div>` + tabbar(TABS_B, "home");
+      },
+      tasks() {
+        const list = TASKS.filter(t => t.st === S.filter);
+        return nav("Tasks", { sub:"The pool the day draws from" }) + `
+          <div class="filterbar">${["Active","Unprocessed","Stale","Done"].map(f =>
+            `<button data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${f} ${TASKS.filter(t => t.st === f).length}</button>`).join("")}</div>
+          <div class="scroll"><div class="list">${list.map(t => taskRow(t)).join("")}</div>
+          <div class="note">A flat pool on purpose — there is no list order to groom. Ranking only happens
+            when a window asks.</div></div>` + tabbar(TABS_B, "tasks");
+      },
+      templates() {
+        return nav("Day shapes", { sub:`${pattern().name}`,
+          right:`<button class="icon" data-act="sheet" data-kind="pattern">Switch</button>` }) + `
+          <div class="scroll">
+            <div class="sec-h">This week uses</div>
+            <div class="list">${pattern().days.map((tid, i) => `<button class="row" data-act="go" data-screen="template" data-param="${tid}">
+              <div class="body"><div class="title">${WDL[i]} — ${esc(tpl(tid).name)}</div>
+              <div class="meta">${tpl(tid).windows.map(w => `<span class="pill dur">${hm(w.s)}</span>`).join("")}</div></div>
+              <span class="chev">›</span></button>`).join("")}</div>
+            <div class="sec-h">All shapes</div>
+            <div class="list">${TEMPLATES.map(t => `<button class="row" data-act="go" data-screen="template" data-param="${t.id}">
+              <div class="body"><div class="title">${esc(t.name)}</div>
+              <div class="meta"><span class="pill">${t.windows.length} windows</span>
+                <span class="pill">used by ${PATTERNS.filter(p => p.days.includes(t.id)).length}</span>
+                ${t.protos.length ? `<span class="pill dim">${t.protos.length} event prototype</span>` : ""}</div></div>
+              <span class="chev">›</span></button>`).join("")}</div>
+            <div class="note">Reached <b>after</b> you've drawn a day, not before. The intended path to a new shape is
+              "make today look right, then <b>promote it</b>".</div>
+          </div>` + tabbar(TABS_B, "templates");
+      },
+      template:() => A.screens.template(),
+      window:() => A.screens.window(),
+      more() {
+        return nav("More") + `
+          <div class="scroll"><div class="list">
+            <button class="row" data-act="go" data-screen="triage"><div class="body"><div class="title">Process &amp; stale</div>
+              <div class="meta"><span class="pill">${countBy("Unprocessed")} + ${countBy("Stale")}</span></div></div><span class="chev">›</span></button>
+            <button class="row" data-act="go" data-screen="dates"><div class="body"><div class="title">Overrides &amp; events</div></div><span class="chev">›</span></button>
+            <button class="row" data-act="go" data-screen="dimensions"><div class="body"><div class="title">Dimensions</div></div><span class="chev">›</span></button>
+            <button class="row" data-act="noop"><div class="body"><div class="title">Pushover</div></div><span class="chev">›</span></button>
+          </div></div>` + tabbar(TABS_B, "more");
+      },
+      dates:() => A.screens.dates(),
+      landing:() => landingScreen("home", "Day"),
+      fitsnow:() => fitsNowScreen("home", "Day"),
+      task:() => taskDetail("tasks", "Tasks"),
+      dimensions:() => dimensionsScreen("more", "More"),
+      triage:() => triageScreen("more", "More"),
+    },
+  };
+
+  /* ============================ variant C ============================ */
+  const C = {
+    name:"Moment-first",
+    tagline:"No tab bar at all. One screen answers \"what now?\"; capture is always on the bottom edge; everything else lives behind a single overflow index.",
+    screens:{
+      home() {
+        const live = liveWindow(), next = nextWindow();
+        const w = live || next || dayShape(today).windows[0];
+        const list = live ? matchesFor(live) : [];
+        return `<button class="overflow-btn" data-act="go" data-screen="index" aria-label="Everything else">⋯</button>
+          <div class="scroll" style="padding-bottom:70px">
+            <div class="moment">
+              <div class="eyebrow">${live ? "Open now" : "Nothing open"}</div>
+              <h1>${esc(live ? live.name : next ? "Next: " + next.name : "Done for today")}</h1>
+              <div class="when">${live ? `${hm(live.s)}–${hm(live.e)} · ${list.length} of ${countBy("Active")} tasks fit`
+                : next ? `starts ${hm(next.s)}` : "no more windows today"}</div>
+            </div>
+            ${live ? `<div class="stream">${list.map(t => `<button class="streamitem" data-act="task" data-id="${t.id}">
+                <span class="tick" data-done="0">✓</span>
+                <span style="flex:1"><span style="display:block;font-size:15.5px;letter-spacing:-.01em">${esc(t.t)}</span>
+                <span class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">
+                  <span class="pill dur">${durLabel(t.dur)}</span>${duePill(t)}${rarityPill(t)}${dimPills(t.dims)}</span></span>
+              </button>`).join("")}</div>
+              <div class="btn-row"><button class="btn" data-act="snooze">Snooze ${Math.min(30, Math.max(5, Math.round(winMins(live) * .25)))} min</button>
+                <button class="btn ghost" data-act="noop">Not now</button></div>`
+            : `<div class="empty">Silence is truthful — nothing is open, so nothing is being asked of you.<br><br>
+                <button class="btn" data-act="go" data-screen="fitsnow">Show me what would fit anyway</button></div>`}
+            ${footerBar()}
+            <div class="note">The notification opens <b>exactly this screen</b>. There is no separate landing page,
+              because the landing page and the home screen are the same question.</div>
+          </div>
+          <div class="capbar">
+            <input class="field" placeholder="Add a task…" data-act="capfocus">
+            <button class="btn primary" data-act="sheet" data-kind="capture">Add</button>
+          </div>`;
+      },
+      index() {
+        const items = [
+          { k:"all",     g:"☑", t:"All tasks",    d:`${countBy("Active")} active` },
+          { k:"triage",  g:"◐", t:"Process",      d:`${countBy("Unprocessed")} to process · ${countBy("Stale")} stale` },
+          { k:"week",    g:"▤", t:"The week",     d:pattern().name },
+          { k:"dates",   g:"◈", t:"Dates",        d:`${OVERRIDES.length} overrides · ${EVENTS.length} events` },
+          { k:"dimensions", g:"⊞", t:"Dimensions", d:"read-only, code-declared" },
+          { k:"noop",    g:"◎", t:"Pushover",     d:"app + user key" },
+        ];
+        return nav("Everything else", { back:"home", backLabel:"Now" }) + `
+          <div class="scroll"><div class="indexgrid">
+            ${items.map(i => `<button data-act="go" data-screen="${i.k}">
+              <span class="g">${i.g}</span><span class="t">${esc(i.t)}</span><span class="d">${esc(i.d)}</span></button>`).join("")}
+          </div>
+          <div class="note">Six destinations, one level deep, visited rarely. The cost of no tab bar is that
+            nothing here is ever one tap away.</div></div>`;
+      },
+      all() {
+        const list = TASKS.filter(t => t.st === S.filter);
+        return nav("All tasks", { back:"index", backLabel:"Index" }) + `
+          <div class="filterbar">${["Active","Unprocessed","Stale","Done"].map(f =>
+            `<button data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${f} ${TASKS.filter(t => t.st === f).length}</button>`).join("")}</div>
+          <div class="scroll"><div class="list">${list.map(t => taskRow(t)).join("")}</div></div>`;
+      },
+      week() {
+        const p = pattern();
+        return nav("The week", { back:"index", backLabel:"Index",
+          right:`<button class="icon" data-act="sheet" data-kind="pattern">${esc(p.name)}</button>` }) + `
+          <div class="scroll"><div class="weekform">
+            ${p.days.map((tid, i) => { const t = tpl(tid); return `<details ${i === new Date().getDay() ? "open" : ""}>
+              <summary><span class="day">${WD[i]}</span><span class="tpl">${esc(t.name)}</span><span class="chev">⌄</span></summary>
+              <div class="inner">
+                ${t.windows.map(w => `<button class="row" style="padding:9px 0;border:none;border-bottom:1px solid var(--line-soft)"
+                    data-act="go" data-screen="window" data-param="${esc(t.id)}|${esc(w.name)}">
+                  <div class="body"><div class="title" style="font-size:14px">${esc(w.name)}</div>
+                  <div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div></div>
+                  <span class="chev">›</span></button>`).join("")}
+                <button class="btn ghost" style="padding:9px 0" data-act="noop">＋ Add a window to ${esc(t.name)}</button>
+              </div></details>`; }).join("")}
+          </div>
+          <div class="note">One scrolling form, no drill-down: the whole week is on one screen and every window is
+            two taps from its tags. The catch — it edits <b>templates</b>, so the propagation warning has nowhere
+            obvious to live.</div>
+          <div class="btn-row"><button class="btn wide" data-act="go" data-screen="dates">Change a single date instead →</button></div>
+          </div>`;
+      },
+      dates:() => A.screens.dates(),
+      window:() => A.screens.window(),
+      landing:() => landingScreen("home", "Now"),
+      fitsnow:() => fitsNowScreen("home", "Now"),
+      task:() => taskDetail("all", "All tasks"),
+      dimensions:() => dimensionsScreen("index", "Index"),
+      triage:() => triageScreen("index", "Index"),
+    },
+  };
+
+  /* ====================== variant D — C, merged per feedback ====================== */
+  const D = {
+    name:"Moment-first, merged",
+    tagline:"C's calm, A's Today layout, and a tab bar back at the bottom. \"Matching on\" lets you say reality "
+      + "surprised you; the change writes through to today, and between windows it mints the window you are standing in.",
+    screens:{
+      home() {
+        const sh = dayShape(today), live = liveWindow(), evs = eventsOn(today);
+        return nav("Today", { sub:`${fmtDate(today)} · ${sh.label}` }) + `
+          <div class="scroll col">
+            ${live ? `<button class="livecard" data-act="landing" data-win="${esc(live.name)}">
+              <div class="eyebrow">Open now</div>
+              <div class="t">${esc(live.name)}</div>
+              <div class="m">${hm(live.s)}–${hm(live.e)} · ${matchesFor(live).length} of ${countBy("Active")} tasks fit</div>
+            </button>` : ""}
+            <div class="sec-h">Windows today</div>
+            <div class="list">${sh.windows.map(w => windowLine(w)).join("")}</div>
+            ${evs.length ? `<div class="sec-h">Events</div><div class="list">
+              ${evs.map(e => `<div class="row"><div class="body"><div class="title">${esc(e.name)}</div>
+                <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+            <div class="fitspace">
+              <button class="btn fits" data-act="go" data-screen="fitsnow">What fits right now?</button>
+            </div>
+            ${footerBar()}
+          </div>` + tabbar(null, "home");
+      },
+      tasks() {
+        const list = TASKS.filter(t => t.st === S.filter);
+        return nav("Tasks") + `
+          <div class="filterbar">${["Active","Unprocessed","Stale","Done"].map(f =>
+            `<button data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${f} ${TASKS.filter(t => t.st === f).length}</button>`).join("")}</div>
+          <div class="scroll">
+            <div class="list">${list.map(t => taskRow(t)).join("") || `<div class="empty">Nothing here.</div>`}</div>
+            <div class="note">Marking off happens <b>here</b>, deliberately — never as a side effect of dismissing
+              a reminder.</div>
+          </div>` + tabbar(null, "tasks");
+      },
+      schedule:() => A.screens.schedule(),
+      template:() => A.screens.template(),
+      window:() => A.screens.window(),
+      dates:() => A.screens.dates(),
+      more:() => A.screens.more(),
+      landing:() => landingScreen("home", "Today"),
+      fitsnow:() => fitsNowScreen("home", "Today"),
+      task:() => taskDetail("tasks", "Tasks"),
+      dimensions:() => dimensionsScreen("more", "More"),
+      triage:() => triageScreen("more", "More"),
+    },
+  };
+
+  const VARIANTS = { D, A, B, C };
+  const KEYS = ["D","A","B","C"];
+
+  /* ============================== render ============================== */
+  function render() {
+    _ahead = new Map();           // windows, tasks, overrides and the clock all move under us
+    const V = VARIANTS[S.variant] || A;
+    const fn = V.screens[S.screen] || V.screens.home;
+    let html = fn();
+    if (S.sheet) {
+      if (S.sheet.kind === "capture") html += captureSheet();
+      else if (S.sheet.kind === "pattern") html += patternSheet();
+      else if (S.sheet.kind === "overlap") html += eventOverlapSheet();
+      else if (S.sheet.kind === "win") html += winSheet(S.sheet.param);
+    }
+    document.getElementById("device").innerHTML = html;
+
+    document.getElementById("switcher").innerHTML = `
+      <button data-sw="prev" aria-label="Previous variant">‹</button>
+      <button class="label" data-sw="about">
+        <b>${S.variant}</b> — ${esc(V.name)} <span class="hint">· tap for notes</span>
+      </button>
+      <button data-sw="next" aria-label="Next variant">›</button>`;
+
+    const old = document.querySelector(".about");
+    if (old) old.remove();
+    if (S.about) {
+      const el = document.createElement("div");
+      el.className = "about";
+      el.innerHTML = `<div class="about-in" data-stop>
+        <div class="kicker">Variant ${S.variant} of ${KEYS.length} · prototype scaffolding</div>
+        <h2>${esc(V.name)}</h2>
+        <p>${esc(V.tagline)}</p>
+        <div class="kicker" style="margin-top:14px">Screens in this variant</div>
+        <ul>${Object.keys(V.screens).map(k => `<li><b>${esc(k)}</b></li>`).join("")}</ul>
+        <div class="kicker" style="margin-top:14px">How to drive it</div>
+        <ul>
+          <li>Arrows or <code>←</code>/<code>→</code> swap variant; <code>?variant=${S.variant}</code> is in the URL.</li>
+          <li>Ticks, duration chips, dimension chips and pattern switching all really mutate the in-memory state —
+            matching re-runs, so counts move.</li>
+          <li>Data is shared across all three variants, so like-for-like comparison holds.</li>
+        </ul>
+        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+          <button class="btn primary" data-sw="close">Close</button></div>
+      </div>`;
+      document.body.appendChild(el);
+    }
+  }
+
+  function winSheet(name) {
+    const w = findWindow(name);
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>${esc(w.name)}</h2>
+        <button class="icon" data-act="landing" data-win="${esc(w.name)}" style="background:none;border:none;color:var(--accent)">Preview</button></div>
+      <div class="stack">
+        <div class="lbl">Span on ${esc(fmtShort(curDate()))} — ${hm(w.s)}–${hm(w.e)}</div>
+        <div style="display:flex;gap:9px;align-items:center">${timeField(w, "s", "")}
+          <span style="color:var(--ink-3)">to</span>${timeField(w, "e", "")}</div>
+        ${timeHint}
+        ${DIMS.map(d => `<div class="lbl">${esc(d.label)}</div>
+          <div class="chipset">${d.values.map(v => `<button data-act="setwdim" data-t="" data-w="${esc(w.name)}" data-k="${d.key}" data-v="${esc(v)}"
+            aria-pressed="${d.type === "ord" ? (w.dims[d.key] ?? d.winDef) === v : valuesOf(w, d).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
+      </div>
+      <div class="note"><b>${matchesFor(w).length}</b> tasks fit as configured.
+        Saving this on a future date writes an override for that date alone.</div>
+      <div class="btn-row"><button class="btn" data-act="noop">Promote day to a template</button>
+        <button class="btn primary" data-act="closesheet">Save</button></div>
+    </div></div>`;
+  }
+
+  /* ============================== events ============================== */
+  document.addEventListener("click", e => {
+    const sw = e.target.closest("[data-sw]");
+    if (sw) {
+      const k = sw.dataset.sw;
+      if (k === "about") { S.about = !S.about; render(); return; }
+      if (k === "close") { S.about = false; render(); return; }
+      cycle(k === "next" ? 1 : -1);
+      return;
+    }
+    if (e.target.closest(".about") && !e.target.closest("[data-stop]")) { S.about = false; render(); return; }
+
+    const el = e.target.closest("[data-act]");
+    if (!el) return;
+    const a = el.dataset.act;
+    // clicking the veil closes; clicking inside the sheet must not
+    if (a === "closesheet" && el.classList.contains("veil") && e.target.closest("[data-stop]")) return;
+
+    switch (a) {
+      case "go": go(el.dataset.screen, el.dataset.param || null); break;
+      case "task": go("task", el.dataset.id); break;
+      case "landing": S.sheet = null; go("landing", el.dataset.win); break;
+      case "sheet": sheet(el.dataset.kind, el.dataset.param); break;
+      case "closesheet": sheet(null); break;
+      case "filter": S.filter = el.dataset.v; render(); break;
+      case "adjustopen": S.adjustOpen = !S.adjustOpen; render(); break;
+      case "qtoggle": {
+        const d = dim(el.dataset.k);
+        let w;
+        if (S.screen === "fitsnow") {
+          const live = S.adhoc ? findWindow(S.adhoc) : liveWindow();
+          // nothing open? then this gesture mints the window it is talking about
+          w = live ? overrideWindow(S.date, live.name) : adHocWindow(S.date);
+          S.adhoc = w.name;
+        } else {
+          w = overrideWindow(S.date, S.param);
+        }
+        toggleDim(w, d, el.dataset.v, d.winDef);
+        render(); break;
+      }
+      case "setdate": S.date = el.dataset.v; render(); break;
+      case "toggle": { const t = task(+el.dataset.id); t.st = t.st === "Done" ? "Active" : "Done"; render(); break; }
+      case "setdur": { const t = task(+el.dataset.id); const v = el.dataset.v; t.dur = v === "Longer" ? "Longer" : +v; render(); break; }
+      case "setst": { task(+el.dataset.id).st = el.dataset.v; render(); break; }
+      case "setdim": {
+        const d = dim(el.dataset.k);
+        toggleDim(task(+el.dataset.id), d, el.dataset.v, d.taskDef);
+        render(); break;
+      }
+      case "setwdim": {
+        const w = el.dataset.t ? tpl(el.dataset.t).windows.find(x => x.name === el.dataset.w) : findWindow(el.dataset.w);
+        const d = dim(el.dataset.k);
+        toggleDim(w, d, el.dataset.v, d.winDef);
+        render(); break;
+      }
+      case "process": { const t = task(+el.dataset.id); const v = el.dataset.v; t.dur = v === "Longer" ? "Longer" : +v; t.st = "Active"; render(); break; }
+      case "capture": {
+        const inp = document.querySelector(".sheet input.field");
+        const title = (inp && inp.value.trim()) || "New task";
+        const v = el.dataset.v;
+        TASKS.unshift({ id:Date.now(), t:title, dur:v === "Longer" ? "Longer" : +v, st:"Active", dims:{} });
+        sheet(null); break;
+      }
+      case "setpattern": { activePattern = el.dataset.v; sheet(null); break; }
+      case "overlap": { sheet(null); break; }
+      case "snooze": { go("home"); break; }
+      case "capfocus": break;
+      default: break;
+    }
+  });
+
+  document.addEventListener("change", e => {
+    const el = e.target.closest("[data-time]");
+    if (!el) return;
+    const v = parseTime(el.value);
+    if (!v) { el.classList.add("bad"); el.select && el.select(); return; }
+    const w = el.dataset.t ? tpl(el.dataset.t).windows.find(x => x.name === el.dataset.w)
+                           : findWindow(el.dataset.w);
+    const other = el.dataset.f === "s" ? w.e : w.s;
+    if (el.dataset.f === "s" ? mins(v) >= mins(other) : mins(v) <= mins(other)) {
+      el.classList.add("bad"); return;                 // a window must have positive length
+    }
+    w[el.dataset.f] = v;
+    render();
+  });
+
+  function cycle(dir) {
+    const i = KEYS.indexOf(S.variant);
+    S.variant = KEYS[(i + dir + KEYS.length) % KEYS.length];
+    S.screen = "home"; S.param = null; S.sheet = null;
+    const u = new URL(location.href);
+    u.searchParams.set("variant", S.variant);
+    history.replaceState(null, "", u);
+    render();
+  }
+
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.key === "ArrowLeft") cycle(-1);
+    else if (e.key === "ArrowRight") cycle(1);
+    else if (e.key === "Escape" && (S.sheet || S.about)) { S.sheet = null; S.about = false; render(); }
+  });
+
+  render();
+})();
+</script>

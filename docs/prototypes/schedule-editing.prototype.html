@@ -1,0 +1,1666 @@
+<title>task-guide — schedule editing variants</title>
+
+<!--
+  PROTOTYPE — throwaway. Not production code.
+  Question: how is the weekly schedule authored on a phone?
+  Four radically different shapes for the SCHEDULE CLUSTER, mounted inside the
+  settled shell from #12 (variant D: four tabs, Today-style home, quick-add circle).
+  Switchable via ?variant=W|P|M|S and the floating bottom bar.
+  Ticket: https://github.com/jpjerkins/task-guide/issues/17
+  Companion: ui-screens.prototype.html — same branch, same fixture data, settles the shell.
+  In-memory data only. No persistence, no tests, no error handling.
+
+    W — Week canvas       one scrolling week, inline expansion, blast radius at the point of edit
+    P — Draw & promote    date-first timeline; templates are DERIVED by promoting a day you drew
+    M — Mode switch       a hard "the shape / this date" toggle governs every edit below it
+    S — Season setup      a guided seasonal flow; ad-hoc editing is the secondary path
+-->
+
+<style>
+  :root, :root[data-theme="light"] {
+    --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2; --surface-3:#DFE4EA;
+    --ink:#13171C; --ink-2:#586373; --ink-3:#8A93A1;
+    --line:#DFE4EA; --line-soft:#EDF0F4;
+    --accent:#276B5B; --accent-ink:#FFFFFF; --accent-soft:#DFEDE8;
+    --now:#8A5A0B; --now-soft:#FAEFDA;
+    --danger:#A2322A; --danger-soft:#F8E5E3;
+    --scaffold-bg:#13171C; --scaffold-ink:#F4F6F8; --scaffold-line:#3A4350;
+    --shadow:0 1px 2px rgba(19,23,28,.06), 0 8px 28px rgba(19,23,28,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0E1216; --surface:#171C22; --surface-2:#20262E; --surface-3:#2A323B;
+      --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
+      --line:#252C34; --line-soft:#1E242B;
+      --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
+      --now:#D9A448; --now-soft:#32281433;
+      --danger:#E0837A; --danger-soft:#3A211E;
+      --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1216; --surface:#171C22; --surface-2:#20262E; --surface-3:#2A323B;
+    --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
+    --line:#252C34; --line-soft:#1E242B;
+    --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
+    --now:#D9A448; --now-soft:#32281433;
+    --danger:#E0837A; --danger-soft:#3A211E;
+    --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column; align-items:center; min-height:100dvh;
+  }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .stage { flex:1; width:100%; display:flex; justify-content:center; padding:0; }
+  .device {
+    position:relative; width:100%; max-width:430px; height:calc(100dvh - 60px);
+    background:var(--ground); overflow:hidden; display:flex; flex-direction:column;
+  }
+  @media (min-width:600px) {
+    .stage { padding:26px 16px 0; }
+    .device { height:min(880px, calc(100dvh - 92px)); border:1px solid var(--line);
+      border-radius:30px; box-shadow:var(--shadow); }
+  }
+  .scroll { flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+
+  /* ---- shell chrome (settled in #12, not under test here) ---- */
+  .nav { display:flex; flex-direction:column; padding:14px 16px 10px;
+    background:var(--surface); border-bottom:1px solid var(--line); flex:none; }
+  .nav-main { display:flex; align-items:center; gap:10px; min-height:32px; }
+  .nav h1 { font-size:21px; letter-spacing:-.02em; margin:0; flex:1; min-width:0; text-wrap:balance; }
+  .nav .sub { font-size:12px; color:var(--ink-2); margin:3px 0 0; }
+  .nav-add { flex:none; width:32px; height:32px; border-radius:50%; padding:0;
+    background:var(--accent); color:var(--accent-ink); border:none;
+    font-size:19px; line-height:1; display:grid; place-items:center; }
+  .nav button.icon { background:none; border:none; padding:4px 6px; color:var(--accent);
+    font-size:15px; border-radius:8px; }
+  .tabbar { display:flex; background:var(--surface); border-top:1px solid var(--line); flex:none; }
+  .tabbar button { flex:1; background:none; border:none; padding:9px 4px 12px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    font-size:10px; letter-spacing:.02em; color:var(--ink-3); }
+  .tabbar button .g { font-size:19px; line-height:1; }
+  .tabbar button[aria-current="page"] { color:var(--accent); font-weight:600; }
+
+  /* ---- shared bits ---- */
+  .sec { padding:16px 16px 4px; }
+  .sec-h { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--ink-3); font-weight:650; padding:18px 16px 7px; }
+  .list { background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .row { display:flex; align-items:flex-start; gap:11px; padding:11px 16px;
+    border-bottom:1px solid var(--line-soft); background:var(--surface);
+    width:100%; text-align:left; border-left:none; border-right:none; border-top:none; }
+  .row:last-child { border-bottom:none; }
+  .row .body { flex:1; min-width:0; }
+  .row .title { font-size:15px; line-height:1.3; letter-spacing:-.01em; }
+  .row .meta { font-size:12px; color:var(--ink-2); margin-top:4px;
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .row .chev { color:var(--ink-3); font-size:14px; align-self:center; }
+  .tick { width:22px; height:22px; border-radius:50%; border:1.5px solid var(--ink-3);
+    background:none; flex:none; margin-top:1px; padding:0; display:grid; place-items:center;
+    font-size:12px; color:transparent; }
+  .tick[data-done="1"] { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+
+  .pill { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+    padding:2px 7px; border-radius:99px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap; }
+  .pill.dur { font-variant-numeric:tabular-nums; background:var(--surface-3); color:var(--ink); }
+  .pill.dim { background:var(--accent-soft); color:var(--accent); }
+  .pill.due { background:var(--danger-soft); color:var(--danger); }
+  .pill.now { background:var(--now-soft); color:var(--now); }
+  .pill.ghost { background:transparent; border:1px dashed var(--ink-3); color:var(--ink-3); }
+
+  .btn { border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    padding:11px 14px; border-radius:11px; font-size:15px; font-weight:550; }
+  .btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .btn.wide { width:100%; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--accent); }
+  .btn.danger { border-color:var(--danger); color:var(--danger); }
+  .btn.sm { padding:7px 11px; font-size:13.5px; border-radius:9px; }
+  .btn-row { display:flex; gap:9px; padding:14px 16px; }
+  .btn-row .btn { flex:1; }
+
+  .note { font-size:12.5px; line-height:1.5; color:var(--ink-2); padding:10px 16px 16px; }
+  .note b { color:var(--ink); font-weight:600; }
+  .empty { padding:38px 24px; text-align:center; color:var(--ink-2); font-size:14px; line-height:1.55; }
+
+  .footer-count { display:flex; gap:8px; flex-wrap:wrap; padding:13px 16px;
+    border-top:1px dashed var(--line); font-size:12.5px; color:var(--ink-2); background:var(--surface); }
+
+  input.field, textarea.field, select.field {
+    width:100%; font:inherit; font-size:16px; padding:11px 12px; color:var(--ink);
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px; }
+  input.field.time { max-width:112px; font-variant-numeric:tabular-nums; }
+  input.field.bad { border-color:var(--danger); background:var(--danger-soft); color:var(--danger); }
+  .chipset { display:flex; flex-wrap:wrap; gap:7px; }
+  .chipset button { background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2);
+    padding:8px 12px; border-radius:99px; font-size:14px; }
+  .chipset button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
+    color:var(--accent-ink); font-weight:600; }
+  .chipset.read span { background:var(--surface-2); border:1px dashed var(--line);
+    color:var(--ink-3); padding:8px 12px; border-radius:99px; font-size:14px; }
+  .chipset.read span.on { background:var(--surface-3); border-style:solid; color:var(--ink); font-weight:600; }
+  .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); font-weight:650; }
+  .lbl .soft { text-transform:none; letter-spacing:0; font-weight:400; color:var(--ink-3); }
+  .stack { display:flex; flex-direction:column; gap:8px; padding:14px 16px 4px; }
+
+  /* ---- sheet ---- */
+  .veil { position:absolute; inset:0; background:rgba(8,12,16,.45); z-index:20;
+    display:flex; align-items:flex-end; }
+  .sheet { background:var(--surface); width:100%; border-radius:18px 18px 0 0;
+    max-height:90%; overflow-y:auto; padding-bottom:12px; }
+  .sheet-h { display:flex; align-items:center; gap:10px; padding:15px 16px 10px;
+    border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--surface); z-index:2; }
+  .sheet-h h2 { margin:0; font-size:17px; flex:1; letter-spacing:-.01em; }
+  .grabber { width:34px; height:4px; border-radius:9px; background:var(--surface-3); margin:8px auto 0; }
+
+  /* ---- scope banner: WHAT AM I TOUCHING. the load-bearing control in this whole ticket ---- */
+  .scope { display:flex; align-items:flex-start; gap:9px; padding:11px 14px;
+    font-size:12.5px; line-height:1.45; border-radius:11px; margin:12px 16px 0; }
+  .scope .g { font-size:15px; line-height:1.2; }
+  .scope b { font-weight:650; }
+  .scope.shared { background:var(--now-soft); color:var(--now); }
+  .scope.shared b { color:var(--now); }
+  .scope.one { background:var(--accent-soft); color:var(--accent); }
+  .scope.one b { color:var(--accent); }
+  .scope.flat { margin:0; border-radius:0; border-top:1px solid var(--line); }
+
+  /* ---- W: week canvas ---- */
+  .canvas { background:var(--surface); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .dayrow { border-bottom:1px solid var(--line); }
+  .dayrow:last-child { border-bottom:none; }
+  .dayhead { display:flex; align-items:center; gap:10px; padding:10px 14px 10px 16px; width:100%;
+    background:none; border:none; text-align:left; }
+  .dayhead .wd { width:30px; flex:none; font-size:12px; font-weight:700; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-3); }
+  .dayhead .tplname { flex:1; min-width:0; font-size:14.5px; font-weight:600; letter-spacing:-.01em; }
+  .dayhead .swap { flex:none; font-size:12px; color:var(--accent); font-weight:600; }
+  .dayrow[data-today="1"] .wd { color:var(--now); }
+  .winstrip { display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 11px 60px; }
+  .winchip { background:var(--surface-2); border:1px solid var(--line); border-radius:9px;
+    padding:6px 9px; font-size:12px; color:var(--ink-2); display:flex; gap:6px; align-items:center;
+    font-variant-numeric:tabular-nums; text-align:left; }
+  .winchip b { color:var(--ink); font-weight:600; font-variant-numeric:normal; }
+  .winchip[data-open="1"] { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+  .winchip[data-open="1"] b { color:var(--accent); }
+  .winchip.add { border-style:dashed; color:var(--accent); }
+  .inline-ed { background:var(--ground); border-top:1px solid var(--line); }
+
+  /* ---- P: timeline ---- */
+  .weekstrip { display:flex; gap:5px; padding:9px 12px 11px; background:var(--surface);
+    border-bottom:1px solid var(--line); overflow-x:auto; }
+  .weekstrip button { flex:none; width:45px; padding:6px 0 7px; border-radius:11px;
+    border:1px solid transparent; background:none; text-align:center; color:var(--ink-2); }
+  .weekstrip .wd { font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
+  .weekstrip .dn { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums;
+    margin-top:1px; color:var(--ink); }
+  .weekstrip button[aria-current="date"] { background:var(--ink); border-color:var(--ink); }
+  .weekstrip button[aria-current="date"] .dn,
+  .weekstrip button[aria-current="date"] .wd { color:var(--ground); }
+  .weekstrip .dot { width:4px; height:4px; border-radius:50%; background:var(--now); margin:3px auto 0; }
+  .weekstrip .dot.blank { background:transparent; }
+
+  .timeline { position:relative; padding:12px 16px 24px 52px; }
+  .timeline .hr { position:relative; height:32px; border-top:1px solid var(--line-soft); }
+  .timeline .hr span { position:absolute; left:-40px; top:-7px; font-size:10.5px; color:var(--ink-3);
+    font-variant-numeric:tabular-nums; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .blk { position:absolute; left:52px; right:14px; border-radius:11px; padding:7px 10px;
+    background:var(--accent-soft); border:1px solid transparent; border-left:3px solid var(--accent);
+    text-align:left; color:var(--ink); overflow:hidden; }
+  .blk .bt { font-size:13.5px; font-weight:600; letter-spacing:-.01em; }
+  .blk .bm { font-size:11.5px; color:var(--ink-2); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .blk.event { background:var(--surface-2); border-left-color:var(--ink-2); border-color:var(--ink-3); }
+  .blk.live { background:var(--now-soft); border-left-color:var(--now); }
+  .nowline { position:absolute; left:38px; right:14px; height:0; border-top:1.5px solid var(--now); }
+  .nowline::before { content:""; position:absolute; left:-4px; top:-3.5px; width:7px; height:7px;
+    border-radius:50%; background:var(--now); }
+
+  /* ---- M: mode switch ---- */
+  .modebar { display:flex; padding:10px 16px 12px; background:var(--surface);
+    border-bottom:1px solid var(--line); gap:0; }
+  .modebar button { flex:1; background:var(--surface-2); border:1px solid var(--line);
+    padding:9px 8px; font-size:13.5px; font-weight:600; color:var(--ink-2); }
+  .modebar button:first-child { border-radius:10px 0 0 10px; }
+  .modebar button:last-child { border-radius:0 10px 10px 0; border-left:none; }
+  .modebar button[aria-pressed="true"] { background:var(--ink); border-color:var(--ink); color:var(--ground); }
+  .wdtabs { display:flex; gap:4px; padding:10px 12px; background:var(--surface);
+    border-bottom:1px solid var(--line); }
+  .wdtabs button { flex:1; padding:8px 0; border-radius:9px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink-2); font-size:13px; font-weight:600; }
+  .wdtabs button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
+    color:var(--accent-ink); }
+
+  /* ---- S: wizard ---- */
+  .steps { display:flex; gap:5px; padding:12px 16px 0; }
+  .steps div { flex:1; height:3px; border-radius:2px; background:var(--surface-3); }
+  .steps div.on { background:var(--accent); }
+  .steps div.done { background:var(--accent); opacity:.45; }
+  .wizq { padding:16px 16px 2px; }
+  .wizq h2 { margin:0; font-size:22px; letter-spacing:-.025em; line-height:1.2; text-wrap:balance; }
+  .wizq p { margin:7px 0 0; font-size:13.5px; line-height:1.5; color:var(--ink-2); }
+  .wizbar { display:flex; gap:9px; padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+    background:var(--surface); border-top:1px solid var(--line); flex:none; }
+  .wizbar .btn { flex:1; }
+  .checkrow { display:flex; align-items:center; gap:12px; padding:13px 16px; width:100%;
+    background:var(--surface); border:none; border-bottom:1px solid var(--line-soft); text-align:left; }
+  .box { width:22px; height:22px; border-radius:6px; border:1.5px solid var(--ink-3); flex:none;
+    display:grid; place-items:center; font-size:13px; color:transparent; }
+  .box[data-on="1"] { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .damage { margin:14px 16px; border-radius:13px; overflow:hidden; border:1px solid var(--danger); }
+  .damage-h { background:var(--danger-soft); color:var(--danger); padding:12px 14px;
+    font-size:13.5px; font-weight:650; line-height:1.4; }
+  .damage .row { background:var(--surface); }
+
+  /* ---- shape picker: a dozen named days do not fit in a wrap of pills ----
+     Each row carries a 24h strip of where its windows actually sit, because with a
+     dozen shapes the NAMES stop being distinguishable ("Ordinary Saturday" vs
+     "Ordinary weekday") long before the silhouettes do. */
+  .pickrow { display:flex; align-items:center; gap:12px; padding:11px 16px; width:100%;
+    background:var(--surface); border:none; border-bottom:1px solid var(--line-soft); text-align:left; }
+  .pickrow .who { flex:1; min-width:0; }
+  .pickrow .nm { font-size:15px; letter-spacing:-.01em; display:flex; align-items:center; gap:7px; }
+  .pickrow .nm .pill { flex:none; }
+  .pickrow[aria-pressed="true"] .nm { font-weight:650; color:var(--accent); }
+  .pickrow .sub2 { font-size:11.5px; color:var(--ink-3); margin-top:3px; font-variant-numeric:tabular-nums; }
+  .strip { position:relative; height:7px; margin-top:7px; border-radius:4px;
+    background:var(--surface-2); overflow:hidden; }
+  .strip i { position:absolute; top:0; bottom:0; background:var(--accent); opacity:.75; border-radius:4px; }
+  .strip u { position:absolute; top:0; bottom:0; width:1px; background:var(--line); }
+  .pickrow[aria-pressed="true"] .strip i { opacity:1; }
+  /* the editable version: tall enough to tap a window and to carry its name where it fits */
+  .strip.big { height:26px; margin:2px 0 0; border-radius:7px; }
+  .strip.big button {
+    position:absolute; top:0; bottom:0; min-width:14px; padding:0; border:none;
+    background:var(--accent); color:var(--accent-ink); border-radius:7px; }
+  .strip.big button[data-open="1"] { background:var(--now); color:var(--ground); }
+  .strip.big u { background:var(--line-soft); }
+  .strip.empty-d { background:repeating-linear-gradient(45deg,
+    var(--surface-2) 0 6px, var(--surface-3) 6px 12px); }
+
+  /* section header that carries a control */
+  .sec-h.with-tog { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .vtog { display:flex; flex:none; }
+  .vtog button { background:var(--surface-2); border:1px solid var(--line); color:var(--ink-3);
+    padding:4px 9px; font-size:10.5px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; }
+  .vtog button:first-child { border-radius:8px 0 0 8px; }
+  .vtog button:last-child { border-radius:0 8px 8px 0; border-left:none; }
+  .vtog button[aria-pressed="true"] { background:var(--ink); border-color:var(--ink); color:var(--ground); }
+
+  /* ---- live preview ---- */
+  .preview { background:var(--surface-2); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .preview-h { display:flex; align-items:baseline; gap:8px; padding:11px 16px 5px; }
+  .preview-h .n { font-size:20px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .preview-h .of { font-size:12.5px; color:var(--ink-2); flex:1; }
+  .preview.zero { background:var(--danger-soft); }
+  .preview.zero .n { color:var(--danger); }
+  .preview ul { margin:0; padding:0 16px 12px 32px; }
+  .preview li { font-size:13px; line-height:1.55; color:var(--ink-2); }
+  .preview li b { color:var(--ink); font-weight:600; }
+
+  /* ---- prototype scaffolding: deliberately not part of the design ---- */
+  .switcher { position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px)); z-index:60;
+    display:flex; align-items:stretch; background:var(--scaffold-bg); color:var(--scaffold-ink);
+    border-radius:99px; box-shadow:0 6px 24px rgba(0,0,0,.35);
+    font-family:ui-monospace, SFMono-Regular, Menlo, monospace; max-width:calc(100vw - 24px); }
+  .switcher button { background:none; border:none; color:inherit; padding:0 15px; font-size:15px; }
+  .switcher .label { padding:9px 4px; font-size:12px; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; border-left:1px solid var(--scaffold-line);
+    border-right:1px solid var(--scaffold-line); min-width:0; }
+  .switcher .label b { font-weight:700; }
+  .switcher .label .hint { opacity:.5; }
+
+  .about { position:fixed; inset:0; z-index:70; background:rgba(8,12,16,.6);
+    display:flex; align-items:center; justify-content:center; padding:18px; }
+  .about-in { background:var(--surface); color:var(--ink); border-radius:16px; max-width:470px;
+    width:100%; max-height:82dvh; overflow-y:auto; padding:20px; box-shadow:var(--shadow); }
+  .about-in h2 { margin:0 0 3px; font-size:19px; letter-spacing:-.02em; }
+  .about-in .kicker { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); }
+  .about-in p { font-size:13.5px; line-height:1.6; color:var(--ink-2); }
+  .about-in ul { padding-left:17px; margin:8px 0 0; }
+  .about-in li { font-size:13px; line-height:1.6; color:var(--ink-2); margin-bottom:4px; }
+  .about-in li b { color:var(--ink); font-weight:600; }
+  .about-in code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px;
+    background:var(--surface-2); padding:1px 5px; border-radius:5px; }
+
+  @media (prefers-reduced-motion:no-preference) {
+    .veil { animation:fade .16s ease-out; }
+    .sheet { animation:rise .2s cubic-bezier(.2,.8,.3,1); }
+    @keyframes fade { from { opacity:0 } }
+    @keyframes rise { from { transform:translateY(14px) } }
+  }
+</style>
+
+<div class="stage"><div class="device" id="device"></div></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ============================ fake data ============================ */
+  const DAY = 864e5;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dAdd = n => new Date(today.getTime() + n*DAY);
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const parseISO = k => new Date(k + "T00:00:00");
+  const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const WDL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fmtDate = d => `${WDL[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
+  const fmtShort = d => `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
+
+  // Four kinds of axis, and the whole point of this ticket's dimension question is that the
+  // editor has to show all four without looking like four unrelated controls.
+  //   cat + authored   — multi-select chips, window values OR
+  //   ord + authored   — single value, a ceiling
+  //   ord + derived    — Duration: computed from the span, shown, never asked (pseudo-dimension below)
+  //   cat + fetched    — Weather: window side is ALWAYS blank in storage (#9), filled at fire time
+  const DIMS = [
+    { key:"location", label:"Location",     type:"cat", src:"authored", values:["home","desk","garage","outside","out & about"] },
+    { key:"who",      label:"With whom",    type:"cat", src:"authored", values:["Sam","Ana","the kids"] },
+    { key:"energy",   label:"Mental energy",type:"ord", src:"authored", taskDef:"low", winDef:"low",
+      values:["low","medium","high"] },
+    { key:"weather",  label:"Weather",      type:"cat", src:"fetched",  values:["dry","wet","snow"] },
+  ];
+  const dim = k => DIMS.find(d => d.key === k);
+  const authored = DIMS.filter(d => d.src === "authored");
+
+  // Open-Meteo's answer, bucketed (#20). Window-side weather is never stored — this is what
+  // fills it in. Day 0 is today; the forecast is why a weather-tagged task's scarcity moves.
+  const FORECAST = ["dry","dry","wet","wet","dry","dry","dry","dry","dry"];
+  const weatherOn = d => FORECAST[Math.max(0, Math.round((d - today)/DAY))] || "dry";
+
+  function valuesOf(holder, d) {
+    const v = holder.dims[d.key];
+    if (v === undefined) return [];
+    return Array.isArray(v) ? v.slice() : [v];
+  }
+  function setValues(holder, d, vals) {
+    if (!vals.length) delete holder.dims[d.key];
+    else holder.dims[d.key] = vals.length === 1 ? vals[0] : vals;
+  }
+  function toggleDim(holder, d, v, def) {
+    if (d.type === "ord") {
+      if (v === def) delete holder.dims[d.key]; else holder.dims[d.key] = v;
+      return;
+    }
+    const vals = valuesOf(holder, d);
+    const i = vals.indexOf(v);
+    if (i >= 0) vals.splice(i, 1); else vals.push(v);
+    setValues(holder, d, vals);
+  }
+
+  const DURS = [2,10,30,60,"Longer"];
+  const durMins = d => d === "Longer" ? 150 : d;
+  const durLabel = d => d === "Longer" ? "Longer" : d + "m";
+  // The largest bucket a span admits. Derived from something already on screen, so it is a
+  // sentence, not a control — unlike Weather, whose source is nowhere on the screen at all.
+  const ceilingLabel = w => durLabel([...DURS].reverse().find(v => durMins(v) <= winMins(w)) ?? 2);
+
+  let TASKS = [
+    { id:1, t:"Call the bank about the mortgage", dur:10, st:"Active", due:iso(dAdd(6)),
+      dims:{ energy:"high", location:"desk" } },
+    { id:2, t:"Fix the gutter bracket", dur:30, st:"Active", dims:{ location:"outside", weather:"dry", energy:"medium" } },
+    { id:3, t:"Email Sam about the tournament car share", dur:2, st:"Active", dims:{ energy:"low" } },
+    { id:11, t:"Settle the summer trip dates with Sam and Ana", dur:30, st:"Active",
+      dims:{ who:["Sam","Ana"], energy:"medium" } },
+    { id:4, t:"Oil the bike chain", dur:10, st:"Active", dims:{ location:"garage" } },
+    { id:5, t:"Draft the Q3 numbers", dur:60, st:"Active", due:iso(dAdd(9)), dims:{ energy:"high", location:"desk" } },
+    { id:6, t:"Order a new karate belt", dur:2, st:"Active", dims:{} },
+    { id:7, t:"Renew the car registration", dur:10, st:"Active", due:iso(dAdd(12)),
+      dims:{ energy:"medium", location:"desk" } },
+    { id:8, t:"Sort out the loft", dur:"Longer", st:"Active", dims:{ location:"home", energy:"medium" } },
+    { id:9, t:"Book the dentist", dur:10, st:"Active", dims:{ energy:"medium", location:"desk" } },
+    { id:10, t:"Replace the shed padlock", dur:10, st:"Active", dims:{ location:"outside", weather:"dry" } },
+    { id:12, t:"Take the mower in for service", dur:60, st:"Active", dims:{ location:"out & about", energy:"medium" } },
+    { id:13, t:"Clear the garage bench with Sam", dur:60, st:"Active", dims:{ location:"garage", who:"Sam", energy:"medium" } },
+    { id:20, t:"gutter thing??", dur:null, st:"Unprocessed", dims:{} },
+    { id:21, t:"look into the loft hatch", dur:null, st:"Unprocessed", dims:{} },
+    { id:22, t:"ring re: warranty", dur:null, st:"Unprocessed", dims:{} },
+    { id:30, t:"Reorganise the entire garage", dur:"Longer", st:"Stale", dims:{ location:"garage" } },
+    { id:31, t:"Learn some Portuguese", dur:30, st:"Stale", dims:{} },
+  ];
+  const task = id => TASKS.find(t => t.id === id);
+
+  // Windows carry stable ids. #16 exposed why: an Override materialised mid-day MUST reuse them,
+  // or an already-fired window re-pushes a minute later. Every copy below preserves w.id.
+  let SEQ = 100;
+  const W_ = (id, name, s, e, dims) => ({ id, name, s, e, dims });
+  let TEMPLATES = [
+    { id:"ord", name:"Ordinary weekday", windows:[
+      W_("w-ord-1","Morning admin", "07:00","08:00",{ location:"desk", energy:"high" }),
+      W_("w-ord-2","Lunch gap",      "12:15","12:45",{ energy:"low" }),
+      W_("w-ord-3","Evening prep",   "18:00","20:00",{ location:"home", energy:"medium" }),
+    ], protos:[] },
+    { id:"vol", name:"Volleyball Tuesday", windows:[
+      W_("w-vol-1","Morning admin",   "07:00","08:00",{ location:"desk", energy:"high" }),
+      W_("w-vol-2","Sports hall wait","18:30","20:00",{ location:"out & about", energy:"low" }),
+      W_("w-vol-3","Short evening",   "21:15","22:00",{ location:"home", energy:"low" }),
+    ], protos:[] },
+    { id:"tour", name:"Tournament Saturday", windows:[
+      W_("w-tour-1","Garden hour",       "08:00","09:30",{ location:["outside","garage"], energy:"medium" }),
+      W_("w-tour-2","Car park downtime", "10:00","15:00",{ location:"out & about", energy:"low" }),
+    ], protos:[] },
+    { id:"sat", name:"Ordinary Saturday", windows:[
+      W_("w-sat-1","Jobs morning", "09:00","12:00",{ location:["outside","garage"], energy:"medium" }),
+      W_("w-sat-2","Evening prep", "18:00","20:00",{ location:"home", energy:"medium" }),
+    ], protos:[] },
+    { id:"trav", name:"Travel day", windows:[
+      W_("w-trav-1","On the road", "09:00","13:00",{ location:"out & about", energy:"low" }),
+    ], protos:[] },
+    { id:"church", name:"Church Sunday", windows:[
+      W_("w-ch-1","Slow afternoon","14:00","17:00",{ location:"home", energy:"medium", who:["Sam","Ana","the kids"] }),
+    ], protos:[{ name:"Church", s:"10:00", e:"11:30" }] },
+    // Phil's read: a dozen-plus shapes accumulate within a couple of seasons. The fixture carries
+    // them so the picker is judged at the density it will actually meet, not at six.
+    { id:"wfh", name:"Working from home", windows:[
+      W_("w-wfh-1","Early desk",  "06:30","08:00",{ location:"desk", energy:"high" }),
+      W_("w-wfh-2","Laundry gap", "11:00","11:20",{ location:"home", energy:"low" }),
+      W_("w-wfh-3","Evening prep","18:00","20:00",{ location:"home", energy:"medium" }),
+    ], protos:[] },
+    { id:"half", name:"Half-day Friday", windows:[
+      W_("w-half-1","Morning admin","07:00","08:00",{ location:"desk", energy:"high" }),
+      W_("w-half-2","Long afternoon","13:00","17:30",{ location:["garage","outside"], energy:"medium" }),
+    ], protos:[] },
+    { id:"swim", name:"Swim meet Saturday", windows:[
+      W_("w-swim-1","Poolside stretch","09:00","14:00",{ location:"out & about", energy:"low" }),
+    ], protos:[] },
+    { id:"early", name:"Early start", windows:[
+      W_("w-early-1","Before anyone","05:30","06:45",{ location:"desk", energy:"high" }),
+      W_("w-early-2","Evening prep", "18:00","20:00",{ location:"home", energy:"medium" }),
+    ], protos:[] },
+    { id:"visit", name:"Grandparents visiting", windows:[
+      W_("w-visit-1","Kitchen shift","10:00","11:30",{ location:"home", energy:"low", who:["Sam","Ana"] }),
+    ], protos:[] },
+    { id:"yard", name:"Yard day", windows:[
+      W_("w-yard-1","All morning outside","08:00","12:30",{ location:["outside","garage"], energy:"medium" }),
+      W_("w-yard-2","Second wind","15:00","17:00",{ location:"outside", energy:"low" }),
+    ], protos:[] },
+    { id:"sick", name:"Sick day", windows:[], protos:[] },
+  ];
+  const tpl = id => TEMPLATES.find(t => t.id === id);
+
+  let PATTERNS = [
+    { id:"vball",  name:"Volleyball season", days:["church","ord","vol","ord","ord","ord","tour"] },
+    { id:"school", name:"School year",       days:["church","ord","ord","ord","ord","ord","sat"] },
+    { id:"summer", name:"Summer",            days:["church","sat","sat","sat","sat","sat","sat"] },
+  ];
+  let activePattern = "vball";
+  const pattern = () => PATTERNS.find(p => p.id === activePattern);
+
+  let OVERRIDES = [
+    { date:iso(dAdd(6)), from:"trav", label:"Travel day", windows:null },
+    { date:iso(dAdd(7)), from:null,   label:"One-off day", windows:[
+      W_("w-of-1","Hotel morning","08:00","09:30",{ location:"out & about", energy:"low" }) ] },
+  ];
+  let EVENTS = [
+    { id:"e1", name:"Band concert", date:iso(dAdd(2)), s:"19:00", e:"20:30", dims:{ who:"the kids" } },
+    { id:"e2", name:"Ana's flight", date:iso(dAdd(6)), s:"11:20", e:"12:00", dims:{} },
+  ];
+
+  /* ==================== derived: day shape + matching ==================== */
+  const mins = hhmm => (+hhmm.slice(0,2)) * 60 + (+hhmm.slice(3));
+  const winMins = w => mins(w.e) - mins(w.s);
+  const hm = t => {
+    const h = +t.slice(0,2), m = +t.slice(3), h12 = h % 12 === 0 ? 12 : h % 12;
+    return (m ? `${h12}:${String(m).padStart(2,"0")}` : `${h12}`) + (h < 12 ? "a" : "p");
+  };
+  function parseTime(v) {
+    const t = String(v).trim().toLowerCase().replace(/[\s.]/g, m => m === "." ? ":" : "");
+    const m = t.match(/^(\d{1,2}):?(\d{2})?\s*(am|pm|a|p)?$/);
+    if (!m) return null;
+    let h = +m[1]; const min = m[2] ? +m[2] : 0; const ap = m[3] ? m[3][0] : null;
+    if (min > 59) return null;
+    if (ap) { if (h < 1 || h > 12) return null; h = (h % 12) + (ap === "p" ? 12 : 0); }
+    else if (h > 23) return null;
+    return `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+  }
+
+  const cloneWin = w => ({ ...w, dims:{ ...w.dims } });   // id preserved, deliberately (#16)
+  const overrideOn = k => OVERRIDES.find(o => o.date === k);
+
+  function dayShape(d) {
+    const key = iso(d), ov = overrideOn(key);
+    if (ov) {
+      const ws = ov.windows || tpl(ov.from).windows.map(cloneWin);
+      return { source:"override", label:ov.label, stamped:ov.from, windows:ws, key };
+    }
+    const t = tpl(pattern().days[d.getDay()]);
+    return { source:"pattern", label:t.name, tplId:t.id, windows:t.windows, key };
+  }
+  const eventsOn = d => EVENTS.filter(e => e.date === iso(d));
+
+  // Materialise a date: copy the windows, KEEP THE IDS, detach from the template.
+  function materialise(dateKey, why) {
+    let ov = overrideOn(dateKey);
+    if (ov) { if (!ov.windows) ov.windows = tpl(ov.from).windows.map(cloneWin); return ov; }
+    const d = parseISO(dateKey), t = tpl(pattern().days[d.getDay()]);
+    ov = { date:dateKey, from:null, label:why || `${t.name}, adjusted`, adjusted:true,
+           windows:t.windows.map(cloneWin) };
+    OVERRIDES.push(ov);
+    OVERRIDES.sort((a,b) => a.date < b.date ? -1 : 1);
+    return ov;
+  }
+  function stamp(dateKey, tplId) {           // applying a named shape to a date is a COPY, not a link
+    const t = tpl(tplId);
+    let ov = overrideOn(dateKey);
+    const windows = t.windows.map(cloneWin);
+    if (ov) { ov.from = tplId; ov.label = t.name; ov.windows = windows; ov.adjusted = false; }
+    else { OVERRIDES.push({ date:dateKey, from:tplId, label:t.name, windows }); OVERRIDES.sort((a,b) => a.date < b.date ? -1 : 1); }
+  }
+  function revertDate(dateKey) {
+    const i = OVERRIDES.findIndex(o => o.date === dateKey);
+    if (i >= 0) OVERRIDES.splice(i,1);
+  }
+  // Promote a date's shape into a named, reusable Day template. The source date does NOT re-link (#8).
+  function promote(dateKey, name) {
+    const sh = dayShape(parseISO(dateKey));
+    const id = "t" + (++SEQ);
+    TEMPLATES.push({ id, name, windows:sh.windows.map(w => ({ ...cloneWin(w), id:"w"+(++SEQ) })), protos:[] });
+    return id;
+  }
+
+  // Duration's ceiling is DERIVED from the span. Weather's value is FETCHED per date.
+  // Neither is ever stored on the window, which is exactly why neither is editable below.
+  function queryFor(w, d) {
+    const q = { mins:winMins(w), label:w.name };
+    for (const dm of DIMS) {
+      if (dm.src === "fetched") q[dm.key] = [weatherOn(d || today)];
+      else q[dm.key] = dm.type === "ord" ? (w.dims[dm.key] ?? dm.winDef) : valuesOf(w, dm);
+    }
+    return q;
+  }
+  function matchesQ(t, q) {
+    if (t.st !== "Active") return false;
+    if (durMins(t.dur) > q.mins) return false;
+    for (const d of DIMS) {
+      if (d.type === "ord") {
+        const tv = t.dims[d.key] ?? d.taskDef;
+        if (d.values.indexOf(tv) > d.values.indexOf(q[d.key])) return false;
+      } else if (!valuesOf(t, d).every(v => q[d.key].includes(v))) return false;
+    }
+    return true;
+  }
+  const matchesFor = (w, d) => rank(TASKS.filter(t => matchesQ(t, queryFor(w, d))));
+  function rank(list) {
+    return list.sort((a,b) => {
+      const ad = a.due ? new Date(a.due) - today : 1e9, bd = b.due ? new Date(b.due) - today : 1e9;
+      if (ad !== bd) return ad - bd;
+      return scarcity(a) - scarcity(b);
+    });
+  }
+
+  // Scarcity over a rolling 7 days of REAL dates, so overrides, events and the forecast all count.
+  const asActive = t => ({ ...t, dims:{ ...t.dims }, st:"Active" });
+  let _ahead = new Map();
+  function admittingAhead(t) {
+    if (_ahead.has(t.id)) return _ahead.get(t.id);
+    const probe = asActive(t), out = [];
+    for (let i = 0; i <= 7; i++) {
+      const d = dAdd(i);
+      for (const w of dayShape(d).windows) if (matchesQ(probe, queryFor(w, d))) out.push({ d, w });
+    }
+    _ahead.set(t.id, out);
+    return out;
+  }
+  const scarcity = t => admittingAhead(t).length;
+
+  // Structural fit under ANY pattern — the question the switcher must answer before committing.
+  function structuralFitUnder(t, pat) {
+    const probe = asActive(t);
+    return pat.days.some((tid, wd) => tpl(tid).windows.some(w => {
+      // probe against a representative date for that weekday so the forecast is realistic
+      let d = today; for (let i = 0; i <= 7; i++) if (dAdd(i).getDay() === wd) { d = dAdd(i); break; }
+      return matchesQ(probe, queryFor(w, d));
+    }));
+  }
+  const orphansUnder = pat => TASKS.filter(t => t.st === "Active" && !structuralFitUnder(t, pat));
+  const orphans = () => orphansUnder(pattern());
+  const countBy = st => TASKS.filter(t => t.st === st).length;
+  const usedBy = tplId => PATTERNS.filter(p => p.days.includes(tplId));
+  // How many days in the next 7 actually change if this template changes.
+  function affectedDates(tplId) {
+    const out = [];
+    for (let i = 0; i <= 13; i++) {
+      const d = dAdd(i), sh = dayShape(d);
+      if (sh.source === "pattern" && sh.tplId === tplId) out.push(d);
+    }
+    return out;
+  }
+
+  /* ============================== state ============================== */
+  const qs = new URLSearchParams(location.search);
+  const S = {
+    variant: qs.get("variant") || "W",
+    screen: "schedule",
+    param: null,
+    filter: "Active",
+    date: iso(today),
+    sheet: null,
+    about: false,
+    open: null,          // W: "tplId|winId" currently expanded inline
+    swap: null,          // W: weekday index whose template picker is open
+    mode: "shape",       // M: shape | date
+    mwd: today.getDay(), // M: which weekday
+    step: 0,             // S: wizard step
+    wiz: null,           // S: draft pattern
+    ev: { name:"Parents' evening", s:"19:00", e:"20:30" },   // the event being drafted
+    dayview: "strip",    // how a day's windows read: "strip" (6a–11p silhouette) or "pills" (times)
+    focusWd: null,       // weekday to scroll to after the next render
+    confirmDel: null,    // window ref armed for deletion — a second tap does it
+  };
+  const curDate = () => parseISO(S.date);
+  const liveWindow = () => {
+    if (S.date !== iso(today)) return null;
+    const n = new Date(), now = n.getHours()*60 + n.getMinutes();
+    return dayShape(today).windows.find(w => mins(w.s) <= now && now < mins(w.e)) || null;
+  };
+  function go(screen, param) {
+    S.screen = screen; S.param = param ?? null; S.sheet = null; S.open = null; S.swap = null;
+    // Tapping a specific day on the season summary should land on that day, not the top of the week.
+    S.focusWd = screen === "season" && param !== null && param !== undefined ? +param : null;
+    render();
+  }
+  function sheet(kind, param) { S.sheet = kind ? { kind, param } : null; render(); }
+
+  /* ============================ components ============================ */
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+  function dimPills(dims) {
+    return DIMS.filter(d => d.src === "authored" && dims[d.key] !== undefined)
+      .map(d => `<span class="pill dim">${esc(d.label.toLowerCase())}: ${esc(
+        Array.isArray(dims[d.key]) ? dims[d.key].join(" / ") : dims[d.key])}</span>`).join("");
+  }
+  function rarityPill(t) {
+    if (t.st !== "Active") return "";
+    const n = scarcity(t);
+    if (n === 0) return `<span class="pill due">never fits</span>`;
+    if (n === 1) return `<span class="pill now">only chance</span>`;
+    if (n <= 3) return `<span class="pill now">rare · ${n}</span>`;
+    return `<span class="pill">${n} in 7d</span>`;
+  }
+  function taskRow(t) {
+    return `<div class="row">
+      <button class="tick" data-done="${t.st === "Done" ? 1 : 0}" data-act="toggle" data-id="${t.id}" aria-label="Mark done">✓</button>
+      <div class="body">
+        <div class="title">${esc(t.t)}</div>
+        <div class="meta">${t.dur ? `<span class="pill dur">${durLabel(t.dur)}</span>` : `<span class="pill due">no duration</span>`}
+          ${dimPills(t.dims)}${rarityPill(t)}</div>
+      </div></div>`;
+  }
+  function footerBar() {
+    const o = orphans().length;
+    return `<div class="footer-count">
+      <span class="pill">${countBy("Unprocessed")} to process</span>
+      <span class="pill">${countBy("Stale")} stale</span>
+      ${o ? `<span class="pill due">${o} never fit any window</span>` : ""}</div>`;
+  }
+  const addBtn = `<button class="nav-add" data-act="sheet" data-kind="capture" aria-label="Quick add a task">＋</button>`;
+  function nav(title, o = {}) {
+    return `<div class="nav"><div class="nav-main">
+      ${o.back ? `<button class="icon" data-act="go" data-screen="${o.back}" data-param="${o.backParam || ""}">‹ ${esc(o.backLabel || "Back")}</button>` : ""}
+      <h1>${esc(title)}</h1>${o.right || addBtn}</div>
+      ${o.sub ? `<div class="sub">${esc(o.sub)}</div>` : ""}</div>`;
+  }
+  const TABS = [
+    { k:"today", g:"◷", l:"Today" }, { k:"tasks", g:"☑", l:"Tasks" },
+    { k:"schedule", g:"▤", l:"Schedule" }, { k:"more", g:"⋯", l:"More" },
+  ];
+  const tabbar = active => `<div class="tabbar">${TABS.map(i => `
+    <button data-act="go" data-screen="${i.k}" ${i.k === active ? 'aria-current="page"' : ""}>
+      <span class="g">${i.g}</span>${esc(i.l)}</button>`).join("")}</div>`;
+
+  const timeField = (ref, w, f) => `<input class="field time" type="text" inputmode="text" spellcheck="false"
+    autocapitalize="off" value="${hm(w[f])}" data-time data-ref="${esc(ref)}" data-f="${f}"
+    aria-label="${f === "s" ? "Start" : "End"} time">`;
+  const timeHint = `<div class="note" style="padding:2px 0 0">Type it how you say it — <b>3p</b>, <b>7:30a</b>, <b>12p</b>.</div>`;
+
+  /* ---------- the scope banner: WHAT AM I TOUCHING ----------
+     Every variant answers this differently. The banner text is shared so the wording
+     is not what is being compared — only where it sits, and whether it arrives in time. */
+  function scopeBanner(ref, flat) {
+    const c = refCtx(ref);
+    if (!c) return "";
+    const cls = `scope ${c.scope === "template" ? "shared" : "one"}${flat ? " flat" : ""}`;
+    if (c.scope === "template") {
+      const dates = affectedDates(c.tplId), pats = usedBy(c.tplId);
+      return `<div class="${cls}"><span class="g">⇉</span><span>Editing the <b>shape</b> “${esc(tpl(c.tplId).name)}”.
+        Changes <b>${dates.length} day${dates.length === 1 ? "" : "s"}</b> in the next fortnight${
+        dates.length ? ` — ${dates.slice(0,4).map(d => esc(fmtShort(d))).join(", ")}${dates.length > 4 ? `, +${dates.length-4}` : ""}` : ""},
+        and every future one. Used by <b>${pats.map(p => esc(p.name)).join(", ")}</b>.</span></div>`;
+    }
+    const ov = overrideOn(c.dateKey);
+    return `<div class="${cls}"><span class="g">◈</span><span>Editing <b>${esc(fmtShort(parseISO(c.dateKey)))} only</b>.
+      ${ov ? `This date is already an override — <b>${esc(ov.label)}</b>.`
+           : `The first change copies the day off its shape and this date stops following the pattern.`}</span></div>`;
+  }
+
+  /* ---------- window reference: "tpl:<tplId>:<winId>" or "date:<key>:<winId>" ---------- */
+  function refCtx(ref) {
+    if (!ref) return null;
+    const [kind, a, b] = ref.split(":");
+    if (kind === "tpl") return { scope:"template", tplId:a, winId:b };
+    return { scope:"date", dateKey:a, winId:b };
+  }
+  function refWindow(ref, materialiseIt) {
+    const c = refCtx(ref); if (!c) return null;
+    if (c.scope === "template") return tpl(c.tplId).windows.find(w => w.id === c.winId);
+    if (materialiseIt) materialise(c.dateKey);
+    const ov = overrideOn(c.dateKey);
+    if (ov) { if (!ov.windows) ov.windows = tpl(ov.from).windows.map(cloneWin);
+              return ov.windows.find(w => w.id === c.winId); }
+    return dayShape(parseISO(c.dateKey)).windows.find(w => w.id === c.winId);
+  }
+  const refDate = ref => { const c = refCtx(ref); return c && c.scope === "date" ? parseISO(c.dateKey) : today; };
+
+  /* ---------- the window editor. shared content, four different presentations ---------- */
+  function windowEditor(ref) {
+    const w = refWindow(ref); if (!w) return `<div class="empty">Gone.</div>`;
+    const d = refDate(ref);
+    const list = matchesFor(w, d);
+    const snooze = Math.min(30, Math.max(5, Math.round(winMins(w) * .25)));
+    return `<div class="stack">
+        <div class="lbl">Name <span class="soft">— becomes the reminder's copy</span></div>
+        <input class="field" value="${esc(w.name)}" data-rename data-ref="${esc(ref)}">
+        <div class="lbl">Span</div>
+        <div style="display:flex;gap:9px;align-items:center">${timeField(ref, w, "s")}
+          <span style="color:var(--ink-3)">to</span>${timeField(ref, w, "e")}</div>
+        ${timeHint}
+      </div>
+      <div class="sec-h">What can be done here</div>
+      <div class="stack" style="padding-top:2px">
+        ${authored.map(dm => `
+          <div class="lbl">${esc(dm.label)} <span class="soft">— ${dm.type === "ord"
+            ? `a ceiling; unset means “${esc(dm.winDef)}”` : "any one of these is enough"}</span></div>
+          <div class="chipset">${dm.values.map(v => `<button data-act="setwdim" data-ref="${esc(ref)}"
+            data-k="${dm.key}" data-v="${esc(v)}" aria-pressed="${dm.type === "ord"
+              ? (w.dims[dm.key] ?? dm.winDef) === v : valuesOf(w, dm).includes(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
+
+        <div class="lbl" style="margin-top:6px">Weather <span class="soft">— fetched when it fires, never stored</span></div>
+        <div class="chipset read">${dim("weather").values.map(v =>
+          `<span class="${weatherOn(d) === v ? "on" : ""}">${esc(v)}</span>`).join("")}</div>
+        <div class="note" style="padding:2px 0 0">Forecast for ${esc(fmtShort(d))}: <b>${esc(weatherOn(d))}</b>.
+          A window never declares weather — the live value fills the axis in, so a rained-off task simply
+          stops matching that morning.</div>
+      </div>
+      <div class="preview ${list.length ? "" : "zero"}">
+        <div class="preview-h"><span class="n">${list.length}</span>
+          <span class="of">${list.length ? `tasks would surface if this fired now` : `nothing fits — it would stay silent`}</span></div>
+        ${list.length ? `<ul>${list.slice(0,4).map(t => `<li><b>${esc(t.t)}</b> · ${durLabel(t.dur)}</li>`).join("")}
+          ${list.length > 4 ? `<li>+${list.length - 4} more</li>` : ""}</ul>`
+          : `<div class="note" style="padding:2px 16px 12px">Silence is truthful — but a window that declares
+             too little is silent for the wrong reason. This is the only place that difference shows.</div>`}
+      </div>
+      ${(() => {
+        // Deleting a shared window rewrites every day using the shape, so the first tap arms and
+        // the second commits — the count comes from the same place the scope banner gets it.
+        const c = refCtx(ref), armed = S.confirmDel === ref;
+        const n = c.scope === "template" ? affectedDates(c.tplId).length : 1;
+        return `<div class="btn-row"><button class="btn danger wide" data-act="delwin" data-ref="${esc(ref)}">
+          ${armed ? `Tap again to remove — ${c.scope === "template"
+            ? `changes ${n} day${n === 1 ? "" : "s"} in the next fortnight and every future one`
+            : `${esc(fmtShort(d))} only`}` : "Remove this window"}</button></div>`;
+      })()}
+      <div class="note">Fires at <b>${hm(w.s)}</b>, ${winMins(w)} minutes long — so it admits tasks up to
+        <b>${esc(ceilingLabel(w))}</b> and a snooze here is <b>${snooze} min</b>. Both fall out of the span;
+        neither is a setting. Window id <code style="font-size:11px">${esc(w.id)}</code> — copies keep it, so a
+        window that already fired today cannot re-fire when the date is materialised.</div>`;
+  }
+
+  /* ---------- shared sheets ---------- */
+  function captureSheet() {
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>Quick add</h2>
+        <button class="icon" data-act="closesheet">Cancel</button></div>
+      <div class="stack"><input class="field" placeholder="What is it?" autofocus>
+        <div class="lbl">How long? — the one thing capture must ask</div>
+        <div class="chipset">${DURS.map(d => `<button data-act="capture" data-v="${d}">${durLabel(d)}</button>`).join("")}</div>
+      </div></div></div>`;
+  }
+
+  // The dangerous surface. #18 owns what it warns about; this ticket owns where it lives.
+  function patternSheet() {
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>Switch pattern</h2><button class="icon" data-act="closesheet">Done</button></div>
+      <div class="list">${PATTERNS.map(p => {
+        const orph = orphansUnder(p).length, cur = p.id === activePattern;
+        return `<button class="row" data-act="setpattern" data-v="${p.id}">
+          <div class="body"><div class="title">${esc(p.name)}${cur ? " · active" : ""}</div>
+          <div class="meta">${p.days.map((t,i) => `<span class="pill">${WD[i]} ${esc(tpl(t).name.split(" ")[0])}</span>`).join("")}</div>
+          <div class="meta">${orph ? `<span class="pill due">${orph} task${orph === 1 ? "" : "s"} would never fit</span>`
+            : `<span class="pill dim">every active task still has a home</span>`}</div></div>
+          <span class="chev">${cur ? "✓" : "›"}</span></button>`; }).join("")}</div>
+      <div class="note">The count is computed <b>before</b> you commit, not after. Switching is the single most
+        destructive action in the system — in this fixture set one of these strands five tasks.</div>
+    </div></div>`;
+  }
+
+  // The overlap prompt has to be honest about what each option actually produces. An event that
+  // runs past the window's end has NO split — the tail is empty — and an event that starts before
+  // the window has no truncate. Offering all three regardless is how a three-way modal starts lying.
+  function clashesWith(d, ev) {
+    return dayShape(d).windows.filter(w => mins(w.s) < mins(ev.e) && mins(ev.s) < mins(w.e));
+  }
+  function overlapOptions(w, ev) {
+    const out = [{ v:"replace", t:"Replace the window",
+      d:`${w.name} disappears that day` }];
+    const headMins = mins(ev.s) - mins(w.s), tailMins = mins(w.e) - mins(ev.e);
+    if (headMins > 0) out.push({ v:"truncate", t:`Truncate it to ${hm(w.s)}–${hm(ev.s)}`,
+      d:`Fires at ${hm(w.s)} as before; ${headMins} min instead of ${winMins(w)}` });
+    if (headMins > 0 && tailMins > 0) out.push({ v:"split", t:`Split it around the event`,
+      d:`${hm(w.s)}–${hm(ev.s)} and ${hm(ev.e)}–${hm(w.e)} — two windows, two fires` });
+    else if (tailMins > 0) out.push({ v:"split", t:`Push it to after the event`,
+      d:`${hm(ev.e)}–${hm(w.e)}; the event covers its whole start` });
+    return out;
+  }
+  function eventSheet(dateKey) {
+    const d = parseISO(dateKey), ev = S.ev;
+    const cl = clashesWith(d, ev), clash = cl[0];
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>New event</h2><button class="icon" data-act="closesheet">Cancel</button></div>
+      <div class="stack">
+        <div class="lbl">Name</div><input class="field" value="${esc(ev.name)}" data-evname>
+        <div class="lbl">When — ${esc(fmtShort(d))}</div>
+        <div style="display:flex;gap:9px;align-items:center">
+          <input class="field time" value="${hm(ev.s)}" data-evtime data-f="s"><span style="color:var(--ink-3)">to</span>
+          <input class="field time" value="${hm(ev.e)}" data-evtime data-f="e"></div>
+        ${timeHint}
+      </div>
+      ${clash ? `<div class="scope shared" style="margin-top:14px"><span class="g">⚠</span>
+        <span>This clashes with <b>${esc(clash.name)}</b>, ${hm(clash.s)}–${hm(clash.e)}. A date has
+        <b>one shape</b>, so the window has to give way somehow.${cl.length > 1
+          ? ` It also overlaps <b>${cl.slice(1).map(w => esc(w.name)).join(", ")}</b> — which #8's
+              three-way prompt never said what to do about.` : ""}</span></div>
+        <div class="stack">${overlapOptions(clash, ev).map(o => `
+          <button class="btn wide" data-act="overlap" data-v="${o.v}" data-d="${dateKey}" data-w="${clash.id}">${esc(o.t)}<br>
+            <span style="font-size:12px;color:var(--ink-2);font-weight:400">${esc(o.d)}</span></button>`).join("")}</div>
+        <div class="note">Only the options that actually produce something are offered — move the end time to
+          ${hm(clash.e)} or later and the split disappears, because there would be no tail to keep. Whichever you
+          pick, ${esc(fmtShort(d))} becomes a <b>one-off day</b>.</div>`
+      : `<div class="btn-row"><button class="btn primary wide" data-act="addevent" data-d="${dateKey}">Add event</button></div>
+         <div class="note">No window overlaps, so there is nothing to resolve and the date keeps following its
+           shape. Most events land here — the three-way prompt is the exception, not the rule.</div>`}
+    </div></div>`;
+  }
+
+  function applyOverlap(dateKey, winId, how) {
+    const ov = materialise(dateKey, "One-off day"), ev = S.ev;
+    const i = ov.windows.findIndex(w => w.id === winId);
+    if (i < 0) return;
+    const w = ov.windows[i];
+    const headMins = mins(ev.s) - mins(w.s), tailMins = mins(w.e) - mins(ev.e);
+    if (how === "replace") ov.windows.splice(i,1);
+    else if (how === "truncate") w.e = ev.s;
+    else if (headMins > 0 && tailMins > 0) {
+      const tail = { ...cloneWin(w), id:"w"+(++SEQ), s:ev.e };
+      w.e = ev.s; ov.windows.splice(i+1, 0, tail);
+    } else if (tailMins > 0) w.s = ev.e;
+    EVENTS.push({ id:"e"+(++SEQ), name:ev.name, date:dateKey, s:ev.s, e:ev.e, dims:{} });
+    ov.windows.sort((a,b) => mins(a.s) - mins(b.s));
+  }
+
+  /* ---------- the shape picker ----------
+     Replaces the wrap of pills everywhere a Day template is chosen. Two moves do the work
+     search would: rows are GROUPED by how the shape is used (the one you want is nearly always
+     already in this season), and each carries a 6a–11p strip of where its windows sit, so a
+     shape is recognised by silhouette rather than by a name it shares with three others. */
+  // Two readings of the same day. `edit` makes each window a tappable bar carrying its name —
+  // the strip stops being a thumbnail and becomes the editing surface itself.
+  function strip(t, edit) {
+    const A = 6*60, B = 23*60, span = B - A;
+    const pos = w => {
+      const l = Math.max(0, (mins(w.s) - A) / span * 100);
+      const r = Math.min(100, (mins(w.e) - A) / span * 100);
+      return `left:${l}%;width:${Math.max(edit ? 3 : 1.2, r - l)}%`;
+    };
+    const ticks = [9,12,15,18,21].map(h => `<u style="left:${(h*60 - A)/span*100}%"></u>`).join("");
+    if (!edit) return `<div class="strip${t.windows.length ? "" : " empty-d"}">${ticks}
+      ${t.windows.map(w => `<i style="${pos(w)}"></i>`).join("")}</div>`;
+    // No labels. A 30-minute window is 3% of the day, which fits about four characters — enough
+    // to be noise and never enough to be the name. The bar's position already says which window
+    // it is, and tapping opens the editor with the name at the top of it.
+    return `<div class="strip big${t.windows.length ? "" : " empty-d"}">${ticks}
+      ${t.windows.map(w => { const ref = `tpl:${t.id}:${w.id}`;
+        return `<button style="${pos(w)}" data-open="${S.open === ref ? 1 : 0}"
+          data-act="expand" data-v="${ref}"
+          aria-label="${esc(w.name)}, ${hm(w.s)} to ${hm(w.e)}"
+          title="${esc(w.name)} ${hm(w.s)}–${hm(w.e)}"></button>`;
+      }).join("")}</div>`;
+  }
+  // The toggle itself. One shared preference, shown on every surface that lists days.
+  const viewToggle = () => `<span class="vtog">
+    <button data-act="dayview" data-v="strip" aria-pressed="${S.dayview === "strip"}">Strips</button>
+    <button data-act="dayview" data-v="pills" aria-pressed="${S.dayview === "pills"}">Times</button></span>`;
+  function shapeRow(t, on, act, extra) {
+    const first = t.windows[0], last = t.windows[t.windows.length - 1];
+    return `<button class="pickrow" aria-pressed="${on}" data-act="${act}" data-v="${t.id}" ${extra || ""}>
+      <span class="who">
+        <span class="nm">${esc(t.name)}${on ? `<span class="pill dim">current</span>` : ""}</span>
+        <span class="sub2">${t.windows.length
+          ? `${t.windows.length} window${t.windows.length === 1 ? "" : "s"} · ${hm(first.s)}–${hm(last.e)}`
+          : `no windows — a deliberately silent day`}</span>
+        ${S.dayview === "strip" ? strip(t) : `<span class="meta" style="margin-top:6px">${
+          t.windows.map(w => `<span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>`).join("")
+          || `<span class="pill ghost">silent</span>`}</span>`}
+      </span></button>`;
+  }
+  function shapePickerSheet(p) {
+    const days = S.wiz ? S.wiz.days : pattern().days;
+    const cur = p.mode === "assign" ? days[p.wd] : (overrideOn(S.date) || {}).from;
+    const inSeason = TEMPLATES.filter(t => days.includes(t.id));
+    const elsewhere = TEMPLATES.filter(t => !days.includes(t.id) && usedBy(t.id).length);
+    const unused = TEMPLATES.filter(t => !days.includes(t.id) && !usedBy(t.id).length);
+    const act = p.mode === "assign" ? "pickassign" : "pickstamp";
+    let first = true;
+    const group = (label, list) => list.length ? `<div class="sec-h${first ? " with-tog" : ""}">${label}${
+      first ? (first = false, viewToggle()) : ""}</div>
+      <div class="list">${list.map(t => shapeRow(t, t.id === cur, act,
+        p.mode === "assign" ? `data-wd="${p.wd}"` : "")).join("")}</div>` : "";
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>${p.mode === "assign" ? WDL[p.wd] : esc(fmtShort(curDate()))}</h2>
+        <button class="icon" data-act="closesheet">Cancel</button></div>
+      <div class="note" style="padding:10px 16px 0">${p.mode === "assign"
+        ? `Which shape does every ${WDL[p.wd]} take?`
+        : `Stamp a shape onto this date. It copies the windows in — <b>not</b> a link, so editing the shape
+           later will not follow.`}</div>
+      ${group("Already in this season", inSeason)}
+      ${group("Used by other seasons", elsewhere)}
+      ${group("Not in use", unused)}
+      <div class="note">${TEMPLATES.length} shapes. Grouping by use keeps the one you want near the top without
+        a search box — the shape you need on a Tuesday is nearly always one this season already contains.</div>
+    </div></div>`;
+  }
+
+  function promoteSheet(dateKey) {
+    const sh = dayShape(parseISO(dateKey));
+    return `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+      <div class="grabber"></div>
+      <div class="sheet-h"><h2>Save this day as a shape</h2><button class="icon" data-act="closesheet">Cancel</button></div>
+      <div class="stack"><div class="lbl">Call it</div>
+        <input class="field" value="${esc(sh.label.replace(", adjusted",""))} v2" data-promo autofocus>
+        <div class="lbl" style="margin-top:6px">Windows it will carry</div></div>
+      <div class="list">${sh.windows.map(w => `<div class="row"><div class="body">
+        <div class="title">${esc(w.name)}</div><div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div>
+      </div></div>`).join("")}</div>
+      <div class="btn-row"><button class="btn primary wide" data-act="dopromote" data-d="${dateKey}">Save the shape</button></div>
+      <div class="note">${esc(fmtShort(parseISO(dateKey)))} <b>does not re-link</b> to the new shape — it keeps its own
+        copy. A shape is a thing you can reach for again, not a thread back to the day it came from.</div>
+    </div></div>`;
+  }
+
+  /* ---------- shared shell screens (settled in #12 — context, not under test) ---------- */
+  const shell = {
+    today() {
+      const sh = dayShape(today), live = liveWindow();
+      return nav("Today", { sub:`${fmtDate(today)} · ${sh.label}` }) + `
+        <div class="scroll">
+          ${live ? `<div class="sec"><button class="btn primary wide">${esc(live.name)} is open now —
+            ${matchesFor(live, today).length} fit</button></div>` : ""}
+          <div class="sec-h">Windows today</div>
+          <div class="list">${sh.windows.map(w => { const n = matchesFor(w, today).length;
+            return `<div class="row"><div class="body"><div class="title">${esc(w.name)}</div>
+              <div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>
+                ${n ? `<span class="pill dim">${n} fit</span>` : `<span class="pill">silent</span>`}
+                ${dimPills(w.dims)}</div></div></div>`; }).join("")
+            || `<div class="empty">No windows today.</div>`}</div>
+          ${footerBar()}
+          <div class="note">The shell is settled — <b>#12</b>, variant D. This prototype only varies the
+            <b>Schedule</b> tab, so flip to it.</div>
+        </div>` + tabbar("today");
+    },
+    tasks() {
+      const list = TASKS.filter(t => t.st === S.filter);
+      return nav("Tasks") + `
+        <div class="scroll"><div class="list">${list.map(taskRow).join("") || `<div class="empty">Nothing here.</div>`}</div>
+        <div class="note">Included so the schedule variants can be judged against a real task pool —
+          every window's preview counts these.</div></div>` + tabbar("tasks");
+    },
+    more() {
+      return nav("More") + `<div class="scroll"><div class="list">
+        <div class="row"><div class="body"><div class="title">Process &amp; stale</div>
+          <div class="meta"><span class="pill">${countBy("Unprocessed")} + ${countBy("Stale")}</span></div></div></div>
+        <div class="row"><div class="body"><div class="title">Dimensions</div>
+          <div class="meta"><span class="pill">read-only</span></div></div></div>
+        <div class="row"><div class="body"><div class="title">Pushover</div></div></div>
+      </div></div>` + tabbar("more");
+    },
+  };
+
+  /* ---------- dated exceptions list, shared by every variant ---------- */
+  function datesList(backScreen) {
+    const rows = [];
+    for (let i = 0; i <= 13; i++) {
+      const d = dAdd(i), k = iso(d), ov = overrideOn(k), evs = eventsOn(d);
+      if (!ov && !evs.length) continue;
+      rows.push(`<button class="row" data-act="pickdate" data-v="${k}"><div class="body">
+        <div class="title">${esc(fmtShort(d))}</div>
+        <div class="meta">${ov ? `<span class="pill dim">${esc(ov.label)}</span>
+          <span class="pill">${ov.from ? "stamped copy" : "one-off day"}</span>` : `<span class="pill ghost">follows the pattern</span>`}
+          ${evs.map(e => `<span class="pill now">${esc(e.name)} ${hm(e.s)}</span>`).join("")}</div>
+      </div><span class="chev">›</span></button>`);
+    }
+    return `<div class="list">${rows.join("") || `<div class="empty">Nothing in the next fortnight departs from the pattern.</div>`}</div>`;
+  }
+
+  /* ---------- the week canvas ----------
+     Seven rows, every window one tap from its tags, no drill-down. W makes this the Schedule
+     tab's home; S mounts the same component inside a named season. Shared on purpose — Phil's
+     third note was that S needed exactly this, so the merge is the finding, not a shortcut. */
+  function weekCanvas(days) {
+    return `<div class="canvas">${days.map((tid, wd) => {
+      const t = tpl(tid), isToday = wd === today.getDay();
+      return `<div class="dayrow" id="day-${wd}" data-today="${isToday ? 1 : 0}">
+        <button class="dayhead" data-act="sheet" data-kind="pick" data-param="assign:${wd}">
+          <span class="wd">${WD[wd]}</span><span class="tplname">${esc(t.name)}</span>
+          <span class="swap">change ▾</span></button>
+        <div class="winstrip" style="${S.dayview === "strip" ? "display:block;padding-right:14px" : ""}">
+          ${S.dayview === "strip"
+            ? `<div style="display:flex;align-items:center;gap:8px">
+                 <div style="flex:1;min-width:0">${strip(t, true)}</div>
+                 <button class="winchip add" data-act="addwin" data-t="${t.id}">＋</button></div>`
+            : `${t.windows.map(w => { const ref = `tpl:${t.id}:${w.id}`;
+                 return `<button class="winchip" data-open="${S.open === ref ? 1 : 0}" data-act="expand" data-v="${ref}">
+                   <b>${esc(w.name)}</b> ${hm(w.s)}–${hm(w.e)}</button>`; }).join("")
+                 || `<span class="winchip" style="opacity:.6">silent all day</span>`}
+               <button class="winchip add" data-act="addwin" data-t="${t.id}">＋</button>`}
+        </div>
+        ${S.open && S.open.startsWith(`tpl:${t.id}:`) ? `<div class="inline-ed">
+          ${scopeBanner(S.open, true)}${windowEditor(S.open)}
+          <div class="btn-row"><button class="btn" data-act="clone" data-t="${t.id}" data-wd="${wd}">Clone to diverge</button>
+            <button class="btn ghost" data-act="expand" data-v="">Collapse</button></div>
+        </div>` : ""}
+      </div>`; }).join("")}</div>`;
+  }
+
+  /* ============================ variant W ============================ */
+  const W = {
+    name:"Week canvas",
+    tagline:"The whole week on one scroll. Tap a window and it expands in place — no drill-down, and the "
+      + "blast radius is stated in the banner that appears with the editor, not on a screen you already left.",
+    schedule() {
+      const p = pattern();
+      return nav("Schedule", { sub:`${p.name} · ${TEMPLATES.length} shapes` }) + `
+        <div class="scroll">
+          <div class="sec"><button class="btn wide" data-act="sheet" data-kind="pattern">
+            ${esc(p.name)} — switch season</button></div>
+          <div class="sec-h with-tog">The week ${viewToggle()}</div>
+          ${weekCanvas(p.days)}
+          <div class="sec-h">Dates that depart from it</div>
+          ${datesList("schedule")}
+          <div class="sec"><button class="btn wide" data-act="go" data-screen="date">Change one date →</button></div>
+          <div class="note">Everything above edits <b>shapes</b>, so it all propagates. The dated exceptions are a
+            separate list on purpose: the two are different verbs, and mixing them is how you edit next Saturday
+            and change every Saturday by accident.</div>
+        </div>` + tabbar("schedule");
+    },
+    date() {
+      const d = curDate(), sh = dayShape(d), evs = eventsOn(d);
+      const days = []; for (let i = -1; i < 10; i++) { const dd = dAdd(i);
+        days.push(`<button data-act="pickdate" data-v="${iso(dd)}" ${iso(dd) === S.date ? 'aria-current="date"' : ""}>
+          <div class="wd">${WD[dd.getDay()]}</div><div class="dn">${dd.getDate()}</div>
+          <div class="dot ${overrideOn(iso(dd)) || eventsOn(dd).length ? "" : "blank"}"></div></button>`); }
+      return nav(fmtShort(d), { back:"schedule", backLabel:"Week", sub:sh.label }) + `
+        <div class="weekstrip">${days.join("")}</div>
+        <div class="scroll">
+          ${scopeBanner(`date:${S.date}:x`, false)}
+          <div class="sec-h">Windows on this date</div>
+          <div class="list">${sh.windows.map(w => { const ref = `date:${S.date}:${w.id}`;
+            return `<button class="row" data-act="expand" data-v="${ref}"><div class="body">
+              <div class="title">${esc(w.name)}</div><div class="meta">
+                <span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>
+                <span class="pill dim">${matchesFor(w, d).length} fit</span>${dimPills(w.dims)}</div>
+            </div><span class="chev">${S.open === ref ? "⌃" : "›"}</span></button>
+            ${S.open === ref ? `<div class="inline-ed">${windowEditor(ref)}</div>` : ""}`; }).join("")
+            || `<div class="empty">No windows — a completely blank day.</div>`}</div>
+          ${evs.length ? `<div class="sec-h">Events</div><div class="list">${evs.map(e => `<div class="row">
+            <div class="body"><div class="title">${esc(e.name)}</div>
+            <div class="meta"><span class="pill dur">${hm(e.s)}–${hm(e.e)}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+          <div class="sec"><button class="btn wide" data-act="sheet" data-kind="pick" data-param="stamp">
+            Stamp a whole shape onto this date…</button></div>
+          <div class="btn-row">
+            <button class="btn" data-act="sheet" data-kind="event">＋ Event</button>
+            <button class="btn" data-act="sheet" data-kind="promote">Save as a shape</button></div>
+          ${overrideOn(S.date) ? `<div class="btn-row"><button class="btn danger wide" data-act="revert">
+            Put it back on the pattern</button></div>` : ""}
+          <div class="note">Stamping copies the windows in. It is <b>not</b> a link — edit the shape tomorrow and
+            this date will not follow. That is the whole difference between the two lists on the week screen.</div>
+        </div>`;
+    },
+  };
+
+  /* ============================ variant P ============================ */
+  const P = {
+    name:"Draw & promote",
+    tagline:"Dates are the only thing you edit directly. You shape a concrete day on a timeline, then promote it "
+      + "to a named shape and assign it. Templates are derived from days you have actually lived, never authored blank.",
+    schedule() {
+      const d = curDate(), sh = dayShape(d), evs = eventsOn(d), isToday = iso(d) === iso(today);
+      const H0 = 6, H1 = 23, PX = 32, y = m => (m - H0*60)/60*PX;
+      const hrs = []; for (let h = H0; h <= H1; h++)
+        hrs.push(`<div class="hr"><span>${hm(String(h).padStart(2,"0") + ":00")}</span></div>`);
+      const live = liveWindow();
+      const blocks = sh.windows.map(w => {
+        const n = matchesFor(w, d).length;
+        return `<button class="blk ${live && live.id === w.id ? "live" : ""}"
+          style="top:${y(mins(w.s))+12}px;height:${Math.max(28,(winMins(w)/60)*PX-4)}px"
+          data-act="sheet" data-kind="win" data-param="date:${S.date}:${w.id}">
+          <div class="bt">${esc(w.name)}</div>
+          <div class="bm">${hm(w.s)}–${hm(w.e)} · ${n ? n + " fit" : "silent"}</div></button>`; }).join("");
+      const evB = evs.map(e => `<div class="blk event" style="top:${y(mins(e.s))+12}px;height:${Math.max(26,((mins(e.e)-mins(e.s))/60)*PX-4)}px">
+        <div class="bt">${esc(e.name)}</div><div class="bm">${hm(e.s)}–${hm(e.e)} · event</div></div>`).join("");
+      const n = new Date(), nowMin = n.getHours()*60 + n.getMinutes();
+      const days = []; for (let i = -1; i < 10; i++) { const dd = dAdd(i);
+        days.push(`<button data-act="pickdate" data-v="${iso(dd)}" ${iso(dd) === S.date ? 'aria-current="date"' : ""}>
+          <div class="wd">${WD[dd.getDay()]}</div><div class="dn">${dd.getDate()}</div>
+          <div class="dot ${overrideOn(iso(dd)) || eventsOn(dd).length ? "" : "blank"}"></div></button>`); }
+      return nav(fmtShort(d), { sub:`${sh.source === "override" ? "detached · " : "following "}${esc(sh.label)}` }) + `
+        <div class="weekstrip">${days.join("")}</div>
+        <div class="scroll">
+          ${scopeBanner(`date:${S.date}:x`, false)}
+          <div class="timeline">${hrs.join("")}${blocks}${evB}
+            ${isToday && nowMin > H0*60 && nowMin < H1*60 ? `<div class="nowline" style="top:${y(nowMin)+12}px"></div>` : ""}</div>
+          <div class="btn-row">
+            <button class="btn" data-act="addwin" data-d="${S.date}">＋ Window</button>
+            <button class="btn" data-act="sheet" data-kind="event">＋ Event</button></div>
+          <div class="btn-row">
+            <button class="btn primary wide" data-act="sheet" data-kind="promote">Save this day as a shape →</button></div>
+          ${overrideOn(S.date) ? `<div class="btn-row"><button class="btn danger wide" data-act="revert">
+            Put it back on the pattern</button></div>` : ""}
+          <div class="sec-h">Shapes you have promoted</div>
+          <div class="list">${TEMPLATES.map(t => `<button class="row" data-act="go" data-screen="shape" data-param="${t.id}">
+            <div class="body"><div class="title">${esc(t.name)}</div>
+            <div class="meta"><span class="pill">${t.windows.length} windows</span>
+              ${usedBy(t.id).map(p => `<span class="pill dim">${esc(p.name)}</span>`).join("")
+              || `<span class="pill ghost">not in any pattern</span>`}</div></div><span class="chev">›</span></button>`).join("")}</div>
+          <div class="sec"><button class="btn wide" data-act="sheet" data-kind="pattern">
+            ${esc(pattern().name)} — switch season</button></div>
+          <div class="note">There is no blank "new template" button anywhere. A shape only ever comes into being by
+            <b>promoting a day you drew</b>, which is the difference between authoring by example and authoring by
+            abstraction. The cost: assembling a season means living, or at least drawing, each of its days first.</div>
+          ${footerBar()}
+        </div>` + tabbar("schedule");
+    },
+    shape() {
+      const t = tpl(S.param) || TEMPLATES[0];
+      return nav(t.name, { back:"schedule", backLabel:"Day" }) + `
+        <div class="scroll">
+          ${scopeBanner(`tpl:${t.id}:${t.windows[0] ? t.windows[0].id : "x"}`, false)}
+          <div class="sec-h">Windows</div>
+          <div class="list">${t.windows.map(w => { const ref = `tpl:${t.id}:${w.id}`;
+            return `<button class="row" data-act="expand" data-v="${ref}"><div class="body">
+              <div class="title">${esc(w.name)}</div><div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div>
+            </div><span class="chev">${S.open === ref ? "⌃" : "›"}</span></button>
+            ${S.open === ref ? `<div class="inline-ed">${windowEditor(ref)}</div>` : ""}`; }).join("")}</div>
+          <div class="sec-h">Where it is used</div>
+          <div class="list">${usedBy(t.id).map(p => `<div class="row"><div class="body">
+            <div class="title">${esc(p.name)}</div><div class="meta">${p.days.map((x,i) =>
+              x === t.id ? `<span class="pill dim">${WD[i]}</span>` : "").join("")}</div></div></div>`).join("")
+            || `<div class="empty">Not used by any pattern yet.</div>`}</div>
+          <div class="sec-h">Put it in the active pattern</div>
+          <div class="stack"><div class="chipset">${WD.map((w,i) =>
+            `<button data-act="assign" data-wd="${i}" data-v="${t.id}"
+              aria-pressed="${pattern().days[i] === t.id}">${w}</button>`).join("")}</div></div>
+          <div class="note">Assignment lives on the <b>shape</b>, not on the week — you got here from a day you
+            liked, so "and use it every Tuesday" is the natural next sentence.</div>
+        </div>`;
+    },
+  };
+
+  /* ============================ variant M ============================ */
+  const M = {
+    name:"Mode switch",
+    tagline:"One hard toggle at the top — the shape, or this date — governs every edit below it. The model's "
+      + "central distinction becomes the primary control instead of a consequence of which list you tapped.",
+    schedule() {
+      const shapeMode = S.mode === "shape";
+      const head = nav("Schedule", { sub:shapeMode
+        ? `Editing shapes · ${pattern().name}` : `Editing single dates` }) + `
+        <div class="modebar">
+          <button data-act="mode" data-v="shape" aria-pressed="${shapeMode}">The shape<br>
+            <span style="font-size:11px;font-weight:400">every ${WDL[S.mwd]}</span></button>
+          <button data-act="mode" data-v="date" aria-pressed="${!shapeMode}">This date<br>
+            <span style="font-size:11px;font-weight:400">${esc(fmtShort(curDate()))} only</span></button>
+        </div>`;
+      if (shapeMode) {
+        const tid = pattern().days[S.mwd], t = tpl(tid);
+        return head + `
+          <div class="wdtabs">${WD.map((w,i) => `<button data-act="mwd" data-v="${i}"
+            aria-pressed="${i === S.mwd}">${w}</button>`).join("")}</div>
+          <div class="scroll">
+            ${scopeBanner(`tpl:${tid}:x`, false)}
+            <div class="sec"><button class="btn wide" data-act="sheet" data-kind="pick" data-param="assign:${S.mwd}">
+              ${WDL[S.mwd]} uses <b>${esc(t.name)}</b> — change…</button></div>
+            <div class="sec-h">Windows in “${esc(t.name)}”</div>
+            <div class="list">${t.windows.map(w => { const ref = `tpl:${t.id}:${w.id}`;
+              return `<button class="row" data-act="expand" data-v="${ref}"><div class="body">
+                <div class="title">${esc(w.name)}</div><div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>${dimPills(w.dims)}</div>
+              </div><span class="chev">${S.open === ref ? "⌃" : "›"}</span></button>
+              ${S.open === ref ? `<div class="inline-ed">${windowEditor(ref)}</div>` : ""}`; }).join("")}
+              <button class="row" data-act="addwin" data-t="${t.id}"><div class="body">
+                <div class="title" style="color:var(--accent)">＋ Add a window</div></div></button></div>
+            <div class="btn-row"><button class="btn" data-act="clone" data-t="${t.id}">Clone to diverge</button>
+              <button class="btn" data-act="sheet" data-kind="pattern">Switch season</button></div>
+            <div class="note">Nothing on this screen can touch a single date. The toggle is not a filter — it is the
+              only thing that decides whether an edit propagates, and it is stated before you scroll.</div>
+          </div>` + tabbar("schedule");
+      }
+      const d = curDate(), sh = dayShape(d), evs = eventsOn(d);
+      const days = []; for (let i = -1; i < 10; i++) { const dd = dAdd(i);
+        days.push(`<button data-act="pickdate" data-v="${iso(dd)}" ${iso(dd) === S.date ? 'aria-current="date"' : ""}>
+          <div class="wd">${WD[dd.getDay()]}</div><div class="dn">${dd.getDate()}</div>
+          <div class="dot ${overrideOn(iso(dd)) || eventsOn(dd).length ? "" : "blank"}"></div></button>`); }
+      return head + `<div class="weekstrip">${days.join("")}</div>
+        <div class="scroll">
+          ${scopeBanner(`date:${S.date}:x`, false)}
+          <div class="sec-h">Windows on ${esc(fmtShort(d))}</div>
+          <div class="list">${sh.windows.map(w => { const ref = `date:${S.date}:${w.id}`;
+            return `<button class="row" data-act="expand" data-v="${ref}"><div class="body">
+              <div class="title">${esc(w.name)}</div><div class="meta"><span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>
+              <span class="pill dim">${matchesFor(w, d).length} fit</span>${dimPills(w.dims)}</div>
+            </div><span class="chev">${S.open === ref ? "⌃" : "›"}</span></button>
+            ${S.open === ref ? `<div class="inline-ed">${windowEditor(ref)}</div>` : ""}`; }).join("")
+            || `<div class="empty">No windows on this date.</div>`}
+            <button class="row" data-act="addwin" data-d="${S.date}"><div class="body">
+              <div class="title" style="color:var(--accent)">＋ Add a window</div></div></button></div>
+          ${evs.length ? `<div class="sec-h">Events</div><div class="list">${evs.map(e => `<div class="row">
+            <div class="body"><div class="title">${esc(e.name)}</div><div class="meta">
+            <span class="pill dur">${hm(e.s)}–${hm(e.e)}</span>${dimPills(e.dims)}</div></div></div>`).join("")}</div>` : ""}
+          <div class="sec"><button class="btn wide" data-act="sheet" data-kind="pick" data-param="stamp">
+            Stamp a shape onto this date…</button></div>
+          <div class="btn-row">
+            <button class="btn" data-act="sheet" data-kind="event">＋ Event</button>
+            <button class="btn" data-act="sheet" data-kind="promote">Save as a shape</button></div>
+          ${overrideOn(S.date) ? `<div class="btn-row"><button class="btn danger wide" data-act="revert">
+            Put it back on the pattern</button></div>` : ""}
+          <div class="note">The same editor, the same fields — only the scope above it changed. The claim being
+            tested is that a mode you set <b>deliberately</b> is safer than a scope you infer from your route.</div>
+        </div>` + tabbar("schedule");
+    },
+  };
+
+  /* ============================ variant S ============================ */
+  // Three steps, not four. "Which days change?" was a question the canvas answers by being used —
+  // and the diff against the season you copied is a derived fact, so asking for it up front was
+  // storing what could be computed, the mistake this project has now refused four times.
+  const STEPS = ["Start from", "Shape the week", "Check the damage"];
+  const S_ = {
+    name:"Season setup",
+    tagline:"The season is a named, saved object and the Schedule tab's subject. Editing it — new or existing — "
+      + "is W's week canvas, and creating one is a three-step flow that ends on the orphan check.",
+    schedule() {
+      if (S.wiz) return S_.wizard();
+      const p = pattern();
+      return nav("Schedule", { sub:`${p.name}` }) + `
+        <div class="scroll">
+          <div class="sec"><div class="lbl">Active season</div>
+            <div style="font-size:26px;letter-spacing:-.03em;margin:6px 0 2px">${esc(p.name)}</div>
+            <div style="font-size:13px;color:var(--ink-2)">${new Set(p.days).size} shapes in use ·
+              ${p.days.reduce((n,t) => n + tpl(t).windows.length, 0)} windows a week ·
+              ${orphans().length ? `<b style="color:var(--danger)">${orphans().length} tasks never fit</b>` : "every task has a home"}</div></div>
+          <div class="btn-row">
+            <button class="btn primary" data-act="go" data-screen="season">Edit this season</button>
+            <button class="btn" data-act="wizstart">New season</button></div>
+          <div class="sec-h with-tog">The week, at a glance ${viewToggle()}</div>
+          <div class="list">${p.days.map((tid,i) => `<button class="row" data-act="go" data-screen="season" data-param="${i}">
+            <div class="body"><div class="title">${WDL[i]} — ${esc(tpl(tid).name)}</div>
+            ${S.dayview === "strip" ? strip(tpl(tid))
+              : `<div class="meta">${tpl(tid).windows.map(w => `<span class="pill dur">${hm(w.s)}</span>`).join("")
+                 || `<span class="pill ghost">silent all day</span>`}</div>`}</div>
+            <span class="chev">›</span></button>`).join("")}</div>
+          <div class="sec"><button class="btn wide" data-act="sheet" data-kind="pattern">Switch to a saved season</button></div>
+          <div class="sec-h">Dates that depart from it</div>
+          <div class="list">
+            <button class="row" data-act="go" data-screen="date"><div class="body"><div class="title">Change one date</div>
+              <div class="meta"><span class="pill">${OVERRIDES.length} overrides</span><span class="pill">${EVENTS.length} events</span></div></div><span class="chev">›</span></button>
+          </div>
+          ${footerBar()}
+          <div class="note">The season is the object; the week is how you edit it. Naming and saving seasons is the
+            thing this variant has that the others do not — so the summary leads with the name, and every route
+            out of here says which of the two things it changes.</div>
+        </div>` + tabbar("schedule");
+    },
+    // The gap Phil found: S could create a season but never edit the one it was standing in.
+    // Same canvas as W, wrapped in the season's name so the scope is never in doubt.
+    season() {
+      const p = pattern();
+      return nav(p.name, { back:"schedule", backLabel:"Schedule",
+        sub:`Editing the season · every future week` }) + `
+        <div class="scroll">
+          <div class="sec-h with-tog">The week ${viewToggle()}</div>
+          ${weekCanvas(p.days)}
+          <div class="note">Changing a day here changes <b>${esc(p.name)}</b> itself — the other saved seasons are
+            untouched, and switching back to one of them restores its week exactly. Editing a <b>shape</b> is wider
+            still: the amber banner names every season that shares it.</div>
+          <div class="btn-row">
+            <button class="btn wide" data-act="go" data-screen="date">Change a single date instead →</button></div>
+        </div>`;
+    },
+    wizard() {
+      const w = S.wiz, step = S.step;
+      const bar = `<div class="steps">${STEPS.map((_,i) =>
+        `<div class="${i < step ? "done" : i === step ? "on" : ""}"></div>`).join("")}</div>`;
+      const head = nav(w.name || "New season", { back:null, right:`<button class="icon" data-act="wizcancel">Cancel</button>` }) + bar;
+      let body = "";
+      if (step === 0) {
+        body = `<div class="wizq"><h2>Start from what?</h2>
+          <p>Seasons come back round, so nothing is ever rebuilt from nothing.</p></div>
+          <div class="stack"><div class="lbl">Call it</div>
+            <input class="field" value="${esc(w.name)}" data-wizname></div>
+          <div class="sec-h">Copy the week from</div>
+          <div class="list">${PATTERNS.map(p => `<button class="row" data-act="wizbase" data-v="${p.id}">
+            <div class="body"><div class="title">${esc(p.name)}${p.id === activePattern ? " · active" : ""}</div>
+            <div class="meta">${p.days.map((t,i) => `<span class="pill">${WD[i]} ${esc(tpl(t).name.split(" ")[0])}</span>`).join("")}</div></div>
+            <span class="chev">${w.base === p.id ? "✓" : "›"}</span></button>`).join("")}</div>`;
+      } else if (step === 1) {
+        const base = PATTERNS.find(p => p.id === w.base);
+        const changed = w.days.filter((t,i) => base && base.days[i] !== t).length;
+        body = `<div class="wizq"><h2>Shape the week</h2>
+          <p>Prepopulated with ${base ? `“${esc(base.name)}”` : "the current season"}. Change the days that moved
+            and leave the rest — ${changed ? `<b>${changed} changed so far</b>` : "nothing changed yet"}.</p></div>
+          ${weekCanvas(w.days)}
+          <div class="note">This is the same canvas as the Schedule tab, so there is one way to edit a week and it
+            does not matter whether you arrived here from a new season or an old one. Careful with a shape used by
+            <b>another</b> season — the amber banner will say so, and <b>Clone to diverge</b> is the way out.</div>`;
+      } else {
+        const draft = { id:"draft", name:w.name, days:w.days };
+        const lost = orphansUnder(draft), now = orphans();
+        const newly = lost.filter(t => !now.some(x => x.id === t.id));
+        body = `<div class="wizq"><h2>Before you switch</h2>
+          <p>This is the whole reason the flow exists — the count arrives while you can still change the answer.</p></div>
+          ${newly.length ? `<div class="damage"><div class="damage-h">${newly.length} active task${newly.length === 1 ? "" : "s"}
+            would have nowhere to fire in “${esc(w.name)}”.</div>
+            ${newly.map(t => `<div class="row"><div class="body"><div class="title">${esc(t.t)}</div>
+              <div class="meta">${dimPills(t.dims)}<span class="pill dur">${durLabel(t.dur)}</span></div></div></div>`).join("")}</div>
+            <div class="note">Each one needs some window in the new week to declare what it asks for. Fixing them is
+              <b>#18's</b> job; arriving here knowing about them is this ticket's.</div>`
+          : `<div class="sec"><div class="scope one"><span class="g">✓</span><span>Every active task still has a
+              window that can admit it.</span></div></div>`}
+          <div class="sec-h">The week you are committing to</div>
+          <div class="list">${w.days.map((tid,i) => {
+            const base = PATTERNS.find(p => p.id === w.base);
+            const moved = base && base.days[i] !== tid;
+            return `<div class="row"><div class="body">
+              <div class="title">${WDL[i]} — ${esc(tpl(tid).name)}</div>
+              <div class="meta">${moved
+                ? `<span class="pill now">was ${esc(tpl(base.days[i]).name)}</span>`
+                : `<span class="pill ghost">unchanged</span>`}
+                ${tpl(tid).windows.map(win => `<span class="pill dur">${hm(win.s)}</span>`).join("")
+                  || `<span class="pill ghost">silent</span>`}</div></div></div>`; }).join("")}</div>`;
+      }
+      const last = step === STEPS.length - 1;
+      return head + `<div class="scroll">${body}</div>
+        <div class="wizbar">
+          <button class="btn" data-act="wizback">${step === 0 ? "Cancel" : "Back"}</button>
+          <button class="btn primary" data-act="wiznext">${last ? "Switch to it" : "Next"}</button></div>`;
+    },
+    shape:() => P.shape(),
+    date:() => W.date(),
+  };
+
+  const VARIANTS = { W, P, M, S:S_ };
+  const KEYS = ["W","P","M","S"];
+
+  /* ============================== render ============================== */
+  function screenFor(V) {
+    if (S.screen === "today") return shell.today();
+    if (S.screen === "tasks") return shell.tasks();
+    if (S.screen === "more")  return shell.more();
+    const fn = V[S.screen] || V.schedule;
+    return fn();
+  }
+  function render() {
+    _ahead = new Map();
+    const V = VARIANTS[S.variant] || W;
+    let html = screenFor(V);
+    if (S.sheet) {
+      const k = S.sheet.kind;
+      if (k === "capture") html += captureSheet();
+      else if (k === "pattern") html += patternSheet();
+      else if (k === "event") html += eventSheet(S.date);
+      else if (k === "promote") html += promoteSheet(S.date);
+      else if (k === "pick") {
+        const [mode, wd] = String(S.sheet.param || "stamp").split(":");
+        html += shapePickerSheet({ mode, wd:+wd });
+      }
+      else if (k === "win") html += `<div class="veil" data-act="closesheet"><div class="sheet" data-stop>
+        <div class="grabber"></div>
+        <div class="sheet-h"><h2>${esc((refWindow(S.sheet.param) || {name:"Window"}).name)}</h2>
+          <button class="icon" data-act="closesheet">Done</button></div>
+        ${scopeBanner(S.sheet.param, true)}${windowEditor(S.sheet.param)}</div></div>`;
+    }
+    document.getElementById("device").innerHTML = html;
+
+    if (S.focusWd !== null && S.focusWd !== undefined) {
+      const row = document.getElementById("day-" + S.focusWd);
+      if (row && row.scrollIntoView) {
+        row.scrollIntoView({ block:"start", behavior:"instant" });
+        row.animate && row.animate(
+          [{ background:"var(--accent-soft)" }, { background:"transparent" }],
+          { duration:900, easing:"ease-out" });
+      }
+      S.focusWd = null;
+    }
+
+    document.getElementById("switcher").innerHTML = `
+      <button data-sw="prev" aria-label="Previous variant">‹</button>
+      <button class="label" data-sw="about"><b>${S.variant}</b> — ${esc(V.name)}
+        <span class="hint">· tap for notes</span></button>
+      <button data-sw="next" aria-label="Next variant">›</button>`;
+
+    const old = document.querySelector(".about"); if (old) old.remove();
+    if (S.about) {
+      const el = document.createElement("div"); el.className = "about";
+      el.innerHTML = `<div class="about-in" data-stop>
+        <div class="kicker">Variant ${S.variant} of ${KEYS.length} · schedule editing · issue #17</div>
+        <h2>${esc(V.name)}</h2><p>${esc(V.tagline)}</p>
+        <div class="kicker" style="margin-top:14px">The six surfaces, and where each one lives here</div>
+        <ul>
+          <li><b>Window editor</b> — ${esc(V === W ? "expands inline under the week" : V === P ? "a sheet off the timeline block" : V === M ? "inline, under whichever mode you chose" : "inline inside the wizard step")}</li>
+          <li><b>Shape + usage list</b> — ${esc(V === W ? "the week rows are the shapes; usage is in the banner" : V === P ? "reached after promoting, with its own usage screen" : V === M ? "the whole of shape mode" : "the picker groups by use; the banner names every season sharing a shape")}</li>
+          <li><b>Pattern editor</b> — ${esc(V === W ? "change ▾ on any weekday row" : V === P ? "assign chips on a shape screen" : V === M ? "above the windows, in shape mode" : "Edit this season, and wizard step 2 — the same canvas either way")}</li>
+          <li><b>Pattern switcher</b> — ${esc(V === S_ ? "a sheet, plus the wizard's last step on the path out" : "a sheet, with the orphan count precomputed per season")}</li>
+          <li><b>Override a date</b> — ${esc(V === W ? "a separate list, deliberately not mixed with shapes" : V === P ? "the home screen; it is all you can edit directly" : V === M ? "the other half of the toggle" : "Change one date, under the season summary")}</li>
+          <li><b>Event + overlap</b> — ${esc("＋ Event on a date, then replace / truncate / split, applied for real")}</li>
+        </ul>
+        <div class="kicker" style="margin-top:14px">Things worth poking</div>
+        <ul>
+          <li>Open a window editor and watch the <b>scope banner</b>. Shared shapes are amber, single dates green.</li>
+          <li>Any <b>change ▾</b> opens the shape picker — ${TEMPLATES.length} shapes, grouped by use, each with a strip showing where its windows sit.</li>
+          <li><b>Duration</b> is now a sentence at the bottom of the editor, not a control; <b>Weather</b> keeps a read-only row because its source is nowhere else on the screen.</li>
+          <li>Switch season and read the <b>orphan count per pattern</b>, computed before you commit.</li>
+          <li>Add an event at 7p on a day with an evening window to hit <b>replace / truncate / split</b>.</li>
+          <li>Data is shared across all four variants, so the comparison holds.</li>
+        </ul>
+        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+          <button class="btn primary" data-sw="close">Close</button></div></div>`;
+      document.body.appendChild(el);
+    }
+  }
+
+  /* ============================== events ============================== */
+  document.addEventListener("click", e => {
+    const sw = e.target.closest("[data-sw]");
+    if (sw) {
+      const k = sw.dataset.sw;
+      if (k === "about") { S.about = !S.about; render(); return; }
+      if (k === "close") { S.about = false; render(); return; }
+      cycle(k === "next" ? 1 : -1); return;
+    }
+    if (e.target.closest(".about") && !e.target.closest("[data-stop]")) { S.about = false; render(); return; }
+
+    const el = e.target.closest("[data-act]"); if (!el) return;
+    const a = el.dataset.act;
+    if (a === "closesheet" && el.classList.contains("veil") && e.target.closest("[data-stop]")) return;
+    if (a !== "delwin") S.confirmDel = null;   // any other tap disarms the delete
+
+    switch (a) {
+      case "go": go(el.dataset.screen, el.dataset.param || null); break;
+      case "sheet": sheet(el.dataset.kind, el.dataset.param); break;
+      case "closesheet": sheet(null); break;
+      case "expand": S.open = S.open === el.dataset.v ? null : (el.dataset.v || null); render(); break;
+      case "pickassign": {
+        const days = S.wiz ? S.wiz.days : pattern().days;
+        days[+el.dataset.wd] = el.dataset.v;
+        sheet(null); break;
+      }
+      case "pickstamp": stamp(S.date, el.dataset.v); S.open = null; sheet(null); break;
+      case "dayview": S.dayview = el.dataset.v; render(); break;
+      case "delwin": {
+        const ref = el.dataset.ref;
+        if (S.confirmDel !== ref) { S.confirmDel = ref; render(); break; }
+        const c = refCtx(ref);
+        const list = c.scope === "template" ? tpl(c.tplId).windows
+                   : (materialise(c.dateKey), overrideOn(c.dateKey).windows);
+        const i = list.findIndex(x => x.id === c.winId);
+        if (i >= 0) list.splice(i, 1);
+        S.confirmDel = null; S.open = null; S.sheet = null; render(); break;
+      }
+      case "mode": S.mode = el.dataset.v; S.open = null; render(); break;
+      case "mwd": S.mwd = +el.dataset.v; S.open = null; render(); break;
+      case "pickdate": S.date = el.dataset.v; S.open = null; if (S.screen === "schedule" && S.variant === "W") go("date"); else render(); break;
+      case "filter": S.filter = el.dataset.v; render(); break;
+      case "toggle": { const t = task(+el.dataset.id); t.st = t.st === "Done" ? "Active" : "Done"; render(); break; }
+      case "setwdim": {
+        const w = refWindow(el.dataset.ref, true) || refWindow(el.dataset.ref);
+        const d = dim(el.dataset.k);
+        toggleDim(w, d, el.dataset.v, d.winDef); render(); break;
+      }
+      case "assign": {
+        if (S.wiz) { S.wiz.days = S.wiz.days.slice(); S.wiz.days[+el.dataset.wd] = el.dataset.v; }
+        else { const p = pattern(); p.days = p.days.slice(); p.days[+el.dataset.wd] = el.dataset.v; }
+        S.swap = null; render(); break;
+      }
+      case "stamp": stamp(S.date, el.dataset.v); S.open = null; render(); break;
+      case "revert": revertDate(S.date); S.open = null; render(); break;
+      case "addwin": {
+        const id = "w" + (++SEQ);
+        if (el.dataset.t) tpl(el.dataset.t).windows.push(W_(id, "New window", "13:00", "14:00", {}));
+        else { const ov = materialise(el.dataset.d || S.date);
+               ov.windows.push(W_(id, "New window", "13:00", "14:00", {}));
+               ov.windows.sort((x,y) => mins(x.s) - mins(y.s)); }
+        S.open = el.dataset.t ? `tpl:${el.dataset.t}:${id}` : `date:${el.dataset.d || S.date}:${id}`;
+        render(); break;
+      }
+      case "clone": {
+        const src = tpl(el.dataset.t), id = "t" + (++SEQ);
+        TEMPLATES.push({ id, name:src.name + " (copy)", protos:[],
+          windows:src.windows.map(w => ({ ...cloneWin(w), id:"w"+(++SEQ) })) });
+        const days = S.wiz ? S.wiz.days : pattern().days;
+        const wd = el.dataset.wd !== undefined ? +el.dataset.wd
+                 : S.variant === "M" && S.mode === "shape" ? S.mwd
+                 : days.indexOf(src.id);
+        if (wd >= 0) days[wd] = id;
+        S.open = null; render(); break;
+      }
+      case "overlap": applyOverlap(el.dataset.d, el.dataset.w, el.dataset.v); sheet(null); break;
+      case "addevent": {
+        EVENTS.push({ id:"e"+(++SEQ), name:S.ev.name, date:el.dataset.d, s:S.ev.s, e:S.ev.e, dims:{} });
+        sheet(null); break;
+      }
+      case "dopromote": {
+        const inp = document.querySelector("[data-promo]");
+        promote(el.dataset.d, (inp && inp.value.trim()) || "New shape");
+        sheet(null); break;
+      }
+      case "setpattern": {
+        activePattern = el.dataset.v;
+        const p = pattern(); if (!p.days.includes(tpl(p.days[S.mwd]).id)) S.mwd = today.getDay();
+        sheet(null); break;
+      }
+      case "capture": {
+        const inp = document.querySelector(".sheet input.field");
+        const v = el.dataset.v;
+        TASKS.unshift({ id:Date.now(), t:(inp && inp.value.trim()) || "New task",
+          dur:v === "Longer" ? "Longer" : +v, st:"Active", dims:{} });
+        sheet(null); break;
+      }
+      /* ---- S's wizard ---- */
+      case "wizstart": {
+        const p = pattern();
+        S.wiz = { name:"New season", base:p.id, days:p.days.slice() };
+        S.step = 0; S.open = null; render(); break;
+      }
+      case "wizcancel": S.wiz = null; S.step = 0; S.open = null; render(); break;
+      case "wizbase": {
+        S.wiz.base = el.dataset.v;
+        S.wiz.days = PATTERNS.find(p => p.id === el.dataset.v).days.slice();
+        render(); break;
+      }
+      case "wizback": {
+        if (S.step === 0) S.wiz = null; else S.step--;
+        S.open = null; render(); break;
+      }
+      case "wiznext": {
+        const nameInp = document.querySelector("[data-wizname]");
+        if (nameInp) S.wiz.name = nameInp.value.trim() || "New season";
+        if (S.step === STEPS.length - 1) {
+          PATTERNS.push({ id:"p" + (++SEQ), name:S.wiz.name, days:S.wiz.days.slice() });
+          activePattern = PATTERNS[PATTERNS.length - 1].id;
+          S.wiz = null; S.step = 0;
+        } else S.step++;
+        S.open = null; render(); break;
+      }
+      default: break;
+    }
+  });
+
+  document.addEventListener("change", e => {
+    const evt = e.target.closest("[data-evtime]");
+    if (evt) {
+      const v = parseTime(evt.value);
+      const other = evt.dataset.f === "s" ? S.ev.e : S.ev.s;
+      if (!v || (evt.dataset.f === "s" ? mins(v) >= mins(other) : mins(v) <= mins(other))) {
+        evt.classList.add("bad"); return;
+      }
+      S.ev[evt.dataset.f] = v; render(); return;
+    }
+    const evn = e.target.closest("[data-evname]");
+    if (evn) { S.ev.name = evn.value.trim() || S.ev.name; render(); return; }
+
+    const t = e.target.closest("[data-time]");
+    if (t) {
+      const v = parseTime(t.value);
+      if (!v) { t.classList.add("bad"); return; }
+      const w = refWindow(t.dataset.ref, true) || refWindow(t.dataset.ref);
+      const other = t.dataset.f === "s" ? w.e : w.s;
+      if (t.dataset.f === "s" ? mins(v) >= mins(other) : mins(v) <= mins(other)) { t.classList.add("bad"); return; }
+      w[t.dataset.f] = v; render(); return;
+    }
+    const r = e.target.closest("[data-rename]");
+    if (r) { const w = refWindow(r.dataset.ref, true) || refWindow(r.dataset.ref);
+             w.name = r.value.trim() || w.name; render(); }
+  });
+
+  function cycle(dir) {
+    S.variant = KEYS[(KEYS.indexOf(S.variant) + dir + KEYS.length) % KEYS.length];
+    S.screen = "schedule"; S.param = null; S.sheet = null; S.open = null; S.swap = null;
+    S.wiz = null; S.step = 0; S.mode = "shape";
+    const u = new URL(location.href); u.searchParams.set("variant", S.variant);
+    history.replaceState(null, "", u);
+    render();
+  }
+
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.key === "ArrowLeft") cycle(-1);
+    else if (e.key === "ArrowRight") cycle(1);
+    else if (e.key === "Escape" && (S.sheet || S.about)) { S.sheet = null; S.about = false; render(); }
+  });
+
+  render();
+})();
+</script>
