@@ -1,4 +1,4 @@
-<title>task-guide — tag entry variants</title>
+<title>Tag Entry Variants</title>
 
 <!--
   PROTOTYPE — throwaway. Not production code.
@@ -66,17 +66,21 @@
   button { font:inherit; color:inherit; cursor:pointer; }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
+  /* Phone first: the PAGE scrolls. A nested scroller inside a device frame fights
+     mobile Safari, and the frame is decoration anyway once the screen IS the phone. */
   .stage { flex:1; width:100%; display:flex; justify-content:center; padding:0; }
   .device {
-    position:relative; width:100%; max-width:430px; height:calc(100dvh - 60px);
-    background:var(--ground); overflow:hidden; display:flex; flex-direction:column;
+    position:relative; width:100%; max-width:430px;
+    background:var(--ground); display:flex; flex-direction:column;
   }
+  .scroll { padding-bottom:84px; }
   @media (min-width:600px) {
     .stage { padding:26px 16px 0; }
-    .device { height:min(880px, calc(100dvh - 92px)); border:1px solid var(--line);
-      border-radius:30px; box-shadow:var(--shadow); }
+    .device { height:min(880px, calc(100dvh - 92px)); overflow:hidden;
+      border:1px solid var(--line); border-radius:30px; box-shadow:var(--shadow); }
+    .scroll { flex:1; overflow-y:auto; overscroll-behavior:contain;
+      -webkit-overflow-scrolling:touch; padding-bottom:12px; }
   }
-  .scroll { flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
 
   /* ---- shell chrome (settled in #12, not under test here) ---- */
   .nav { display:flex; flex-direction:column; padding:14px 16px 10px;
@@ -166,7 +170,7 @@
   .shelf { border:1px dashed var(--line); border-radius:13px; padding:11px 12px; margin:0 16px; }
   .shelf .sh-h { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
     color:var(--ink-3); font-weight:700; margin-bottom:8px; }
-  .range { width:100%; accent-color:var(--accent); }
+  .range { width:100%; height:34px; accent-color:var(--accent); }
   .ticks { display:flex; justify-content:space-between; font-size:11px; color:var(--ink-3); margin-top:2px; }
 
   /* ---- verdict line under the free-text field ---- */
@@ -179,10 +183,16 @@
   .verdict b { color:inherit; }
 
   /* ---- sheet ---- */
-  .scrim { position:absolute; inset:0; background:rgba(8,12,16,.42); z-index:8; }
-  .sheet { position:absolute; left:0; right:0; bottom:0; z-index:9; background:var(--surface);
-    border-radius:20px 20px 0 0; box-shadow:var(--shadow); max-height:82%; display:flex;
-    flex-direction:column; padding-bottom:12px; }
+  .scrim { position:fixed; inset:0; background:rgba(8,12,16,.42); z-index:8; }
+  .sheet { position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%;
+    max-width:430px; z-index:9; background:var(--surface);
+    border-radius:20px 20px 0 0; box-shadow:var(--shadow); max-height:82dvh; display:flex;
+    flex-direction:column; padding-bottom:calc(12px + env(safe-area-inset-bottom)); overflow-y:auto; }
+  @media (min-width:600px) {
+    .scrim { position:absolute; }
+    .sheet { position:absolute; left:0; right:0; width:auto; max-width:none;
+      transform:none; max-height:82%; }
+  }
   .sheet-h { display:flex; align-items:center; gap:10px; padding:14px 16px 8px; }
   .sheet-h h2 { margin:0; font-size:17px; flex:1; letter-spacing:-.01em; }
   .sheet-h button { background:none; border:none; color:var(--accent); font-weight:600; font-size:15px; }
@@ -196,7 +206,7 @@
 
   /* ---- prototype scaffolding (obviously not the design) ---- */
   .switcher {
-    position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:50;
+    position:fixed; bottom:calc(12px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); z-index:50;
     display:flex; align-items:center; gap:2px; background:var(--scaffold-bg); color:var(--scaffold-ink);
     border-radius:99px; padding:4px; box-shadow:var(--shadow); font-size:13px; max-width:min(96vw,560px);
   }
