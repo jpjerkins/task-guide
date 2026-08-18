@@ -6,26 +6,36 @@
     1. ordinal axis — slider vs segmented vs stepper
     2. how the free-text field says "this will be inert" BEFORE commit
     3. how a muted (loose) tag reads next to normal chips
-  Three structurally different shapes for the TAG SECTION of the task editor,
-  mounted inside the settled shell from #12. Switchable via ?variant=A|B|C.
   Ticket: https://github.com/jpjerkins/task-guide/issues/38
   Companions: ui-screens.prototype.html (#12), schedule-editing.prototype.html (#17).
   In-memory only. No persistence, no tests, no error handling.
 
-    A — Axis blocks     every axis always visible; ordinal = SEGMENTED with an explicit default segment
+    A — Axis blocks     every axis always visible; ordinal = SEGMENTED with an absence segment
     B — One field       search-first; the registry answers as you type; ordinal = STEPPER
     C — The sentence    tags read as the constraint sentence; blanks open sheets; ordinal = SLIDER
 
-  VERDICT (2026-08-18): A wins, muting included. C's sentence was judged the more
-  elegant presentation, but elegance bought by saving space — and the Task edit screen
-  is not short of space once this prototype's own scaffolding (the brief above, the
-  example list below) is taken out. On the real screen C would read as SHY of showing
-  you what you need to see. Folded into CONTEXT.md; B and C kept here as the argument.
+  ROUND 2. Round 1 chose A on the grounds that the Task edit screen has room to show
+  everything, so C's space-saving elegance would read as SHY. That was judged against a
+  screen missing HALF ITS FIELDS — no Deadline, Defer, Postpone, Recurrence or CreatedAt —
+  so the density claim that decided it was never actually tested. Now:
+    - every field from CONTEXT.md § Task is present, rendered IDENTICALLY in all three
+      variants, because only the tag section is under test
+    - the prototype's own commentary and the example list are OFF by default (the ⓘ
+      button), so what you see on load is the screen's own density and nothing else
+    - the ⧉ button cycles the fixture tasks, which exercise the one-off, the recurring
+      and the postponed cases
+    - the OPPORTUNITIES count is live and sticky, computed by the real matching rule
+      against a week of fixture Windows — it is a consequence of the tags below it,
+      so it has to stay visible while they are edited
 
-  Nothing here reopens a decision. Registry rules obeyed as settled in #21 / CONTEXT.md:
+  Registry rules obeyed as settled in #21 / CONTEXT.md:
     - tags are lowercase
     - a value name belongs to exactly one Dimension, so the STRING ALONE resolves it
     - a loose tag an ordinal axis claims is taken up only if that axis is unset
+  Task rules obeyed as settled in #10 / #19 / CONTEXT.md:
+    - Recurrence generates the Deadline, so a recurring Task never carries a hand-set one
+    - a recurring Task's Defer must use the offset form
+    - Postpone is authored ONLY by the "Not now" swipe, never as a field here
 -->
 
 <style>
@@ -92,27 +102,55 @@
   .nav { display:flex; flex-direction:column; padding:14px 16px 10px;
     background:var(--surface); border-bottom:1px solid var(--line); flex:none; }
   .nav-main { display:flex; align-items:center; gap:10px; min-height:32px; }
-  .nav h1 { font-size:21px; letter-spacing:-.02em; margin:0; flex:1; min-width:0; }
+  .nav h1 { font-size:20px; letter-spacing:-.02em; margin:0; flex:1; min-width:0; }
   .nav .sub { font-size:12px; color:var(--ink-2); margin:3px 0 0; }
   .nav .back { background:none; border:none; padding:0 2px 0 0; color:var(--accent);
     font-size:15px; font-weight:600; }
 
   .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3);
-    font-weight:700; padding:20px 16px 7px; }
+    font-weight:700; padding:18px 16px 6px; }
   .stack { display:flex; flex-direction:column; gap:8px; padding:6px 16px 4px; }
   .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); font-weight:650; }
+  .lbl .soft { text-transform:none; letter-spacing:0; font-weight:400; color:var(--ink-3); }
   .hint { font-size:12px; color:var(--ink-2); line-height:1.45; }
+  .hint.warn { color:var(--now); }
   .note { font-size:12px; color:var(--ink-2); line-height:1.5; margin:14px 16px 0;
     padding:11px 13px; background:var(--surface-2); border-radius:11px; }
   .note b { color:var(--ink); }
   .card { background:var(--surface); border:1px solid var(--line); border-radius:14px;
     margin:0 16px 10px; padding:12px 13px; }
+  .inline { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 
   input.field, textarea.field {
     width:100%; font:inherit; font-size:16px; padding:11px 12px; color:var(--ink);
     background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
   }
+  input.field.date { max-width:190px; font-variant-numeric:tabular-nums; }
   input.field::placeholder { color:var(--ink-3); }
+
+  .stateline { display:flex; align-items:center; gap:9px; background:var(--now-soft);
+    border:1px solid var(--now); color:var(--now); border-radius:11px; padding:10px 12px;
+    font-size:13px; line-height:1.35; }
+  .stateline button { margin-left:auto; background:none; border:1px solid currentColor;
+    border-radius:8px; padding:5px 10px; font-size:12px; font-weight:600; flex:none; }
+  .derived { display:flex; align-items:baseline; gap:8px; background:var(--surface-2);
+    border-radius:11px; padding:10px 12px; font-size:13px; color:var(--ink-2); }
+  .derived b { color:var(--ink); font-size:14px; }
+
+  /* ---- live Opportunities readout (#18 / #11) ---- */
+  .fitbar { position:sticky; top:0; z-index:3; display:flex; align-items:baseline; gap:9px;
+    flex-wrap:wrap; padding:11px 16px; background:var(--surface); border-bottom:1px solid var(--line);
+    font-size:13px; color:var(--ink-2); }
+  .fitbar .n { font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums; }
+  .fitbar .which { flex-basis:100%; font-size:12px; color:var(--ink-3); line-height:1.4; }
+  .fitbar.orphan { background:var(--danger-soft); border-bottom-color:var(--danger); color:var(--danger); }
+  .fitbar.orphan .n { color:var(--danger); }
+  .fitbar.orphan .which { color:var(--danger); }
+  .fitbar.scarce { background:var(--now-soft); border-bottom-color:var(--now); color:var(--now); }
+  .fitbar.scarce .n { color:var(--now); }
+  .fitbar.scarce .which { color:var(--now); }
+  .fitbar.gated { background:var(--surface-2); }
 
   /* ---- chips ---- */
   .chipset { display:flex; flex-wrap:wrap; gap:7px; }
@@ -122,6 +160,8 @@
   }
   .chipset button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
     color:var(--accent-ink); font-weight:600; }
+  .chipset button[disabled] { opacity:.4; cursor:default; }
+  .chipset.tight button { padding:6px 10px; font-size:13px; }
 
   .pill { display:inline-flex; align-items:center; gap:5px; font-size:12px; padding:3px 9px;
     border-radius:99px; background:var(--surface-2); color:var(--ink-2); border:1px solid transparent; }
@@ -148,6 +188,7 @@
     padding:9px 4px; border-radius:8px; white-space:nowrap; }
   .seg button[aria-pressed="true"] { background:var(--surface); color:var(--ink); font-weight:650;
     box-shadow:0 1px 2px rgba(0,0,0,.10); }
+  .seg button[disabled] { opacity:.38; cursor:default; }
   .seg button.def { color:var(--ink-3); flex:0 0 40px; font-size:16px; }
   .seg button.def[aria-pressed="true"] { color:var(--ink-2); }
   .seg-wrap { display:flex; flex-direction:column; gap:5px; }
@@ -158,8 +199,11 @@
   .step .val { flex:1; text-align:center; font-size:15px; font-weight:600; }
   .step .val.unset { color:var(--ink-3); font-weight:400; font-style:italic; }
   .step .bump { width:34px; height:34px; border-radius:9px; border:1px solid var(--line);
-    background:var(--surface); font-size:17px; line-height:1; }
+    background:var(--surface); font-size:17px; line-height:1; flex:none; }
   .step .bump[disabled] { opacity:.32; cursor:default; }
+  .step.small { padding:4px 6px; }
+  .step.small .val { font-size:14px; }
+  .step.small .bump { width:30px; height:30px; }
   .sug { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface); }
   .sug button { display:flex; width:100%; align-items:center; gap:9px; text-align:left;
     background:none; border:none; border-bottom:1px solid var(--line-soft); padding:11px 12px; font-size:15px; }
@@ -186,7 +230,6 @@
   .verdict.claimed { background:var(--accent-soft); color:var(--accent); }
   .verdict.inert { background:var(--surface-2); color:var(--ink-2); }
   .verdict.idle { background:none; color:var(--ink-3); padding:2px 2px; }
-  .verdict b { color:inherit; }
 
   /* ---- sheet ---- */
   .scrim { position:fixed; inset:0; background:rgba(8,12,16,.42); z-index:8; }
@@ -194,33 +237,37 @@
     max-width:430px; z-index:9; background:var(--surface);
     border-radius:20px 20px 0 0; box-shadow:var(--shadow); max-height:82dvh; display:flex;
     flex-direction:column; padding-bottom:calc(12px + env(safe-area-inset-bottom)); overflow-y:auto; }
+  .sheet-h { display:flex; align-items:center; gap:10px; padding:14px 16px 8px; }
+  .sheet-h h2 { margin:0; font-size:17px; flex:1; letter-spacing:-.01em; }
+  .sheet-h button { background:none; border:none; color:var(--accent); font-weight:600; font-size:15px; }
+  .grabber { width:34px; height:4px; border-radius:9px; background:var(--surface-3); margin:8px auto 0; }
   @media (min-width:600px) {
     .scrim { position:absolute; }
     .sheet { position:absolute; left:0; right:0; width:auto; max-width:none;
       transform:none; max-height:82%; }
   }
-  .sheet-h { display:flex; align-items:center; gap:10px; padding:14px 16px 8px; }
-  .sheet-h h2 { margin:0; font-size:17px; flex:1; letter-spacing:-.01em; }
-  .sheet-h button { background:none; border:none; color:var(--accent); font-weight:600; font-size:15px; }
-  .grabber { width:34px; height:4px; border-radius:9px; background:var(--surface-3); margin:8px auto 0; }
 
   .btn-row { padding:16px; }
   .btn { border:1px solid var(--line); background:var(--surface); border-radius:12px;
     padding:13px 16px; font-size:15px; font-weight:600; }
   .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
   .btn.wide { width:100%; }
+  .created { font-size:11.5px; color:var(--ink-3); padding:2px 16px 0; }
 
   /* ---- prototype scaffolding (obviously not the design) ---- */
   .switcher {
-    position:fixed; bottom:calc(12px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); z-index:50;
+    position:fixed; bottom:calc(12px + env(safe-area-inset-bottom)); left:50%;
+    transform:translateX(-50%); z-index:50;
     display:flex; align-items:center; gap:2px; background:var(--scaffold-bg); color:var(--scaffold-ink);
     border-radius:99px; padding:4px; box-shadow:var(--shadow); font-size:13px; max-width:min(96vw,560px);
   }
-  .switcher button { background:none; border:none; color:inherit; padding:7px 12px; border-radius:99px; }
-  .switcher .cur { padding:0 8px; font-weight:600; white-space:nowrap; overflow:hidden;
+  .switcher button { background:none; border:none; color:inherit; padding:7px 11px; border-radius:99px; }
+  .switcher button[aria-pressed="true"] { background:rgba(128,128,128,.32); }
+  .switcher .cur { padding:0 6px; font-weight:600; white-space:nowrap; overflow:hidden;
     text-overflow:ellipsis; }
   .switcher .cur small { display:block; font-weight:400; opacity:.62; font-size:11px; }
-  .brief { margin:0 16px 14px; padding:12px 14px; border:1px dashed var(--scaffold-line);
+  .switcher .div { width:1px; align-self:stretch; background:rgba(128,128,128,.34); margin:0 3px; }
+  .brief { margin:14px 16px 0; padding:12px 14px; border:1px dashed var(--scaffold-line);
     border-radius:13px; font-size:12.5px; line-height:1.55; color:var(--ink-2); }
   .brief h3 { margin:0 0 5px; font-size:13px; color:var(--ink); letter-spacing:-.01em; }
   .brief ul { margin:7px 0 0; padding-left:17px; }
@@ -258,19 +305,105 @@ function resolve(raw) {
 }
 
 /* ============================ fixture ============================ */
+// Chosen to exercise the three timing shapes: a plain one-off, a one-off with an
+// offset Defer and a live Postpone, and a recurring Task (whose Deadline is generated
+// and whose Defer must therefore use the offset form).
 const TASKS = [
-  { id:1, t:"Reseal the garage door", dims:{ duration:"30 min", energy:"medium", location:["garage"], weather:["dry"] },
+  { id:1, t:"Reseal the garage door", notes:"Sikaflex is on the shelf above the bench.",
+    st:"Active", created:"2026-06-02",
+    timing:"once", deadline:"2026-08-25",
+    defer:{ mode:"offset", date:"", n:2, unit:"weeks" }, postpone:null,
+    rec:{ kind:"cal", n:1, unit:"weeks", days:["Sat"] },
+    dims:{ duration:"30 min", energy:"medium", location:["garage"], weather:["dry"] },
     loose:["#springjob","#garge"] },
-  { id:2, t:"Book the tournament hotel", dims:{ duration:"10 min", location:["desk"] },
+  { id:2, t:"Book the tournament hotel", notes:"https://example.com/bracket — Ana wants the one near the pitch.",
+    st:"Active", created:"2026-08-04",
+    timing:"once", deadline:"2026-08-29",
+    defer:{ mode:"none", date:"", n:1, unit:"weeks" }, postpone:"2026-08-21",
+    rec:{ kind:"cal", n:1, unit:"weeks", days:["Sat"] },
+    dims:{ duration:"10 min", location:["desk"] },
     loose:["#placetostay"] },
-  { id:3, t:"Kick a ball about with the kids", dims:{ duration:"1 hour", location:["outside"], who:["kids"] },
+  { id:3, t:"Change the water filter", notes:"",
+    st:"Active", created:"2026-02-14",
+    timing:"recur", deadline:"",
+    defer:{ mode:"offset", date:"", n:3, unit:"days" }, postpone:null,
+    rec:{ kind:"done", n:6, unit:"months", days:["Sat"] },
+    dims:{ duration:"10 min", location:["home"] },
     loose:[] },
 ];
-const S = { variant:"A", id:1, draft:"", sheet:null };
+// A week of Availability Windows, so Opportunities is a real count rather than a
+// number typed into a mockup. Duration on the window side is DERIVED from its length
+// (#7), which is why these carry a length rather than a duration value.
+const WINDOWS = [
+  { day:"Tue", name:"Early desk",   mins:30,  dims:{ location:["desk","home"], energy:"high" } },
+  { day:"Tue", name:"Evening",      mins:60,  dims:{ location:["home"], energy:"low", who:["ana"] } },
+  { day:"Wed", name:"Lunch walk",   mins:30,  dims:{ location:["out & about"], energy:"low" } },
+  { day:"Wed", name:"Evening",      mins:60,  dims:{ location:["home"], energy:"medium", who:["ana"] } },
+  { day:"Thu", name:"Early desk",   mins:30,  dims:{ location:["desk","home"], energy:"high" } },
+  { day:"Thu", name:"Kids' bedtime",mins:10,  dims:{ location:["home"], energy:"low", who:["kids"] } },
+  { day:"Fri", name:"Evening",      mins:60,  dims:{ location:["home"], energy:"low", who:["ana"] } },
+  { day:"Sat", name:"Garage slot",  mins:120, dims:{ location:["garage","outside"], energy:"medium", weather:["dry"] } },
+  { day:"Sat", name:"Kids' morning",mins:120, dims:{ location:["outside"], energy:"medium", who:["kids"], weather:["dry","fine"] } },
+  { day:"Sun", name:"Errands",      mins:60,  dims:{ location:["out & about"], energy:"medium" } },
+  { day:"Sun", name:"Evening",      mins:60,  dims:{ location:["home"], energy:"low", who:["ana"] } },
+  { day:"Mon", name:"Early desk",   mins:30,  dims:{ location:["desk","home"], energy:"high" } },
+  { day:"Mon", name:"Kids' bedtime",mins:10,  dims:{ location:["home"], energy:"low", who:["kids"] } },
+  { day:"Tue", name:"Garage slot",  mins:120, dims:{ location:["garage","outside"], energy:"medium", weather:["dry"] } },
+];
+const TODAY = "2026-08-18";
+const DUR_MINS = { "2 min":2, "10 min":10, "30 min":30, "1 hour":60, "longer":180 };
+
+// The Matching rule, both algebras. Categorical: the task's values must be a SUBSET of
+// the window's. Ordinal: the task's value must not exceed the window's ceiling.
+function fits(t, w) {
+  const need = DUR_MINS[t.dims.duration] ?? Infinity;
+  if (need > w.mins) return false;
+  const eOrder = dim("energy").values;
+  const te = t.dims.energy ?? dim("energy").taskDef;
+  const we = w.dims.energy ?? dim("energy").taskDef;
+  if (eOrder.indexOf(te) > eOrder.indexOf(we)) return false;
+  for (const d of DIMS) {
+    if (d.type !== "cat") continue;
+    const tv = t.dims[d.key] ?? [], wv = w.dims[d.key] ?? [];
+    if (!tv.every(x => wv.includes(x))) return false;
+  }
+  return true;
+}
+const opportunities = t => WINDOWS.filter(w => fits(t, w)).length;
+
+// Which single constraint is doing the excluding — the repair hint an Orphan needs.
+function blockers(t) {
+  const out = [];
+  for (const d of DIMS) {
+    if (d.type !== "cat") continue;
+    for (const v of (t.dims[d.key] ?? []))
+      if (!WINDOWS.some(w => (w.dims[d.key] ?? []).includes(v))) out.push(v);
+  }
+  return out;
+}
+
+const S = { variant:"A", id:1, draft:"", sheet:null, scaffold:false };
 const task = () => TASKS.find(t => t.id === S.id);
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const valuesOf = (t, d) => { const v = t.dims[d.key]; return v === undefined ? [] : (Array.isArray(v) ? v.slice() : [v]); };
+
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso + "T12:00:00");
+  return `${d.getDate()} ${MO[d.getMonth()]} ${d.getFullYear()}`;
+}
+// Recurrence GENERATES the deadline (#10), so the screen shows it derived, never editable.
+function nextDue(t) {
+  const base = new Date((t.rec.kind === "done" ? "2026-05-30" : "2026-08-18") + "T12:00:00");
+  const n = t.rec.n;
+  if (t.rec.unit === "days") base.setDate(base.getDate() + n);
+  else if (t.rec.unit === "weeks") base.setDate(base.getDate() + n * 7);
+  else base.setMonth(base.getMonth() + n);
+  return base.toISOString().slice(0,10);
+}
+const effectiveDeadline = t => t.timing === "recur" ? nextDue(t) : t.deadline;
 
 function toggleCat(t, d, v) {
   const cur = valuesOf(t, d);
@@ -310,15 +443,150 @@ function verdict(draft) {
   return { cls:"inert", mark:"◇", html:`No Dimension claims <b>${esc("#" + raw.replace(/^#/,"").toLowerCase())}</b>. It will be <b>kept and shown, but ignored by matching</b> until some Dimension declares it.` };
 }
 
+/* ==================== the fields that are NOT under test ====================
+   Identical in all three variants, so the only thing differing between them is
+   the tag section. Every property in CONTEXT.md § Task is here.
+   ========================================================================== */
+function commonFields() {
+  const t = task(), r = t.rec, recurring = t.timing === "recur";
+  return `<div class="stack">
+      <div class="lbl">Title</div>
+      <input class="field" value="${esc(t.t)}">
+      <div class="lbl">Notes</div>
+      <textarea class="field" rows="2" placeholder="A URL or a sentence of context">${esc(t.notes)}</textarea>
+      <div class="lbl">Status</div>
+      <div class="chipset">${["Unprocessed","Active","Done","Stale"].map(s =>
+        `<button data-act="st" data-v="${s}" aria-pressed="${t.st === s}">${s}</button>`).join("")}</div>
+    </div>
+
+    <div class="sec-h">Timing</div>
+    <div class="stack">
+      <div class="seg">
+        <button data-act="timing" data-v="once" aria-pressed="${!recurring}">One-off</button>
+        <button data-act="timing" data-v="recur" aria-pressed="${recurring}">Recurring</button>
+      </div>
+
+      ${recurring ? `
+        <div class="lbl">Rule</div>
+        <div class="seg">
+          <button data-act="reckind" data-v="cal" aria-pressed="${r.kind === "cal"}">On the calendar</button>
+          <button data-act="reckind" data-v="done" aria-pressed="${r.kind === "done"}">After it's done</button>
+        </div>
+        <div class="inline">
+          <span class="hint">every</span>
+          <div class="step small" style="flex:0 0 118px">
+            <button class="bump" data-act="recn" data-dir="-1" ${r.n <= 1 ? "disabled" : ""}>−</button>
+            <div class="val">${r.n}</div>
+            <button class="bump" data-act="recn" data-dir="1">+</button>
+          </div>
+          <div class="chipset tight">${["days","weeks","months"].map(u =>
+            `<button data-act="recunit" data-v="${u}" aria-pressed="${r.unit === u}">${u}</button>`).join("")}</div>
+        </div>
+        ${r.kind === "cal" && r.unit === "weeks" ? `
+          <div class="chipset tight">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d =>
+            `<button data-act="recday" data-v="${d}" aria-pressed="${r.days.includes(d)}">${d}</button>`).join("")}</div>` : ""}
+        <div class="derived"><span>Next due</span><b>${esc(fmtDate(nextDue(t)))}</b>
+          <span style="margin-left:auto">generated by the rule</span></div>
+        <div class="hint">${r.kind === "done"
+          ? `Doing it restarts the clock, so this can never build up a backlog.`
+          : `The world imposes the date, so a missed one is silently superseded.`}</div>
+      ` : `
+        <div class="lbl">Deadline <span class="soft">— optional</span></div>
+        <input class="field date" type="date" data-act="deadline" value="${esc(t.deadline)}">
+      `}
+
+      <div class="lbl">Defer <span class="soft">— shouldn't start before</span></div>
+      <div class="seg">
+        <button data-act="defer" data-v="none" aria-pressed="${t.defer.mode === "none"}">None</button>
+        <button data-act="defer" data-v="date" aria-pressed="${t.defer.mode === "date"}"
+          ${recurring ? "disabled" : ""}>On a date</button>
+        <button data-act="defer" data-v="offset" aria-pressed="${t.defer.mode === "offset"}"
+          ${!recurring && !t.deadline ? "disabled" : ""}>Before the deadline</button>
+      </div>
+      ${t.defer.mode === "date" ? `
+        <input class="field date" type="date" data-act="deferdate" value="${esc(t.defer.date)}">` : ""}
+      ${t.defer.mode === "offset" ? `
+        <div class="inline">
+          <div class="step small" style="flex:0 0 118px">
+            <button class="bump" data-act="defn" data-dir="-1" ${t.defer.n <= 1 ? "disabled" : ""}>−</button>
+            <div class="val">${t.defer.n}</div>
+            <button class="bump" data-act="defn" data-dir="1">+</button>
+          </div>
+          <div class="chipset tight">${["days","weeks","months"].map(u =>
+            `<button data-act="defunit" data-v="${u}" aria-pressed="${t.defer.unit === u}">${u}</button>`).join("")}</div>
+          <span class="hint">before</span>
+        </div>
+        <div class="derived"><span>Surfaces</span><b>${esc(fmtDate(effectiveDeadline(t)) === "—" ? "" : deferDate(t))}</b></div>` : ""}
+      ${recurring ? `<div class="hint">A recurring Task must defer by offset — an absolute date would
+        be right for one instance and wrong forever after.</div>` : ""}
+
+      ${t.postpone ? `
+        <div class="stateline"><span>Postponed — won't surface until <b>${esc(fmtDate(t.postpone))}</b></span>
+          <button data-act="unpostpone">Clear</button></div>
+        <div class="hint">Set by the <b>"Not now"</b> swipe on a reminder, never typed here. It gates like
+          Defer but doesn't pause the staleness clock.</div>` : ""}
+    </div>`;
+}
+function deferISO(t) {
+  if (t.defer.mode === "none") return null;
+  if (t.defer.mode === "date") return t.defer.date || null;
+  const iso = effectiveDeadline(t); if (!iso) return null;
+  const d = new Date(iso + "T12:00:00"), n = t.defer.n;
+  if (t.defer.unit === "days") d.setDate(d.getDate() - n);
+  else if (t.defer.unit === "weeks") d.setDate(d.getDate() - n * 7);
+  else d.setMonth(d.getMonth() - n);
+  return d.toISOString().slice(0,10);
+}
+function deferDate(t) {
+  const iso = effectiveDeadline(t); if (!iso) return "—";
+  const d = new Date(iso + "T12:00:00"), n = t.defer.n;
+  if (t.defer.unit === "days") d.setDate(d.getDate() - n);
+  else if (t.defer.unit === "weeks") d.setDate(d.getDate() - n * 7);
+  else d.setMonth(d.getMonth() - n);
+  return fmtDate(d.toISOString().slice(0,10));
+}
+// Sticky, and identical in all three variants — Opportunities is a consequence of the
+// tags below it, so it is the one readout that has to stay visible while they are edited.
+function fitBar() {
+  const t = task();
+  // eligible = Active AND now >= Defer AND now >= Postpone. A Defer that has already
+  // elapsed is not a gate, which is why this compares dates rather than presence.
+  const dISO = deferISO(t);
+  const gate = t.st !== "Active" ? `it is <b>${esc(t.st)}</b>`
+    : (t.postpone && t.postpone > TODAY) ? `it is <b>postponed</b> until ${esc(fmtDate(t.postpone))}`
+    : (dISO && dISO > TODAY) ? `it is <b>deferred</b> until ${esc(fmtDate(dISO))}`
+    : null;
+  const n = opportunities(t), bl = blockers(t);
+  // #37: a gated Task is never an Orphan. The count is still shown — it is a fact about
+  // the tags — but the bar says plainly that nothing is being matched right now.
+  const cls = gate ? "gated" : n === 0 ? "orphan" : n <= 2 ? "scarce" : "";
+  return `<div class="fitbar ${cls}">
+    <span class="n">${n}</span>
+    <span>${n === 1 ? "opportunity" : "opportunities"} in the next 7 days</span>
+    ${!gate && n === 0 ? `<span class="pill" style="background:transparent;border:1px solid currentColor">Orphan</span>` : ""}
+    ${gate
+      ? `<span class="which">Not being matched at all right now — ${gate}. Gates decide <i>whether</i>, tags decide <i>where</i>, so this is not an Orphan.</span>`
+      : n === 0
+      ? `<span class="which">${bl.length
+          ? `No window declares ${bl.map(b => `<b>${esc(b)}</b>`).join(" or ")} — relax it here, or declare it on a window.`
+          : `No single tag is to blame; the combination has no home in this pattern.`}</span>`
+      : n <= 2
+      ? `<span class="which">Scarce — it will rank high wherever it does fit.</span>`
+      : ""}
+  </div>`;
+}
+const createdLine = () => `<div class="created">Captured ${esc(fmtDate(task().created))} · age drives the staleness gate</div>`;
+
 /* ============================ shared bits ============================ */
 function nav(sub) {
   return `<div class="nav"><div class="nav-main"><button class="back">‹ Tasks</button></div>
     <div class="nav-main"><h1>${esc(task().t)}</h1></div><div class="sub">${sub}</div></div>`;
 }
-// Every variant renders this: the same three tasks as list rows, so the muted
-// treatment can be judged where it actually has to survive — next to real chips.
+// Scaffolding — OFF by default, because round 1 judged these against the screen
+// they were sitting on. The ⓘ button brings them back.
 function elsewhere(looseClass) {
-  return `<div class="sec-h">How it reads in a list</div>` + TASKS.map(t => {
+  if (!S.scaffold) return "";
+  return `<div class="sec-h">Scaffolding — how it reads in a list</div>` + TASKS.map(t => {
     const pills = DIMS.filter(d => t.dims[d.key] !== undefined)
       .map(d => `<span class="pill dim">${esc(Array.isArray(t.dims[d.key]) ? t.dims[d.key].join(" / ") : t.dims[d.key])}</span>`)
       .concat(t.loose.map(x => `<span class="pill ${looseClass}">${esc(x)}</span>`)).join("");
@@ -327,14 +595,9 @@ function elsewhere(looseClass) {
   }).join("");
 }
 function brief(v) {
-  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)} ${v.won
-    ? `<span class="pill dim">chosen</span>`
-    : `<span class="pill">not chosen</span>`}</h3>${v.tagline}
-    <ul>${v.tradeoffs.map(x => `<li>${x}</li>`).join("")}</ul>
-    ${v.won
-      ? `<p style="margin:9px 0 0"><b>Chosen.</b> Shows every axis and its whole value set on a
-         screen that has the room for it.</p>`
-      : `<p style="margin:9px 0 0"><b>Not chosen.</b> ${v.why}</p>`}</div>`;
+  if (!S.scaffold) return "";
+  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)}</h3>${v.tagline}
+    <ul>${v.tradeoffs.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
 }
 function freeField(placeholder) {
   const vd = verdict(S.draft);
@@ -345,22 +608,24 @@ function freeField(placeholder) {
 
 /* ============================ variant A ============================ */
 const A = {
-  key:"A", name:"Axis blocks", won:true,
-  tagline:"Every axis is always on screen with all of its values. Ordinal axes are a <b>segmented control</b> carrying an explicit default segment, so \"unset\" is a thing you can point at.",
+  key:"A", name:"Axis blocks",
+  tagline:"Every axis is always on screen with all of its values. Ordinal axes are a <b>segmented control</b> carrying an explicit segment for absence.",
   tradeoffs:[
-    "Ordinal control: <b>segmented</b>. The whole value set is visible, and the leading segment is the default — the only shape where <i>unset</i> and <i>low</i> are distinguishable at a glance.",
+    "Ordinal control: <b>segmented</b>. The whole value set is visible, and the leading segment is absence — the only shape where <i>unset</i> and <i>low</i> are distinguishable at a glance.",
     "Inert signal: a <b>verdict line</b> under the field, updating on every keystroke.",
-    "Muting: dashed outline, no fill, italic. Reads as \"not yet a real chip\".",
-    "Cost: five axes of chips is a lot of screen before you reach the free-text field. Duration's five segments are tight at 430px.",
+    "Muting: dashed outline, no fill, italic — a treatment, not a location.",
+    "Cost: five axes of chips, now sitting under a full Timing block. This is the variant the added fields hurt most.",
   ],
   render() {
     const t = task();
-    return nav("Tags — axis blocks") + `<div class="scroll">
-      ${brief(A)}
+    return nav("Full task editor — axis blocks") + `<div class="scroll">
+      ${fitBar()}
+      ${commonFields()}
+      <div class="sec-h">Tags</div>
       <div class="stack">
       ${DIMS.map(d => d.type === "ord" ? `
         <div class="seg-wrap">
-          <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— needs no more than</span></div>
+          <div class="lbl">${esc(d.label)} <span class="soft">— needs no more than</span></div>
           <div class="seg">
             ${d.taskDef !== null ? `<button class="def" data-act="ord" data-k="${d.key}" data-v=""
                 aria-pressed="${t.dims[d.key] === undefined}">—</button>` : ""}
@@ -375,7 +640,7 @@ const A = {
             ? `<div class="hint">Chosen by hand. The <b>—</b> segment puts it back to the default.</div>` : ""}
         </div>` : `
         <div class="seg-wrap">
-          <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— all of these must hold in the window</span></div>
+          <div class="lbl">${esc(d.label)} <span class="soft">— all of these must hold in the window</span></div>
           <div class="chipset">${d.values.map(v => `<button data-act="cat" data-k="${d.key}" data-v="${esc(v)}"
             aria-pressed="${valuesOf(t,d).includes(v)}">${esc(v)}</button>`).join("")}</div>
         </div>`).join("")}
@@ -383,23 +648,21 @@ const A = {
         ${t.loose.length ? `<div class="lbl">Loose — kept, shown, ignored by matching</div>
           <div class="chipset">${t.loose.map(x => `<span class="pill loose">${esc(x)}</span>`).join("")}</div>` : ""}
       </div>
-      ${elsewhere("loose")}
-      <div class="note">The segmented control is the only one of the three that can show <b>a default it is
-        not using</b>. Duration proves the case: it declares no default, so its segmented row simply has no
-        default segment and the axis is visibly incomplete.</div>
-      <div class="btn-row"><button class="btn primary wide">Save</button></div></div>`;
+      ${createdLine()}
+      <div class="btn-row"><button class="btn primary wide">Save</button></div>
+      ${brief(A)}
+      ${elsewhere("loose")}</div>`;
   },
 };
 
 /* ============================ variant B ============================ */
 const B = {
   key:"B", name:"One field",
-  why:"Discoverability. You cannot learn <i>garage</i> exists by scrolling — which is how <code>#garge</code> happens in the first place.",
-  tagline:"No wall of chips. <b>One field at the top</b> is the whole entry surface; the registry answers as you type, and the two ordinal axes sit below as compact <b>steppers</b>.",
+  tagline:"No wall of chips. <b>One field</b> is the whole entry surface; the registry answers as you type, and the two ordinal axes sit below as compact <b>steppers</b>.",
   tradeoffs:[
-    "Ordinal control: <b>stepper</b>. Two taps of a fixed 34px target, no aiming — but you only ever see the current value, so the axis's range is invisible.",
+    "Ordinal control: <b>stepper</b>. Two taps of a fixed target, no aiming — but you only ever see the current value, so the axis's range is invisible.",
     "Inert signal: the <b>suggestion list itself</b>. A match shows a row naming its axis; no match shows a single \"keep as a loose tag\" row. The verdict is the thing you tap.",
-    "Muting: a solid chip in surface tone with a dashed leading dot. Quieter than A, and holds its shape next to real chips.",
+    "Muting: a solid chip in surface tone with a dashed leading dot.",
     "Cost: nothing is discoverable. You cannot learn <i>garage</i> exists by scrolling — you have to guess it, which is exactly how <code>#garge</code> happens.",
   ],
   render() {
@@ -418,8 +681,10 @@ const B = {
         <button data-act="loose"><span class="pill loose-b">#${esc(q)}</span>
           <span class="where">keep as loose</span></button></div>`;
     }
-    return nav("Tags — one field") + `<div class="scroll">
-      ${brief(B)}
+    return nav("Full task editor — one field") + `<div class="scroll">
+      ${fitBar()}
+      ${commonFields()}
+      <div class="sec-h">Tags</div>
       <div class="stack">
         <input class="field" id="draft" value="${esc(S.draft)}" placeholder="Type a tag…" autocomplete="off">
         ${sug || `<div class="verdict idle"><span class="mark"></span><span>Anything the registry doesn't know is kept as a loose tag — visible, and ignored by matching.</span></div>`}
@@ -431,9 +696,6 @@ const B = {
           ${DIMS.filter(d => d.type === "cat").every(d => !valuesOf(t,d).length) && !t.loose.length
             ? `<span class="hint">Nothing yet — an untagged task fits everywhere.</span>` : ""}
         </div>
-      </div>
-      <div class="sec-h">Ordinal axes</div>
-      <div class="stack">
         ${DIMS.filter(d => d.type === "ord").map(d => {
           const i = d.values.indexOf(t.dims[d.key]), unset = i < 0;
           return `<div class="seg-wrap"><div class="lbl">${esc(d.label)}</div>
@@ -446,23 +708,22 @@ const B = {
             </div></div>`;
         }).join("")}
       </div>
-      ${elsewhere("loose-b")}
-      <div class="note">A stepper hides the value set, which is fine for <b>Mental energy</b> (three values you
-        already know) and worse for <b>Duration</b> (five, and the one you must get right).</div>
-      <div class="btn-row"><button class="btn primary wide">Save</button></div></div>`;
+      ${createdLine()}
+      <div class="btn-row"><button class="btn primary wide">Save</button></div>
+      ${brief(B)}
+      ${elsewhere("loose-b")}</div>`;
   },
 };
 
 /* ============================ variant C ============================ */
 const C = {
   key:"C", name:"The sentence",
-  why:"The more elegant presentation, and the one that best teaches what a Tag <i>means</i> — but its elegance is bought by saving space, and this screen is not short of space once the brief above and the list below are taken away. It would read as <b>shy</b> of showing you what you need to see.",
   tagline:"Tags render as the constraint sentence CONTEXT.md insists they are — <i>\"this cannot be done without…\"</i>. Each blank opens a sheet; ordinal axes are a <b>slider</b> in that sheet.",
   tradeoffs:[
-    "Ordinal control: <b>slider</b> with labelled ticks. Reads as a magnitude, which matches \"no more than this much\" — but a slider has <b>no unset position</b>, so the default needs its own switch above it. That extra control is the finding.",
-    "Inert signal: structural. A loose tag <b>cannot enter the sentence</b> — it drops to a shelf underneath, which says \"means nothing yet\" without any wording at all.",
-    "Muting: not a chip treatment but a <b>place</b>. Nothing muted ever sits beside a real chip in the editor.",
-    "Cost: the sentence is the only surface that teaches what a tag <i>means</i>, and the most expensive to edit — every change is a sheet.",
+    "Ordinal control: <b>slider</b> with labelled ticks. Reads as a magnitude, which matches \"no more than this much\" — but a slider has <b>no absence position</b>, so the default needs its own switch above it. That extra control is the finding.",
+    "Inert signal: structural. A loose tag <b>cannot enter the sentence</b> — it drops to a shelf underneath.",
+    "Muting: not a chip treatment but a <b>place</b>.",
+    "Cost: every change is a sheet. Its gain is that it stays the same height however many axes the registry grows to.",
   ],
   slot(d) {
     const t = task(), v = valuesOf(t, d);
@@ -472,8 +733,10 @@ const C = {
   },
   render() {
     const t = task(), dur = t.dims.duration, en = t.dims.energy;
-    return nav("Tags — the sentence") + `<div class="scroll">
-      ${brief(C)}
+    return nav("Full task editor — the sentence") + `<div class="scroll">
+      ${fitBar()}
+      ${commonFields()}
+      <div class="sec-h">Tags</div>
       <div class="card"><div class="sentence">
         Do it at ${this.slot(dim("location"))},
         with ${this.slot(dim("who"))},
@@ -489,11 +752,10 @@ const C = {
           ? t.loose.map(x => `<span class="pill loose">${esc(x)}</span>`).join("")
           : `<span class="hint">Empty. Tags here are kept and shown, and matching ignores them.</span>`}</div>
       </div>
-      ${elsewhere("loose")}
-      <div class="note">The sentence only reads correctly because a Tag on a Task <b>is</b> a constraint. It
-        also exposes the one thing the other two hide: a blank slot is a sentence with a hole in it, which is
-        harder to leave than an unpressed chip.</div>
-      <div class="btn-row"><button class="btn primary wide">Save</button></div></div>`;
+      ${createdLine()}
+      <div class="btn-row"><button class="btn primary wide">Save</button></div>
+      ${brief(C)}
+      ${elsewhere("loose")}</div>`;
   },
   sheet() {
     const d = dim(S.sheet), t = task();
@@ -530,10 +792,12 @@ function render() {
   const V = VARIANTS[S.variant];
   document.getElementById("device").innerHTML =
     V.render() + (S.variant === "C" && S.sheet ? C.sheet() : "");
-  const keys = Object.keys(VARIANTS);
   document.getElementById("switcher").innerHTML =
     `<button data-nav="-1">‹</button><div class="cur">${V.key} — ${V.name}
-      <small>tag entry · #38 · ?variant=${V.key}</small></div><button data-nav="1">›</button>`;
+      <small>#38 · ?variant=${V.key}</small></div><button data-nav="1">›</button>
+     <div class="div"></div>
+     <button data-task="1" title="next fixture task">⧉</button>
+     <button data-scaffold="1" aria-pressed="${S.scaffold}" title="prototype commentary">ⓘ</button>`;
   const f = document.getElementById("draft");
   if (f && S.focusDraft) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
 }
@@ -549,6 +813,12 @@ function go(delta) {
 document.addEventListener("click", e => {
   const nav = e.target.closest("[data-nav]");
   if (nav) return go(+nav.dataset.nav);
+  if (e.target.closest("[data-task]")) {
+    const i = TASKS.findIndex(x => x.id === S.id);
+    S.id = TASKS[(i + 1) % TASKS.length].id; S.draft = ""; S.sheet = null; return render();
+  }
+  if (e.target.closest("[data-scaffold]")) { S.scaffold = !S.scaffold; return render(); }
+
   const el = e.target.closest("[data-act]"); if (!el) return;
   const t = task(), k = el.dataset.k, v = el.dataset.v;
   switch (el.dataset.act) {
@@ -572,6 +842,22 @@ document.addEventListener("click", e => {
       if (n.length > 1 && !t.loose.includes(n)) t.loose.push(n);
       S.draft = ""; break;
     }
+    case "st": t.st = v; break;
+    case "timing":
+      t.timing = v;
+      // Recurrence generates the Deadline, and a recurring Task's Defer must be an offset.
+      if (v === "recur" && t.defer.mode === "date") t.defer.mode = "offset";
+      break;
+    case "reckind": t.rec.kind = v; break;
+    case "recn": t.rec.n = Math.max(1, t.rec.n + (+el.dataset.dir)); break;
+    case "recunit": t.rec.unit = v; break;
+    case "recday":
+      t.rec.days = t.rec.days.includes(v) ? t.rec.days.filter(x => x !== v) : t.rec.days.concat([v]);
+      break;
+    case "defer": t.defer.mode = v; break;
+    case "defn": t.defer.n = Math.max(1, t.defer.n + (+el.dataset.dir)); break;
+    case "defunit": t.defer.unit = v; break;
+    case "unpostpone": t.postpone = null; break;
     case "sheet": S.sheet = k; break;
     case "close": S.sheet = null; break;
   }
@@ -579,11 +865,12 @@ document.addEventListener("click", e => {
 });
 
 document.addEventListener("input", e => {
-  if (e.target.id === "draft") { S.draft = e.target.value; S.focusDraft = true; render(); }
-  if (e.target.dataset && e.target.dataset.act === "range") {
-    const d = dim(e.target.dataset.k);
-    setOrd(task(), d, d.values[+e.target.value]); render();
-  }
+  const t = task();
+  if (e.target.id === "draft") { S.draft = e.target.value; S.focusDraft = true; return render(); }
+  const act = e.target.dataset && e.target.dataset.act;
+  if (act === "range") { const d = dim(e.target.dataset.k); setOrd(t, d, d.values[+e.target.value]); return render(); }
+  if (act === "deadline") { t.deadline = e.target.value; if (!t.deadline && t.defer.mode === "offset") t.defer.mode = "none"; return render(); }
+  if (act === "deferdate") { t.defer.date = e.target.value; }
 });
 
 document.addEventListener("keydown", e => {
