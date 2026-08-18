@@ -14,12 +14,21 @@
     B — One field       search-first; the registry answers as you type; ordinal = STEPPER
     C — The sentence    tags read as the constraint sentence; blanks open sheets; ordinal = SLIDER
 
-  ROUND 2. Round 1 chose A on the grounds that the Task edit screen has room to show
-  everything, so C's space-saving elegance would read as SHY. That was judged against a
-  screen missing HALF ITS FIELDS — no Deadline, Defer, Postpone, Recurrence or CreatedAt —
-  so the density claim that decided it was never actually tested. Now:
+  VERDICT: C — THE SENTENCE. Reached in three rounds, and the first two were wrong
+  because the screen was wrong. Round 1 chose A on the grounds that the Task edit screen
+  had room to show everything, so C would read as SHY — but that was judged against a
+  screen missing half its fields (no Deadline, Defer, Postpone, Recurrence, CreatedAt or
+  Opportunities). Round 2 added them all and reversed the density picture. Round 3 moved
+  Tags above Timing, which is what finally made A and C comparable, and C won there.
+  The lesson is about the method, not the widgets: a UI variant judged on density is
+  being judged against whatever else is on the screen, so the screen has to be real
+  first. Folded into CONTEXT.md; A and B kept here as the argument.
+
+  The rounds, for the record:
     - every field from CONTEXT.md § Task is present, rendered IDENTICALLY in all three
       variants, because only the tag section is under test
+    - KNOWN DEFECT, not this prototype's to fix: the native date input's picker
+      dismisses itself in under a second on Mobile Safari. Tracked separately
     - the prototype's own commentary and the example list are OFF by default (the ⓘ
       button), so what you see on load is the screen's own density and nothing else
     - the ⧉ button cycles the fixture tasks: live, postponed, recurring, UNPROCESSED
@@ -158,6 +167,9 @@
   .fitbar.scarce .n { color:var(--now); }
   .fitbar.scarce .which { color:var(--now); }
   .fitbar.gated { background:var(--surface-2); }
+  .fitbar.done { background:var(--accent-soft); border-bottom-color:var(--accent); color:var(--accent); }
+  .fitbar.done .n { color:var(--accent); }
+  .fitbar.done .which { color:var(--accent); }
   /* Flags are facts about the Task, so they stay solid — never a washed-out chip on a
      washed-out bar. (--now-soft was semi-transparent in dark; it isn't any more.) */
   .fitbar .flag { background:var(--surface); color:inherit; border:1px solid currentColor;
@@ -613,7 +625,7 @@ function fitBar() {
   const n = opportunities(t), bl = blockers(t);
   // #37: a gated Task is never an Orphan. The count is still shown — it is a fact about
   // the tags — but the bar says plainly that nothing is being matched right now.
-  const cls = stale ? "scarce" : gate ? "gated" : n === 0 ? "orphan" : n <= 2 ? "scarce" : "";
+  const cls = t.done ? "done" : stale ? "scarce" : gate ? "gated" : n === 0 ? "orphan" : n <= 2 ? "scarce" : "";
   const flags = [
     unproc ? "Unprocessed" : "",
     stale ? "Stale" : "",
@@ -662,7 +674,9 @@ function elsewhere(looseClass) {
 }
 function brief(v) {
   if (!S.scaffold) return "";
-  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)}</h3>${v.tagline}
+  const won = v.key === "C";
+  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)}
+      <span class="pill ${won ? "dim" : ""}">${won ? "chosen" : "not chosen"}</span></h3>${v.tagline}
     <ul>${v.tradeoffs.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
 }
 function freeField(placeholder) {

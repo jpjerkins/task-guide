@@ -20,7 +20,8 @@ corrected the Orphan Task entry, and
 [Reactive postpone from a reminder](https://github.com/jpjerkins/task-guide/issues/19), which added
 Postpone, sharpened what Defer means, and repaired the `Stale` age rule, and
 [Tag entry control specifics](https://github.com/jpjerkins/task-guide/issues/38), which made the
-derived controls concrete and settled how inertness reads at entry and at rest, and
+derived controls concrete — Tags are authored as a constraint sentence — and settled how inertness
+reads at entry and at rest, and
 [Dimension registry mechanics](https://github.com/jpjerkins/task-guide/issues/21), which rewrote Tag
 and extended Dimension, and split the old Scarcity entry into **Opportunities** (the count) and
 **Scarcity** (the rule that ranks on it), and
@@ -375,12 +376,26 @@ new Dimension appears in the UI with nothing further to declare, and "adding a D
 change" stays true rather than becoming "a code change plus a UI decision". This is **Availability
 Window** editing's rule about derived values, applied to the editor instead of the schedule.
 
-Concretely: **every axis is shown with its whole value set**, categorical as chips, ordinal as a
-segmented control. An ordinal axis's segmented control carries **one segment per declared value plus a
-leading segment for absence**, because a Dimension that declares a default makes *unset* and
-*deliberately set to the default value* two different states of the record, and a control that cannot
-tell them apart cannot set either one on purpose. An axis declaring no default — **Duration** — simply
-has no leading segment, so an unset Duration reads as an incomplete axis rather than as a silent one.
+Concretely, the Task editor renders its Tags as **the constraint sentence they already are** — *"Do it
+at **the garage**, with **nobody**, when it is **dry**. It takes **30 min** and needs no more than
+**medium** attention."* Each value is a **slot**; tapping one opens that Dimension's picker, and the
+picker is what the algebra derives: categorical axes offer their values as a multi-select, ordinal
+axes as a slider over the ordered value set. An axis with no value reads as a **blank in a sentence**,
+which is harder to leave than an unpressed chip.
+
+Two consequences worth stating, because they are the reasons this shape was chosen over showing every
+axis with its whole value set:
+
+- **The editor's height does not grow with the registry.** Adding a Dimension lengthens the sentence
+  by a few words rather than adding a block of chips, so "adding a Dimension is a code change" stays
+  true of the *screen* as well as of the data. This is what decided it: the Task editor also carries
+  Title, Notes, the whole Timing block and the **Opportunities** readout, and the axes are the part
+  that grows without bound.
+- **An ordinal slider needs an explicit control for absence.** A Dimension declaring a default makes
+  *unset* and *deliberately set to the default value* two different states of the record, and a slider
+  has no position for the first. Its picker therefore carries a separate **"leave at the default"**
+  control above the slider. **Duration** declares no default, so it has none — an unset Duration is
+  simply a blank in the sentence, which reads as incomplete rather than silent.
 
 Known Dimensions (illustrative — the registry is authoritative):
 
@@ -457,12 +472,18 @@ set. An **ordinal** Dimension holds one, so a loose Tag it claims is taken up **
 has no value on that record** — a value chosen deliberately is never overruled by one that was loose.
 Such a Tag stays loose, stays visible, and is one tap from being set by hand.
 
-Inertness is **visible wherever Tags render** — a loose Tag is drawn muted: no fill, a dashed outline
-and italic text, against the solid fill a Dimension value carries. The muting is a **treatment, not a
-location** — a loose Tag sits among the Tags it was entered beside rather than being exiled to a tray,
-because where a Tag *sits* is a claim about the Task, and inertness is a statement about the registry.
-Entry says the same thing one step earlier: the free-text field names the Dimension that will claim
-what is being typed, or says plainly that nothing will, **before the Tag is committed**. This is the only symptom a
+Inertness is **visible wherever Tags render**, in two ways that say the same thing:
+
+- **In the Task editor, structurally.** A loose Tag **cannot enter the constraint sentence** — there is
+  no slot for it, because it constrains nothing — so it drops to a **shelf** beneath. The sentence is
+  what the system will act on; the shelf is what it is holding. Nothing has to be worded, and the
+  muting cannot be misread as decoration.
+- **Everywhere Tags render as chips** — task lists, Window editors — a loose Tag is drawn **muted**: no
+  fill, a dashed outline, italic, against the solid fill a Dimension value carries.
+
+Entry says it a step earlier still: as a Tag is typed, the free-text field **names the Dimension that
+will claim it, or says plainly that nothing will, before it is committed**. This is the only moment
+the system can catch a mistyped Tag, which is otherwise invisible to every mechanism in this document. This is the only symptom a
 mistyped Tag ever produces: `#garge` claims nothing, constrains nothing, and so admits the Task to
 **more** Windows than the Tag its author meant, which raises its **Opportunities** and sinks it in the
 rank. The correctly spelled Tag would have been caught as an **Orphan Task**; the typo is invisible to
