@@ -1,0 +1,576 @@
+<title>task-guide — tag entry variants</title>
+
+<!--
+  PROTOTYPE — throwaway. Not production code.
+  Question: what are the concrete controls for tag entry?
+    1. ordinal axis — slider vs segmented vs stepper
+    2. how the free-text field says "this will be inert" BEFORE commit
+    3. how a muted (loose) tag reads next to normal chips
+  Three structurally different shapes for the TAG SECTION of the task editor,
+  mounted inside the settled shell from #12. Switchable via ?variant=A|B|C.
+  Ticket: https://github.com/jpjerkins/task-guide/issues/38
+  Companions: ui-screens.prototype.html (#12), schedule-editing.prototype.html (#17).
+  In-memory only. No persistence, no tests, no error handling.
+
+    A — Axis blocks     every axis always visible; ordinal = SEGMENTED with an explicit default segment
+    B — One field       search-first; the registry answers as you type; ordinal = STEPPER
+    C — The sentence    tags read as the constraint sentence; blanks open sheets; ordinal = SLIDER
+
+  Nothing here reopens a decision. Registry rules obeyed as settled in #21 / CONTEXT.md:
+    - tags are lowercase
+    - a value name belongs to exactly one Dimension, so the STRING ALONE resolves it
+    - a loose tag an ordinal axis claims is taken up only if that axis is unset
+-->
+
+<style>
+  :root, :root[data-theme="light"] {
+    --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2; --surface-3:#DFE4EA;
+    --ink:#13171C; --ink-2:#586373; --ink-3:#8A93A1;
+    --line:#DFE4EA; --line-soft:#EDF0F4;
+    --accent:#276B5B; --accent-ink:#FFFFFF; --accent-soft:#DFEDE8;
+    --now:#8A5A0B; --now-soft:#FAEFDA;
+    --danger:#A2322A; --danger-soft:#F8E5E3;
+    --scaffold-bg:#13171C; --scaffold-ink:#F4F6F8; --scaffold-line:#3A4350;
+    --shadow:0 1px 2px rgba(19,23,28,.06), 0 8px 28px rgba(19,23,28,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0E1216; --surface:#171C22; --surface-2:#20262E; --surface-3:#2A323B;
+      --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
+      --line:#252C34; --line-soft:#1E242B;
+      --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
+      --now:#D9A448; --now-soft:#32281433;
+      --danger:#E0837A; --danger-soft:#3A211E;
+      --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1216; --surface:#171C22; --surface-2:#20262E; --surface-3:#2A323B;
+    --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
+    --line:#252C34; --line-soft:#1E242B;
+    --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
+    --now:#D9A448; --now-soft:#32281433;
+    --danger:#E0837A; --danger-soft:#3A211E;
+    --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column; align-items:center; min-height:100dvh;
+  }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .stage { flex:1; width:100%; display:flex; justify-content:center; padding:0; }
+  .device {
+    position:relative; width:100%; max-width:430px; height:calc(100dvh - 60px);
+    background:var(--ground); overflow:hidden; display:flex; flex-direction:column;
+  }
+  @media (min-width:600px) {
+    .stage { padding:26px 16px 0; }
+    .device { height:min(880px, calc(100dvh - 92px)); border:1px solid var(--line);
+      border-radius:30px; box-shadow:var(--shadow); }
+  }
+  .scroll { flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+
+  /* ---- shell chrome (settled in #12, not under test here) ---- */
+  .nav { display:flex; flex-direction:column; padding:14px 16px 10px;
+    background:var(--surface); border-bottom:1px solid var(--line); flex:none; }
+  .nav-main { display:flex; align-items:center; gap:10px; min-height:32px; }
+  .nav h1 { font-size:21px; letter-spacing:-.02em; margin:0; flex:1; min-width:0; }
+  .nav .sub { font-size:12px; color:var(--ink-2); margin:3px 0 0; }
+  .nav .back { background:none; border:none; padding:0 2px 0 0; color:var(--accent);
+    font-size:15px; font-weight:600; }
+
+  .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3);
+    font-weight:700; padding:20px 16px 7px; }
+  .stack { display:flex; flex-direction:column; gap:8px; padding:6px 16px 4px; }
+  .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); font-weight:650; }
+  .hint { font-size:12px; color:var(--ink-2); line-height:1.45; }
+  .note { font-size:12px; color:var(--ink-2); line-height:1.5; margin:14px 16px 0;
+    padding:11px 13px; background:var(--surface-2); border-radius:11px; }
+  .note b { color:var(--ink); }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    margin:0 16px 10px; padding:12px 13px; }
+
+  input.field, textarea.field {
+    width:100%; font:inherit; font-size:16px; padding:11px 12px; color:var(--ink);
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+  }
+  input.field::placeholder { color:var(--ink-3); }
+
+  /* ---- chips ---- */
+  .chipset { display:flex; flex-wrap:wrap; gap:7px; }
+  .chipset button {
+    background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2);
+    padding:8px 12px; border-radius:99px; font-size:14px;
+  }
+  .chipset button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
+    color:var(--accent-ink); font-weight:600; }
+
+  .pill { display:inline-flex; align-items:center; gap:5px; font-size:12px; padding:3px 9px;
+    border-radius:99px; background:var(--surface-2); color:var(--ink-2); border:1px solid transparent; }
+  .pill.dim { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  /* the muting treatment — deliberately different per variant, see each variant's notes */
+  .pill.loose { background:transparent; color:var(--ink-3); border:1px dashed var(--line);
+    font-style:italic; }
+  .pill.loose-b { background:var(--surface-2); color:var(--ink-3); border:1px solid var(--line-soft); }
+  .pill.loose-b::before { content:""; width:6px; height:6px; border-radius:99px;
+    border:1px dashed var(--ink-3); }
+
+  .row { display:flex; gap:11px; align-items:flex-start; padding:11px 14px;
+    background:var(--surface); border-bottom:1px solid var(--line-soft); }
+  .row .body { flex:1; min-width:0; }
+  .row .title { font-size:15px; line-height:1.3; }
+  .row .meta { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .tick { width:22px; height:22px; border-radius:99px; border:1.5px solid var(--line);
+    background:none; flex:none; margin-top:1px; }
+
+  /* ---- A: segmented ---- */
+  .seg { display:flex; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:11px; padding:3px; gap:3px; }
+  .seg button { flex:1; border:none; background:none; color:var(--ink-2); font-size:13px;
+    padding:9px 4px; border-radius:8px; white-space:nowrap; }
+  .seg button[aria-pressed="true"] { background:var(--surface); color:var(--ink); font-weight:650;
+    box-shadow:0 1px 2px rgba(0,0,0,.10); }
+  .seg button.def { color:var(--ink-3); flex:0 0 40px; font-size:16px; }
+  .seg button.def[aria-pressed="true"] { color:var(--ink-2); }
+  .seg-wrap { display:flex; flex-direction:column; gap:5px; }
+
+  /* ---- B: stepper + typeahead ---- */
+  .step { display:flex; align-items:center; gap:10px; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:11px; padding:6px 8px; }
+  .step .val { flex:1; text-align:center; font-size:15px; font-weight:600; }
+  .step .val.unset { color:var(--ink-3); font-weight:400; font-style:italic; }
+  .step .bump { width:34px; height:34px; border-radius:9px; border:1px solid var(--line);
+    background:var(--surface); font-size:17px; line-height:1; }
+  .step .bump[disabled] { opacity:.32; cursor:default; }
+  .sug { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface); }
+  .sug button { display:flex; width:100%; align-items:center; gap:9px; text-align:left;
+    background:none; border:none; border-bottom:1px solid var(--line-soft); padding:11px 12px; font-size:15px; }
+  .sug button:last-child { border-bottom:none; }
+  .sug .where { margin-left:auto; font-size:11px; color:var(--ink-3); text-transform:uppercase;
+    letter-spacing:.06em; }
+
+  /* ---- C: the sentence ---- */
+  .sentence { font-size:19px; line-height:1.75; letter-spacing:-.01em; }
+  .slot { display:inline-flex; align-items:center; background:var(--accent-soft); color:var(--accent);
+    border:none; font-weight:650; padding:2px 10px; border-radius:8px; font-size:18px; }
+  .slot.empty { background:none; color:var(--ink-3); border-bottom:2px dashed var(--line);
+    border-radius:0; font-weight:400; font-style:italic; padding:0 4px; }
+  .shelf { border:1px dashed var(--line); border-radius:13px; padding:11px 12px; margin:0 16px; }
+  .shelf .sh-h { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--ink-3); font-weight:700; margin-bottom:8px; }
+  .range { width:100%; accent-color:var(--accent); }
+  .ticks { display:flex; justify-content:space-between; font-size:11px; color:var(--ink-3); margin-top:2px; }
+
+  /* ---- verdict line under the free-text field ---- */
+  .verdict { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; line-height:1.45;
+    padding:9px 11px; border-radius:10px; }
+  .verdict .mark { font-weight:700; flex:none; }
+  .verdict.claimed { background:var(--accent-soft); color:var(--accent); }
+  .verdict.inert { background:var(--surface-2); color:var(--ink-2); }
+  .verdict.idle { background:none; color:var(--ink-3); padding:2px 2px; }
+  .verdict b { color:inherit; }
+
+  /* ---- sheet ---- */
+  .scrim { position:absolute; inset:0; background:rgba(8,12,16,.42); z-index:8; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; z-index:9; background:var(--surface);
+    border-radius:20px 20px 0 0; box-shadow:var(--shadow); max-height:82%; display:flex;
+    flex-direction:column; padding-bottom:12px; }
+  .sheet-h { display:flex; align-items:center; gap:10px; padding:14px 16px 8px; }
+  .sheet-h h2 { margin:0; font-size:17px; flex:1; letter-spacing:-.01em; }
+  .sheet-h button { background:none; border:none; color:var(--accent); font-weight:600; font-size:15px; }
+  .grabber { width:34px; height:4px; border-radius:9px; background:var(--surface-3); margin:8px auto 0; }
+
+  .btn-row { padding:16px; }
+  .btn { border:1px solid var(--line); background:var(--surface); border-radius:12px;
+    padding:13px 16px; font-size:15px; font-weight:600; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.wide { width:100%; }
+
+  /* ---- prototype scaffolding (obviously not the design) ---- */
+  .switcher {
+    position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:50;
+    display:flex; align-items:center; gap:2px; background:var(--scaffold-bg); color:var(--scaffold-ink);
+    border-radius:99px; padding:4px; box-shadow:var(--shadow); font-size:13px; max-width:min(96vw,560px);
+  }
+  .switcher button { background:none; border:none; color:inherit; padding:7px 12px; border-radius:99px; }
+  .switcher .cur { padding:0 8px; font-weight:600; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; }
+  .switcher .cur small { display:block; font-weight:400; opacity:.62; font-size:11px; }
+  .brief { margin:0 16px 14px; padding:12px 14px; border:1px dashed var(--scaffold-line);
+    border-radius:13px; font-size:12.5px; line-height:1.55; color:var(--ink-2); }
+  .brief h3 { margin:0 0 5px; font-size:13px; color:var(--ink); letter-spacing:-.01em; }
+  .brief ul { margin:7px 0 0; padding-left:17px; }
+  .brief li { margin:3px 0; }
+</style>
+
+<div class="stage"><div class="device" id="device"></div></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+/* ============================ registry ============================ */
+// Declared in code, no UI (CONTEXT.md § Dimension). Values are lowercase and
+// globally unique across the registry, which is what lets a bare string resolve.
+const DIMS = [
+  { key:"duration", label:"Duration", type:"ord", taskDef:null,
+    values:["2 min","10 min","30 min","1 hour","longer"], short:["2m","10m","30m","1h","longer"] },
+  { key:"energy", label:"Mental energy", type:"ord", taskDef:"low",
+    values:["low","medium","high"], short:["low","medium","high"] },
+  { key:"location", label:"Location", type:"cat",
+    values:["home","desk","garage","outside","out & about"] },
+  { key:"who", label:"With whom", type:"cat", values:["sam","ana","kids"] },
+  { key:"weather", label:"Weather", type:"cat", values:["dry","fine"] },
+];
+const dim = k => DIMS.find(d => d.key === k);
+
+// The whole of tag resolution: one lookup, no qualification, no ambiguity.
+function resolve(raw) {
+  const s = String(raw).trim().replace(/^#/, "").toLowerCase();
+  if (!s) return null;
+  for (const d of DIMS) {
+    const i = d.values.findIndex(v => v.toLowerCase() === s);
+    if (i >= 0) return { d, value:d.values[i] };
+  }
+  return null;
+}
+
+/* ============================ fixture ============================ */
+const TASKS = [
+  { id:1, t:"Reseal the garage door", dims:{ duration:"30 min", energy:"medium", location:["garage"], weather:["dry"] },
+    loose:["#springjob","#garge"] },
+  { id:2, t:"Book the tournament hotel", dims:{ duration:"10 min", location:["desk"] },
+    loose:["#placetostay"] },
+  { id:3, t:"Kick a ball about with the kids", dims:{ duration:"1 hour", location:["outside"], who:["kids"] },
+    loose:[] },
+];
+const S = { variant:"A", id:1, draft:"", sheet:null };
+const task = () => TASKS.find(t => t.id === S.id);
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const valuesOf = (t, d) => { const v = t.dims[d.key]; return v === undefined ? [] : (Array.isArray(v) ? v.slice() : [v]); };
+
+function toggleCat(t, d, v) {
+  const cur = valuesOf(t, d);
+  const next = cur.includes(v) ? cur.filter(x => x !== v) : cur.concat([v]);
+  if (next.length) t.dims[d.key] = next; else delete t.dims[d.key];
+}
+function setOrd(t, d, v) { if (v === null) delete t.dims[d.key]; else t.dims[d.key] = v; }
+
+// Committing the free-text field. This is the whole entry rule from #21, live:
+// a claimed string lands on its Dimension; anything else lands in the loose bag.
+// An ordinal axis that already holds a value does NOT take the tag — it stays loose.
+function commitDraft() {
+  const raw = S.draft.trim(); if (!raw) return;
+  const t = task(), r = resolve(raw);
+  if (r && r.d.type === "cat") {
+    if (!valuesOf(t, r.d).includes(r.value)) toggleCat(t, r.d, r.value);
+  } else if (r && r.d.type === "ord" && t.dims[r.d.key] === undefined) {
+    setOrd(t, r.d, r.value);
+  } else {
+    const norm = "#" + raw.replace(/^#/, "").toLowerCase();
+    if (!t.loose.includes(norm)) t.loose.push(norm);
+  }
+  S.draft = ""; render();
+}
+
+/* ---- the verdict: what the field says BEFORE you commit ---- */
+function verdict(draft) {
+  const raw = draft.trim();
+  if (!raw) return { cls:"idle", mark:"", html:"A value the registry knows lands on its axis. Anything else is kept, shown, and ignored by matching." };
+  const r = resolve(raw), t = task();
+  if (r && r.d.type === "cat")
+    return { cls:"claimed", mark:"→", html:`<b>${esc(r.d.label)}</b> claims <b>${esc(r.value)}</b>. It will be set there — not a loose tag.` };
+  if (r && r.d.type === "ord" && t.dims[r.d.key] === undefined)
+    return { cls:"claimed", mark:"→", html:`<b>${esc(r.d.label)}</b> claims <b>${esc(r.value)}</b>, and that axis is unset, so it will be set there.` };
+  if (r)
+    return { cls:"inert", mark:"◇", html:`<b>${esc(r.d.label)}</b> claims <b>${esc(r.value)}</b>, but it already holds <b>${esc(t.dims[r.d.key])}</b> — a value chosen by hand is never overruled. This stays <b>loose</b>.` };
+  return { cls:"inert", mark:"◇", html:`No Dimension claims <b>${esc("#" + raw.replace(/^#/,"").toLowerCase())}</b>. It will be <b>kept and shown, but ignored by matching</b> until some Dimension declares it.` };
+}
+
+/* ============================ shared bits ============================ */
+function nav(sub) {
+  return `<div class="nav"><div class="nav-main"><button class="back">‹ Tasks</button></div>
+    <div class="nav-main"><h1>${esc(task().t)}</h1></div><div class="sub">${sub}</div></div>`;
+}
+// Every variant renders this: the same three tasks as list rows, so the muted
+// treatment can be judged where it actually has to survive — next to real chips.
+function elsewhere(looseClass) {
+  return `<div class="sec-h">How it reads in a list</div>` + TASKS.map(t => {
+    const pills = DIMS.filter(d => t.dims[d.key] !== undefined)
+      .map(d => `<span class="pill dim">${esc(Array.isArray(t.dims[d.key]) ? t.dims[d.key].join(" / ") : t.dims[d.key])}</span>`)
+      .concat(t.loose.map(x => `<span class="pill ${looseClass}">${esc(x)}</span>`)).join("");
+    return `<div class="row"><button class="tick"></button><div class="body">
+      <div class="title">${esc(t.t)}</div><div class="meta">${pills}</div></div></div>`;
+  }).join("");
+}
+function brief(v) {
+  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)}</h3>${v.tagline}
+    <ul>${v.tradeoffs.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
+}
+function freeField(placeholder) {
+  const vd = verdict(S.draft);
+  return `<div class="lbl">Add a tag</div>
+    <input class="field" id="draft" value="${esc(S.draft)}" placeholder="${esc(placeholder)}" autocomplete="off">
+    <div class="verdict ${vd.cls}"><span class="mark">${vd.mark}</span><span>${vd.html}</span></div>`;
+}
+
+/* ============================ variant A ============================ */
+const A = {
+  key:"A", name:"Axis blocks",
+  tagline:"Every axis is always on screen with all of its values. Ordinal axes are a <b>segmented control</b> carrying an explicit default segment, so \"unset\" is a thing you can point at.",
+  tradeoffs:[
+    "Ordinal control: <b>segmented</b>. The whole value set is visible, and the leading segment is the default — the only shape where <i>unset</i> and <i>low</i> are distinguishable at a glance.",
+    "Inert signal: a <b>verdict line</b> under the field, updating on every keystroke.",
+    "Muting: dashed outline, no fill, italic. Reads as \"not yet a real chip\".",
+    "Cost: five axes of chips is a lot of screen before you reach the free-text field. Duration's five segments are tight at 430px.",
+  ],
+  render() {
+    const t = task();
+    return nav("Tags — axis blocks") + `<div class="scroll">
+      ${brief(A)}
+      <div class="stack">
+      ${DIMS.map(d => d.type === "ord" ? `
+        <div class="seg-wrap">
+          <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— needs no more than</span></div>
+          <div class="seg">
+            ${d.taskDef !== null ? `<button class="def" data-act="ord" data-k="${d.key}" data-v=""
+                aria-pressed="${t.dims[d.key] === undefined}">—</button>` : ""}
+            ${d.values.map((v,i) => `<button data-act="ord" data-k="${d.key}" data-v="${esc(v)}"
+                aria-pressed="${t.dims[d.key] === v}">${esc(d.short[i])}</button>`).join("")}
+          </div>
+          ${d.taskDef === null && t.dims[d.key] === undefined
+            ? `<div class="hint" style="color:var(--danger)">Required — Duration is the one axis with no safe default.</div>`
+            : d.taskDef !== null && t.dims[d.key] === undefined
+            ? `<div class="hint">Unset — the window is matched against the default, <b>${esc(d.taskDef)}</b>.</div>`
+            : d.taskDef !== null
+            ? `<div class="hint">Chosen by hand. The <b>—</b> segment puts it back to the default.</div>` : ""}
+        </div>` : `
+        <div class="seg-wrap">
+          <div class="lbl">${esc(d.label)} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink-3)">— all of these must hold in the window</span></div>
+          <div class="chipset">${d.values.map(v => `<button data-act="cat" data-k="${d.key}" data-v="${esc(v)}"
+            aria-pressed="${valuesOf(t,d).includes(v)}">${esc(v)}</button>`).join("")}</div>
+        </div>`).join("")}
+        ${freeField("garage, sam, dry… or anything new")}
+        ${t.loose.length ? `<div class="lbl">Loose — kept, shown, ignored by matching</div>
+          <div class="chipset">${t.loose.map(x => `<span class="pill loose">${esc(x)}</span>`).join("")}</div>` : ""}
+      </div>
+      ${elsewhere("loose")}
+      <div class="note">The segmented control is the only one of the three that can show <b>a default it is
+        not using</b>. Duration proves the case: it declares no default, so its segmented row simply has no
+        default segment and the axis is visibly incomplete.</div>
+      <div class="btn-row"><button class="btn primary wide">Save</button></div></div>`;
+  },
+};
+
+/* ============================ variant B ============================ */
+const B = {
+  key:"B", name:"One field",
+  tagline:"No wall of chips. <b>One field at the top</b> is the whole entry surface; the registry answers as you type, and the two ordinal axes sit below as compact <b>steppers</b>.",
+  tradeoffs:[
+    "Ordinal control: <b>stepper</b>. Two taps of a fixed 34px target, no aiming — but you only ever see the current value, so the axis's range is invisible.",
+    "Inert signal: the <b>suggestion list itself</b>. A match shows a row naming its axis; no match shows a single \"keep as a loose tag\" row. The verdict is the thing you tap.",
+    "Muting: a solid chip in surface tone with a dashed leading dot. Quieter than A, and holds its shape next to real chips.",
+    "Cost: nothing is discoverable. You cannot learn <i>garage</i> exists by scrolling — you have to guess it, which is exactly how <code>#garge</code> happens.",
+  ],
+  render() {
+    const t = task(), q = S.draft.trim().replace(/^#/,"").toLowerCase();
+    let sug = "";
+    if (q) {
+      const hits = [];
+      DIMS.forEach(d => d.values.forEach(v => { if (v.toLowerCase().includes(q)) hits.push({ d, v }); }));
+      sug = `<div class="sug">
+        ${hits.slice(0,5).map(h => {
+          const blocked = h.d.type === "ord" && t.dims[h.d.key] !== undefined && t.dims[h.d.key] !== h.v;
+          return `<button data-act="pick" data-k="${h.d.key}" data-v="${esc(h.v)}">
+            <span>${esc(h.v)}</span>
+            <span class="where">${esc(h.d.label)}${blocked ? " · held" : ""}</span></button>`;
+        }).join("")}
+        <button data-act="loose"><span class="pill loose-b">#${esc(q)}</span>
+          <span class="where">keep as loose</span></button></div>`;
+    }
+    return nav("Tags — one field") + `<div class="scroll">
+      ${brief(B)}
+      <div class="stack">
+        <input class="field" id="draft" value="${esc(S.draft)}" placeholder="Type a tag…" autocomplete="off">
+        ${sug || `<div class="verdict idle"><span class="mark"></span><span>Anything the registry doesn't know is kept as a loose tag — visible, and ignored by matching.</span></div>`}
+        <div class="lbl">On this task</div>
+        <div class="chipset">
+          ${DIMS.filter(d => d.type === "cat").flatMap(d => valuesOf(t,d).map(v =>
+            `<button data-act="cat" data-k="${d.key}" data-v="${esc(v)}" aria-pressed="true">${esc(v)} ✕</button>`)).join("")}
+          ${t.loose.map(x => `<span class="pill loose-b">${esc(x)}</span>`).join("")}
+          ${DIMS.filter(d => d.type === "cat").every(d => !valuesOf(t,d).length) && !t.loose.length
+            ? `<span class="hint">Nothing yet — an untagged task fits everywhere.</span>` : ""}
+        </div>
+      </div>
+      <div class="sec-h">Ordinal axes</div>
+      <div class="stack">
+        ${DIMS.filter(d => d.type === "ord").map(d => {
+          const i = d.values.indexOf(t.dims[d.key]), unset = i < 0;
+          return `<div class="seg-wrap"><div class="lbl">${esc(d.label)}</div>
+            <div class="step">
+              <button class="bump" data-act="step" data-k="${d.key}" data-dir="-1" ${unset || i === 0 ? "disabled" : ""}>−</button>
+              <div class="val ${unset ? "unset" : ""}">${unset
+                ? (d.taskDef ? esc(d.taskDef) + " (default)" : "not set — required")
+                : esc(d.values[i])}</div>
+              <button class="bump" data-act="step" data-k="${d.key}" data-dir="1" ${!unset && i === d.values.length-1 ? "disabled" : ""}>+</button>
+            </div></div>`;
+        }).join("")}
+      </div>
+      ${elsewhere("loose-b")}
+      <div class="note">A stepper hides the value set, which is fine for <b>Mental energy</b> (three values you
+        already know) and worse for <b>Duration</b> (five, and the one you must get right).</div>
+      <div class="btn-row"><button class="btn primary wide">Save</button></div></div>`;
+  },
+};
+
+/* ============================ variant C ============================ */
+const C = {
+  key:"C", name:"The sentence",
+  tagline:"Tags render as the constraint sentence CONTEXT.md insists they are — <i>\"this cannot be done without…\"</i>. Each blank opens a sheet; ordinal axes are a <b>slider</b> in that sheet.",
+  tradeoffs:[
+    "Ordinal control: <b>slider</b> with labelled ticks. Reads as a magnitude, which matches \"no more than this much\" — but a slider has <b>no unset position</b>, so the default needs its own switch above it. That extra control is the finding.",
+    "Inert signal: structural. A loose tag <b>cannot enter the sentence</b> — it drops to a shelf underneath, which says \"means nothing yet\" without any wording at all.",
+    "Muting: not a chip treatment but a <b>place</b>. Nothing muted ever sits beside a real chip in the editor.",
+    "Cost: the sentence is the only surface that teaches what a tag <i>means</i>, and the most expensive to edit — every change is a sheet.",
+  ],
+  slot(d) {
+    const t = task(), v = valuesOf(t, d);
+    return v.length
+      ? `<button class="slot" data-act="sheet" data-k="${d.key}">${esc(v.join(" + "))}</button>`
+      : `<button class="slot empty" data-act="sheet" data-k="${d.key}">${esc(d.label.toLowerCase())}</button>`;
+  },
+  render() {
+    const t = task(), dur = t.dims.duration, en = t.dims.energy;
+    return nav("Tags — the sentence") + `<div class="scroll">
+      ${brief(C)}
+      <div class="card"><div class="sentence">
+        Do it at ${this.slot(dim("location"))},
+        with ${this.slot(dim("who"))},
+        when it is ${this.slot(dim("weather"))}.<br>
+        It takes <button class="slot ${dur ? "" : "empty"}" data-act="sheet" data-k="duration">${esc(dur || "how long?")}</button>
+        and needs no more than
+        <button class="slot ${en ? "" : "empty"}" data-act="sheet" data-k="energy">${esc(en || "low (default)")}</button> attention.
+      </div></div>
+      <div class="stack">${freeField("Add a tag…")}</div>
+      <div class="shelf">
+        <div class="sh-h">Shelf — means nothing yet</div>
+        <div class="chipset">${t.loose.length
+          ? t.loose.map(x => `<span class="pill loose">${esc(x)}</span>`).join("")
+          : `<span class="hint">Empty. Tags here are kept and shown, and matching ignores them.</span>`}</div>
+      </div>
+      ${elsewhere("loose")}
+      <div class="note">The sentence only reads correctly because a Tag on a Task <b>is</b> a constraint. It
+        also exposes the one thing the other two hide: a blank slot is a sentence with a hole in it, which is
+        harder to leave than an unpressed chip.</div>
+      <div class="btn-row"><button class="btn primary wide">Save</button></div></div>`;
+  },
+  sheet() {
+    const d = dim(S.sheet), t = task();
+    if (!d) return "";
+    let body;
+    if (d.type === "ord") {
+      const i = d.values.indexOf(t.dims[d.key]), unset = i < 0;
+      body = `<div class="stack">
+        ${d.taskDef !== null ? `<div class="chipset"><button data-act="ord" data-k="${d.key}" data-v=""
+            aria-pressed="${unset}">Leave at the default (${esc(d.taskDef)})</button></div>` : ""}
+        <input class="range" type="range" min="0" max="${d.values.length-1}" step="1"
+          value="${unset ? 0 : i}" data-act="range" data-k="${d.key}" ${unset ? 'style="opacity:.4"' : ""}>
+        <div class="ticks">${d.values.map(v => `<span>${esc(v)}</span>`).join("")}</div>
+        <div class="hint">${unset
+          ? `Nothing chosen — the slider is showing <b>${esc(d.values[0])}</b> but the task carries the default. Touch it to commit a value.`
+          : `Set to <b>${esc(d.values[i])}</b>.`}</div>
+      </div>`;
+    } else {
+      body = `<div class="stack"><div class="chipset">${d.values.map(v =>
+        `<button data-act="cat" data-k="${d.key}" data-v="${esc(v)}"
+          aria-pressed="${valuesOf(t,d).includes(v)}">${esc(v)}</button>`).join("")}</div>
+        <div class="hint">A categorical axis takes several — every one you add is another thing the window must declare.</div></div>`;
+    }
+    return `<div class="scrim" data-act="close"></div><div class="sheet"><div class="grabber"></div>
+      <div class="sheet-h"><h2>${esc(d.label)}</h2><button data-act="close">Done</button></div>
+      ${body}</div>`;
+  },
+};
+
+const VARIANTS = { A, B, C };
+
+/* ============================ render ============================ */
+function render() {
+  const V = VARIANTS[S.variant];
+  document.getElementById("device").innerHTML =
+    V.render() + (S.variant === "C" && S.sheet ? C.sheet() : "");
+  const keys = Object.keys(VARIANTS);
+  document.getElementById("switcher").innerHTML =
+    `<button data-nav="-1">‹</button><div class="cur">${V.key} — ${V.name}
+      <small>tag entry · #38 · ?variant=${V.key}</small></div><button data-nav="1">›</button>`;
+  const f = document.getElementById("draft");
+  if (f && S.focusDraft) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
+}
+
+function go(delta) {
+  const keys = Object.keys(VARIANTS);
+  const i = (keys.indexOf(S.variant) + delta + keys.length) % keys.length;
+  S.variant = keys[i]; S.sheet = null; S.draft = ""; S.focusDraft = false;
+  const u = new URL(location); u.searchParams.set("variant", S.variant);
+  history.replaceState(null, "", u); render();
+}
+
+document.addEventListener("click", e => {
+  const nav = e.target.closest("[data-nav]");
+  if (nav) return go(+nav.dataset.nav);
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const t = task(), k = el.dataset.k, v = el.dataset.v;
+  switch (el.dataset.act) {
+    case "cat": toggleCat(t, dim(k), v); break;
+    case "ord": setOrd(t, dim(k), v === "" ? null : v); break;
+    case "step": {
+      const d = dim(k), i = d.values.indexOf(t.dims[d.key]), dir = +el.dataset.dir;
+      if (i < 0) setOrd(t, d, d.values[0]);
+      else setOrd(t, d, d.values[Math.max(0, Math.min(d.values.length-1, i + dir))]);
+      break;
+    }
+    case "pick": {
+      const d = dim(k);
+      if (d.type === "cat") { if (!valuesOf(t,d).includes(v)) toggleCat(t, d, v); }
+      else if (t.dims[d.key] === undefined) setOrd(t, d, v);
+      else { const n = "#" + v.toLowerCase(); if (!t.loose.includes(n)) t.loose.push(n); }
+      S.draft = ""; break;
+    }
+    case "loose": {
+      const n = "#" + S.draft.trim().replace(/^#/,"").toLowerCase();
+      if (n.length > 1 && !t.loose.includes(n)) t.loose.push(n);
+      S.draft = ""; break;
+    }
+    case "sheet": S.sheet = k; break;
+    case "close": S.sheet = null; break;
+  }
+  S.focusDraft = false; render();
+});
+
+document.addEventListener("input", e => {
+  if (e.target.id === "draft") { S.draft = e.target.value; S.focusDraft = true; render(); }
+  if (e.target.dataset && e.target.dataset.act === "range") {
+    const d = dim(e.target.dataset.k);
+    setOrd(task(), d, d.values[+e.target.value]); render();
+  }
+});
+
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  if (typing) { if (e.key === "Enter" && t.id === "draft") { e.preventDefault(); commitDraft(); } return; }
+  if (e.key === "ArrowLeft") go(-1);
+  if (e.key === "ArrowRight") go(1);
+});
+
+S.variant = (new URL(location).searchParams.get("variant") || "A").toUpperCase();
+if (!VARIANTS[S.variant]) S.variant = "A";
+render();
+</script>
