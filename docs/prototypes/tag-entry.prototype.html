@@ -16,6 +16,12 @@
     B — One field       search-first; the registry answers as you type; ordinal = STEPPER
     C — The sentence    tags read as the constraint sentence; blanks open sheets; ordinal = SLIDER
 
+  VERDICT (2026-08-18): A wins, muting included. C's sentence was judged the more
+  elegant presentation, but elegance bought by saving space — and the Task edit screen
+  is not short of space once this prototype's own scaffolding (the brief above, the
+  example list below) is taken out. On the real screen C would read as SHY of showing
+  you what you need to see. Folded into CONTEXT.md; B and C kept here as the argument.
+
   Nothing here reopens a decision. Registry rules obeyed as settled in #21 / CONTEXT.md:
     - tags are lowercase
     - a value name belongs to exactly one Dimension, so the STRING ALONE resolves it
@@ -321,8 +327,14 @@ function elsewhere(looseClass) {
   }).join("");
 }
 function brief(v) {
-  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)}</h3>${v.tagline}
-    <ul>${v.tradeoffs.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
+  return `<div class="brief"><h3>${esc(v.key)} — ${esc(v.name)} ${v.won
+    ? `<span class="pill dim">chosen</span>`
+    : `<span class="pill">not chosen</span>`}</h3>${v.tagline}
+    <ul>${v.tradeoffs.map(x => `<li>${x}</li>`).join("")}</ul>
+    ${v.won
+      ? `<p style="margin:9px 0 0"><b>Chosen.</b> Shows every axis and its whole value set on a
+         screen that has the room for it.</p>`
+      : `<p style="margin:9px 0 0"><b>Not chosen.</b> ${v.why}</p>`}</div>`;
 }
 function freeField(placeholder) {
   const vd = verdict(S.draft);
@@ -333,7 +345,7 @@ function freeField(placeholder) {
 
 /* ============================ variant A ============================ */
 const A = {
-  key:"A", name:"Axis blocks",
+  key:"A", name:"Axis blocks", won:true,
   tagline:"Every axis is always on screen with all of its values. Ordinal axes are a <b>segmented control</b> carrying an explicit default segment, so \"unset\" is a thing you can point at.",
   tradeoffs:[
     "Ordinal control: <b>segmented</b>. The whole value set is visible, and the leading segment is the default — the only shape where <i>unset</i> and <i>low</i> are distinguishable at a glance.",
@@ -382,6 +394,7 @@ const A = {
 /* ============================ variant B ============================ */
 const B = {
   key:"B", name:"One field",
+  why:"Discoverability. You cannot learn <i>garage</i> exists by scrolling — which is how <code>#garge</code> happens in the first place.",
   tagline:"No wall of chips. <b>One field at the top</b> is the whole entry surface; the registry answers as you type, and the two ordinal axes sit below as compact <b>steppers</b>.",
   tradeoffs:[
     "Ordinal control: <b>stepper</b>. Two taps of a fixed 34px target, no aiming — but you only ever see the current value, so the axis's range is invisible.",
@@ -443,6 +456,7 @@ const B = {
 /* ============================ variant C ============================ */
 const C = {
   key:"C", name:"The sentence",
+  why:"The more elegant presentation, and the one that best teaches what a Tag <i>means</i> — but its elegance is bought by saving space, and this screen is not short of space once the brief above and the list below are taken away. It would read as <b>shy</b> of showing you what you need to see.",
   tagline:"Tags render as the constraint sentence CONTEXT.md insists they are — <i>\"this cannot be done without…\"</i>. Each blank opens a sheet; ordinal axes are a <b>slider</b> in that sheet.",
   tradeoffs:[
     "Ordinal control: <b>slider</b> with labelled ticks. Reads as a magnitude, which matches \"no more than this much\" — but a slider has <b>no unset position</b>, so the default needs its own switch above it. That extra control is the finding.",

@@ -19,6 +19,8 @@ entry, added Offset and an Event's Absence notice, and sharpened what an inert T
 corrected the Orphan Task entry, and
 [Reactive postpone from a reminder](https://github.com/jpjerkins/task-guide/issues/19), which added
 Postpone, sharpened what Defer means, and repaired the `Stale` age rule, and
+[Tag entry control specifics](https://github.com/jpjerkins/task-guide/issues/38), which made the
+derived controls concrete and settled how inertness reads at entry and at rest, and
 [Dimension registry mechanics](https://github.com/jpjerkins/task-guide/issues/21), which rewrote Tag
 and extended Dimension, and split the old Scarcity entry into **Opportunities** (the count) and
 **Scarcity** (the rule that ranks on it), and
@@ -373,6 +375,13 @@ new Dimension appears in the UI with nothing further to declare, and "adding a D
 change" stays true rather than becoming "a code change plus a UI decision". This is **Availability
 Window** editing's rule about derived values, applied to the editor instead of the schedule.
 
+Concretely: **every axis is shown with its whole value set**, categorical as chips, ordinal as a
+segmented control. An ordinal axis's segmented control carries **one segment per declared value plus a
+leading segment for absence**, because a Dimension that declares a default makes *unset* and
+*deliberately set to the default value* two different states of the record, and a control that cannot
+tell them apart cannot set either one on purpose. An axis declaring no default — **Duration** — simply
+has no leading segment, so an unset Duration reads as an incomplete axis rather than as a silent one.
+
 Known Dimensions (illustrative — the registry is authoritative):
 
 | Dimension | Algebra | Defaults |
@@ -448,7 +457,12 @@ set. An **ordinal** Dimension holds one, so a loose Tag it claims is taken up **
 has no value on that record** — a value chosen deliberately is never overruled by one that was loose.
 Such a Tag stays loose, stays visible, and is one tap from being set by hand.
 
-Inertness is **visible wherever Tags render** — a loose Tag is drawn muted. This is the only symptom a
+Inertness is **visible wherever Tags render** — a loose Tag is drawn muted: no fill, a dashed outline
+and italic text, against the solid fill a Dimension value carries. The muting is a **treatment, not a
+location** — a loose Tag sits among the Tags it was entered beside rather than being exiled to a tray,
+because where a Tag *sits* is a claim about the Task, and inertness is a statement about the registry.
+Entry says the same thing one step earlier: the free-text field names the Dimension that will claim
+what is being typed, or says plainly that nothing will, **before the Tag is committed**. This is the only symptom a
 mistyped Tag ever produces: `#garge` claims nothing, constrains nothing, and so admits the Task to
 **more** Windows than the Tag its author meant, which raises its **Opportunities** and sinks it in the
 rank. The correctly spelled Tag would have been caught as an **Orphan Task**; the typo is invisible to
