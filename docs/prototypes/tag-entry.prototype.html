@@ -22,8 +22,15 @@
       variants, because only the tag section is under test
     - the prototype's own commentary and the example list are OFF by default (the ⓘ
       button), so what you see on load is the screen's own density and nothing else
-    - the ⧉ button cycles the fixture tasks, which exercise the one-off, the recurring
-      and the postponed cases
+    - the ⧉ button cycles the fixture tasks: live, postponed, recurring, UNPROCESSED
+      (no Duration) and STALE (undeadlined, 59 days old)
+    - TAGS sit directly under Notes, above Timing — Timing is set once, Tags are the
+      everyday surface (GTD contexts)
+    - STATUS IS DERIVED, NOT TYPED. Done is the only bit the editor authors, as a
+      checkbox beside the title, disabled while the Task is Unprocessed. Unprocessed
+      and Stale are computed and surface as chips in the Opportunities bar. This is a
+      DEPARTURE from CONTEXT.md § Status, which declares four exclusive typed values —
+      flagged on the ticket, not folded in
     - the OPPORTUNITIES count is live and sticky, computed by the real matching rule
       against a week of fixture Windows — it is a consequence of the tags below it,
       so it has to stay visible while they are edited
@@ -55,7 +62,7 @@
       --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
       --line:#252C34; --line-soft:#1E242B;
       --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
-      --now:#D9A448; --now-soft:#32281433;
+      --now:#D9A448; --now-soft:#2E2413;
       --danger:#E0837A; --danger-soft:#3A211E;
       --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
@@ -66,7 +73,7 @@
     --ink:#E6EAEF; --ink-2:#98A2AF; --ink-3:#6C7684;
     --line:#252C34; --line-soft:#1E242B;
     --accent:#5CBBA0; --accent-ink:#08211B; --accent-soft:#16302A;
-    --now:#D9A448; --now-soft:#32281433;
+    --now:#D9A448; --now-soft:#2E2413;
     --danger:#E0837A; --danger-soft:#3A211E;
     --scaffold-bg:#E6EAEF; --scaffold-ink:#0E1216; --scaffold-line:#B6BEC9;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
@@ -151,6 +158,17 @@
   .fitbar.scarce .n { color:var(--now); }
   .fitbar.scarce .which { color:var(--now); }
   .fitbar.gated { background:var(--surface-2); }
+  /* Flags are facts about the Task, so they stay solid — never a washed-out chip on a
+     washed-out bar. (--now-soft was semi-transparent in dark; it isn't any more.) */
+  .fitbar .flag { background:var(--surface); color:inherit; border:1px solid currentColor;
+    font-weight:700; letter-spacing:.02em; }
+
+  .check { width:34px; height:34px; border-radius:99px; border:1.5px solid var(--line);
+    background:var(--surface); color:var(--ink-3); flex:none; font-size:17px; line-height:1;
+    display:flex; align-items:center; justify-content:center; }
+  .check[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
+    color:var(--accent-ink); }
+  .check[disabled] { opacity:.34; cursor:default; }
 
   /* ---- chips ---- */
   .chipset { display:flex; flex-wrap:wrap; gap:7px; }
@@ -310,27 +328,45 @@ function resolve(raw) {
 // and whose Defer must therefore use the offset form).
 const TASKS = [
   { id:1, t:"Reseal the garage door", notes:"Sikaflex is on the shelf above the bench.",
-    st:"Active", created:"2026-06-02",
+    done:false, created:"2026-06-02", missed:0,
     timing:"once", deadline:"2026-08-25",
     defer:{ mode:"offset", date:"", n:2, unit:"weeks" }, postpone:null,
     rec:{ kind:"cal", n:1, unit:"weeks", days:["Sat"] },
     dims:{ duration:"30 min", energy:"medium", location:["garage"], weather:["dry"] },
     loose:["#springjob","#garge"] },
   { id:2, t:"Book the tournament hotel", notes:"https://example.com/bracket — Ana wants the one near the pitch.",
-    st:"Active", created:"2026-08-04",
+    done:false, created:"2026-08-04", missed:0,
     timing:"once", deadline:"2026-08-29",
     defer:{ mode:"none", date:"", n:1, unit:"weeks" }, postpone:"2026-08-21",
     rec:{ kind:"cal", n:1, unit:"weeks", days:["Sat"] },
     dims:{ duration:"10 min", location:["desk"] },
     loose:["#placetostay"] },
   { id:3, t:"Change the water filter", notes:"",
-    st:"Active", created:"2026-02-14",
+    done:false, created:"2026-02-14", missed:0,
     timing:"recur", deadline:"",
     defer:{ mode:"offset", date:"", n:3, unit:"days" }, postpone:null,
     rec:{ kind:"done", n:6, unit:"months", days:["Sat"] },
     dims:{ duration:"10 min", location:["home"] },
     loose:[] },
+  // No Duration — captured by a path that couldn't ask. This is what Unprocessed IS,
+  // so it is derived here rather than typed: give it a Duration and it becomes Active.
+  { id:4, t:"Ring the dentist back", notes:"",
+    done:false, created:"2026-08-10", missed:0,
+    timing:"once", deadline:"",
+    defer:{ mode:"none", date:"", n:1, unit:"weeks" }, postpone:null,
+    rec:{ kind:"cal", n:1, unit:"weeks", days:["Sat"] },
+    dims:{}, loose:[] },
+  // Undeadlined, and 59 days old — past #29's 21-day threshold, so Stale.
+  { id:5, t:"Sort out the loft boxes", notes:"",
+    done:false, created:"2026-06-20", missed:0,
+    timing:"once", deadline:"",
+    defer:{ mode:"none", date:"", n:1, unit:"weeks" }, postpone:null,
+    rec:{ kind:"cal", n:1, unit:"weeks", days:["Sat"] },
+    dims:{ duration:"longer", energy:"medium", location:["home"] },
+    loose:[] },
 ];
+const TODAY = "2026-08-18";
+
 // A week of Availability Windows, so Opportunities is a real count rather than a
 // number typed into a mockup. Duration on the window side is DERIVED from its length
 // (#7), which is why these carry a length rather than a duration value.
@@ -350,11 +386,11 @@ const WINDOWS = [
   { day:"Mon", name:"Kids' bedtime",mins:10,  dims:{ location:["home"], energy:"low", who:["kids"] } },
   { day:"Tue", name:"Garage slot",  mins:120, dims:{ location:["garage","outside"], energy:"medium", weather:["dry"] } },
 ];
-const TODAY = "2026-08-18";
 const DUR_MINS = { "2 min":2, "10 min":10, "30 min":30, "1 hour":60, "longer":180 };
 
 // The Matching rule, both algebras. Categorical: the task's values must be a SUBSET of
 // the window's. Ordinal: the task's value must not exceed the window's ceiling.
+// An Unprocessed Task has no Duration, so it fits nothing — which is what Unprocessed means.
 function fits(t, w) {
   const need = DUR_MINS[t.dims.duration] ?? Infinity;
   if (need > w.mins) return false;
@@ -447,19 +483,20 @@ function verdict(draft) {
    Identical in all three variants, so the only thing differing between them is
    the tag section. Every property in CONTEXT.md § Task is here.
    ========================================================================== */
-function commonFields() {
-  const t = task(), r = t.rec, recurring = t.timing === "recur";
+function identityFields() {
+  const t = task();
   return `<div class="stack">
       <div class="lbl">Title</div>
       <input class="field" value="${esc(t.t)}">
       <div class="lbl">Notes</div>
       <textarea class="field" rows="2" placeholder="A URL or a sentence of context">${esc(t.notes)}</textarea>
-      <div class="lbl">Status</div>
-      <div class="chipset">${["Unprocessed","Active","Done","Stale"].map(s =>
-        `<button data-act="st" data-v="${s}" aria-pressed="${t.st === s}">${s}</button>`).join("")}</div>
-    </div>
+    </div>`;
+}
 
-    <div class="sec-h">Timing</div>
+// Below the Tags, because Timing is set once and Tags are the everyday surface.
+function timingFields() {
+  const t = task(), r = t.rec, recurring = t.timing === "recur";
+  return `<div class="sec-h">Timing</div>
     <div class="stack">
       <div class="seg">
         <button data-act="timing" data-v="once" aria-pressed="${!recurring}">One-off</button>
@@ -545,27 +582,51 @@ function deferDate(t) {
   else d.setMonth(d.getMonth() - n);
   return fmtDate(d.toISOString().slice(0,10));
 }
+// Status, derived rather than typed. Done is the only bit the editor authors; the
+// other three fall out of facts the Task already carries.
+//   Unprocessed — captured without the information matching needs (i.e. no Duration)
+//   Stale       — #29: undeadlined one-off past 21 days, or 3 consecutive missed instances
+//   Active      — the residue
+const ageDays = t => Math.round((new Date(TODAY) - new Date(t.created)) / 86400000);
+const isUnprocessed = t => t.dims.duration === undefined;
+function isStale(t) {
+  if (t.done || isUnprocessed(t)) return false;
+  if (t.timing === "recur") return t.missed >= 3;
+  if (t.deadline) return false;           // a Deadline is direct evidence against the age proxy
+  return ageDays(t) > 21;
+}
+const statusLabel = t => t.done ? "Done" : isUnprocessed(t) ? "Unprocessed" : "Active";
+
 // Sticky, and identical in all three variants — Opportunities is a consequence of the
 // tags below it, so it is the one readout that has to stay visible while they are edited.
 function fitBar() {
   const t = task();
-  // eligible = Active AND now >= Defer AND now >= Postpone. A Defer that has already
-  // elapsed is not a gate, which is why this compares dates rather than presence.
-  const dISO = deferISO(t);
-  const gate = t.st !== "Active" ? `it is <b>${esc(t.st)}</b>`
+  // eligible = Active AND not Stale AND now >= Defer AND now >= Postpone. A Defer that
+  // has already elapsed is not a gate, which is why this compares dates, not presence.
+  const dISO = deferISO(t), stale = isStale(t), unproc = isUnprocessed(t);
+  const gate = t.done ? `it is <b>done</b>`
+    : unproc ? `it still needs a <b>Duration</b> before it can be matched`
+    : stale ? `it has gone <b>stale</b> — reword it, slice it smaller, or delete it`
     : (t.postpone && t.postpone > TODAY) ? `it is <b>postponed</b> until ${esc(fmtDate(t.postpone))}`
     : (dISO && dISO > TODAY) ? `it is <b>deferred</b> until ${esc(fmtDate(dISO))}`
     : null;
   const n = opportunities(t), bl = blockers(t);
   // #37: a gated Task is never an Orphan. The count is still shown — it is a fact about
   // the tags — but the bar says plainly that nothing is being matched right now.
-  const cls = gate ? "gated" : n === 0 ? "orphan" : n <= 2 ? "scarce" : "";
+  const cls = stale ? "scarce" : gate ? "gated" : n === 0 ? "orphan" : n <= 2 ? "scarce" : "";
+  const flags = [
+    unproc ? "Unprocessed" : "",
+    stale ? "Stale" : "",
+    (!gate && n === 0) ? "Orphan" : "",
+  ].filter(Boolean).map(f => `<span class="pill flag">${f}</span>`).join("");
   return `<div class="fitbar ${cls}">
     <span class="n">${n}</span>
     <span>${n === 1 ? "opportunity" : "opportunities"} in the next 7 days</span>
-    ${!gate && n === 0 ? `<span class="pill" style="background:transparent;border:1px solid currentColor">Orphan</span>` : ""}
+    ${flags}
     ${gate
-      ? `<span class="which">Not being matched at all right now — ${gate}. Gates decide <i>whether</i>, tags decide <i>where</i>, so this is not an Orphan.</span>`
+      ? `<span class="which">Not being matched at all right now — ${gate}.${
+          stale || unproc ? "" : " Gates decide <i>whether</i>, tags decide <i>where</i>, so this is not an Orphan."}${
+          stale ? ` Undeadlined and ${ageDays(t)} days old.` : ""}</span>`
       : n === 0
       ? `<span class="which">${bl.length
           ? `No window declares ${bl.map(b => `<b>${esc(b)}</b>`).join(" or ")} — relax it here, or declare it on a window.`
@@ -579,8 +640,13 @@ const createdLine = () => `<div class="created">Captured ${esc(fmtDate(task().cr
 
 /* ============================ shared bits ============================ */
 function nav(sub) {
+  const t = task(), unproc = isUnprocessed(t);
   return `<div class="nav"><div class="nav-main"><button class="back">‹ Tasks</button></div>
-    <div class="nav-main"><h1>${esc(task().t)}</h1></div><div class="sub">${sub}</div></div>`;
+    <div class="nav-main"><h1>${esc(t.t)}</h1>
+      <button class="check" data-act="done" aria-pressed="${t.done}" ${unproc ? "disabled" : ""}
+        title="${unproc ? "Nothing to mark off yet — it still needs a Duration" : "Mark it off"}">✓</button>
+    </div>
+    <div class="sub">${unproc ? "Needs a Duration before it can be marked off or matched" : sub}</div></div>`;
 }
 // Scaffolding — OFF by default, because round 1 judged these against the screen
 // they were sitting on. The ⓘ button brings them back.
@@ -620,7 +686,7 @@ const A = {
     const t = task();
     return nav("Full task editor — axis blocks") + `<div class="scroll">
       ${fitBar()}
-      ${commonFields()}
+      ${identityFields()}
       <div class="sec-h">Tags</div>
       <div class="stack">
       ${DIMS.map(d => d.type === "ord" ? `
@@ -648,6 +714,7 @@ const A = {
         ${t.loose.length ? `<div class="lbl">Loose — kept, shown, ignored by matching</div>
           <div class="chipset">${t.loose.map(x => `<span class="pill loose">${esc(x)}</span>`).join("")}</div>` : ""}
       </div>
+      ${timingFields()}
       ${createdLine()}
       <div class="btn-row"><button class="btn primary wide">Save</button></div>
       ${brief(A)}
@@ -683,7 +750,7 @@ const B = {
     }
     return nav("Full task editor — one field") + `<div class="scroll">
       ${fitBar()}
-      ${commonFields()}
+      ${identityFields()}
       <div class="sec-h">Tags</div>
       <div class="stack">
         <input class="field" id="draft" value="${esc(S.draft)}" placeholder="Type a tag…" autocomplete="off">
@@ -708,6 +775,7 @@ const B = {
             </div></div>`;
         }).join("")}
       </div>
+      ${timingFields()}
       ${createdLine()}
       <div class="btn-row"><button class="btn primary wide">Save</button></div>
       ${brief(B)}
@@ -735,7 +803,7 @@ const C = {
     const t = task(), dur = t.dims.duration, en = t.dims.energy;
     return nav("Full task editor — the sentence") + `<div class="scroll">
       ${fitBar()}
-      ${commonFields()}
+      ${identityFields()}
       <div class="sec-h">Tags</div>
       <div class="card"><div class="sentence">
         Do it at ${this.slot(dim("location"))},
@@ -752,6 +820,7 @@ const C = {
           ? t.loose.map(x => `<span class="pill loose">${esc(x)}</span>`).join("")
           : `<span class="hint">Empty. Tags here are kept and shown, and matching ignores them.</span>`}</div>
       </div>
+      ${timingFields()}
       ${createdLine()}
       <div class="btn-row"><button class="btn primary wide">Save</button></div>
       ${brief(C)}
@@ -842,7 +911,7 @@ document.addEventListener("click", e => {
       if (n.length > 1 && !t.loose.includes(n)) t.loose.push(n);
       S.draft = ""; break;
     }
-    case "st": t.st = v; break;
+    case "done": if (!isUnprocessed(t)) t.done = !t.done; break;
     case "timing":
       t.timing = v;
       // Recurrence generates the Deadline, and a recurring Task's Defer must be an offset.
