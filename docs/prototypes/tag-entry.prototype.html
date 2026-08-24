@@ -27,8 +27,12 @@
   The rounds, for the record:
     - every field from CONTEXT.md § Task is present, rendered IDENTICALLY in all three
       variants, because only the tag section is under test
-    - KNOWN DEFECT, not this prototype's to fix: the native date input's picker
-      dismisses itself in under a second on Mobile Safari. Tracked separately
+    - RESOLVED (#46), and it was this prototype's own doing: the Deadline field's
+      input handler calls render(), which rebuilds #device via innerHTML and so
+      destroys the very node the open picker is attached to. Mobile Safari is
+      innocent - Defer's "On a date" omits the render() and stays open. Left as
+      it stands; the fix belongs to the build, which must never remount a date
+      input in response to its own input event
     - the prototype's own commentary and the example list are OFF by default (the ⓘ
       button), so what you see on load is the screen's own density and nothing else
     - the ⧉ button cycles the fixture tasks: live, postponed, recurring, UNPROCESSED

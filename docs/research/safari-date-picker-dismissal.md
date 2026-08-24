@@ -261,3 +261,72 @@ absolute-date entry for most tasks that would use those features).
   a synthesized search result, not traced to a citable Anthropic primary source here) — worth
   confirming directly against Anthropic's own artifact documentation if it ever becomes relevant to
   another investigation.
+
+---
+
+## 7. RESULT — the device test was run, and it settles this (2026-08-24)
+
+**Sections 1–6 above were written before the device test. Section 4's fallback landscape and its
+recommendation are now moot** — no fallback is needed. They are kept as the record of what was
+considered, not as live options.
+
+The test ran against [`docs/prototypes/date-picker-probe.prototype.html`](../prototypes/date-picker-probe.prototype.html):
+seven isolated rows, one variable each, on a plain same-origin page served over Tailscale Serve — no
+iframe, no sandbox, no framework, no CDN.
+
+| # | Row | Result |
+|---|---|---|
+| 1 | Bare input, zero JS | **stayed open** |
+| 2 | Passive `input` listener, touches no DOM | **stayed open** |
+| 3 | `innerHTML` rebuild on `input` | **dismissed** |
+| 4 | Value written back, same node kept | **stayed open** |
+| 5 | Node replaced with a fresh one (`replaceChild`) | **dismissed** |
+| 6 | Inside a `transform`/`will-change` ancestor | **stayed open** |
+| 7 | `focus` handler that blurs sibling fields | **stayed open** |
+
+**The picker dismisses itself if and only if the input element is destroyed or replaced while it is
+open.** Rows 3 and 5 are exactly the two rows that break the element's identity, and they are the only
+two that failed. Everything else survives.
+
+What each surviving row rules out, which matters because these were the standing suspicions:
+
+- **Row 1 clears Mobile Safari.** No WebKit defect is involved, matching Section 1's finding that no
+  primary source documents this symptom on a plain page. That absence was circumstantial; row 1 makes
+  it a result.
+- **Row 1 also retires the iframe/sandbox hypothesis** — Section 2's leading theory, and the reason
+  the ticket demanded a plain page. The probe page is in no iframe at all, and rows 3 and 5 still
+  fail, so the sandbox never needed to be part of the explanation. Section 2's low-to-moderate
+  confidence was correctly placed.
+- **Row 4 clears React's controlled inputs.** React's normal reconciliation keeps the DOM node and
+  reassigns the value, which is exactly row 4. The idiomatic controlled `<input type="date">` is safe.
+- **Row 6 clears the `transform`-ancestor folklore**, and **row 7 clears focus management.**
+
+### Where the observed defect actually came from
+
+The tag entry prototype, not the browser. Its delegated handler
+(`docs/prototypes/tag-entry.prototype.html`):
+
+```js
+if (act === "deadline")  { t.deadline = e.target.value; …; return render(); }
+if (act === "deferdate") { t.defer.date = e.target.value; }   // no render()
+```
+
+`render()` does `document.getElementById("device").innerHTML = …` — row 3 exactly. iOS fires `input`
+as the picker's wheels move, so the picker's own first event destroys the node it is attached to.
+
+The prototype was its own control: **Deadline re-renders and Defer's "On a date" does not**, so the
+same page, in the same second, shows both behaviours. That asymmetry is why the defect looked like a
+browser bug — it appeared on some date fields and not others.
+
+### The constraint this leaves for the build
+
+The native control stays. What the spec carries instead is a rule about the DOM, not about dates:
+
+> **A date input's element must survive its own input events.** Never remount one in response to its
+> own change — no changing `key`, no conditional-render branch swap, no `innerHTML` rebuild of an
+> ancestor. Reassigning `value` on the same node is fine.
+
+This is **not date-specific**. Every system-presented control on iOS — `<select>`, `type="time"`,
+`type="month"`, `type="datetime-local"` — is presented by the OS and anchored to a live DOM element,
+so all of them inherit the same lifetime coupling. The spec should state it that way, because a
+date-only rule would be rediscovered the first time a `<select>` is rebuilt mid-interaction.
