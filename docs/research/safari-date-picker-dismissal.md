@@ -293,10 +293,13 @@ What each surviving row rules out, which matters because these were the standing
 - **Row 1 clears Mobile Safari.** No WebKit defect is involved, matching Section 1's finding that no
   primary source documents this symptom on a plain page. That absence was circumstantial; row 1 makes
   it a result.
-- **Row 1 also retires the iframe/sandbox hypothesis** — Section 2's leading theory, and the reason
-  the ticket demanded a plain page. The probe page is in no iframe at all, and rows 3 and 5 still
-  fail, so the sandbox never needed to be part of the explanation. Section 2's low-to-moderate
-  confidence was correctly placed.
+- **Row 1 makes the iframe/sandbox hypothesis unnecessary — but does NOT refute it.** No row of this
+  probe was inside an iframe, so the probe has no power to say what a sandboxed one does. What it
+  shows is that a remount is *sufficient* to produce the symptom with no iframe present, which means
+  the observed defect is fully explained without invoking the sandbox. Whether the sandbox is *also*
+  capable of it, alone or in combination, is untested by anyone: #48 tested a bare input on a plain
+  page, and so did row 1. **Neither ticket has ever run a date input inside an artifact.** Section 2's
+  low-to-moderate confidence therefore still stands as stated, neither raised nor lowered.
 - **Row 4 clears React's controlled inputs.** React's normal reconciliation keeps the DOM node and
   reassigns the value, which is exactly row 4. The idiomatic controlled `<input type="date">` is safe.
 - **Row 6 clears the `transform`-ancestor folklore**, and **row 7 clears focus management.**
@@ -314,9 +317,12 @@ if (act === "deferdate") { t.defer.date = e.target.value; }   // no render()
 `render()` does `document.getElementById("device").innerHTML = …` — row 3 exactly. iOS fires `input`
 as the picker's wheels move, so the picker's own first event destroys the node it is attached to.
 
-The prototype was its own control: **Deadline re-renders and Defer's "On a date" does not**, so the
-same page, in the same second, shows both behaviours. That asymmetry is why the defect looked like a
-browser bug — it appeared on some date fields and not others.
+**The Deadline/Defer asymmetry is a prediction from this code, not a recorded observation.** Deadline
+re-renders and Defer's "On a date" does not, so the two should behave differently on the same page in
+the same second — but only Deadline was ever reported (#38: "the defect you hit on the Deadline
+field"), and Defer's absolute form sits behind a mode toggle that is disabled for recurring Tasks and
+may simply never have been tapped. It is a clean falsifiable test of this explanation inside the
+artifact, and it has not been run. Do not cite it as evidence until it has.
 
 ### The constraint this leaves for the build
 
