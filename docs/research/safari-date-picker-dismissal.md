@@ -336,3 +336,59 @@ This is **not date-specific**. Every system-presented control on iOS — `<selec
 `type="month"`, `type="datetime-local"` — is presented by the OS and anchored to a live DOM element,
 so all of them inherit the same lifetime coupling. The spec should state it that way, because a
 date-only rule would be rediscovered the first time a `<select>` is rebuilt mid-interaction.
+
+---
+
+## 8. RESULT — the sandbox was tested, and it is irrelevant (2026-08-24)
+
+§7 could not speak to the iframe, because no row of the plain-page probe was in one. That gap is now
+closed. The identical seven rows were published as an artifact and run inside its sandboxed
+cross-origin iframe on the same iPhone. Every `wire()` function was verified byte-identical to the
+plain-page run by diff, not by eye; the only additions were a banner and a per-row result chip, neither
+of which touches a handler.
+
+**The results were identical, row for row: 3 and 5 dismissed, the other five stayed open.**
+
+- **Row 1 stayed open inside the sandbox.** A bare `<input type="date">` in a sandboxed cross-origin
+  iframe is fine. The sandbox does not kill date pickers.
+- **The remount is the sole cause, and it is container-independent.** Rows 3 and 5 fail identically
+  inside and outside an iframe; nothing else fails in either.
+- **No interaction effect.** No row behaved differently between containers, so the sandbox does not
+  amplify, mask, or combine with the remount.
+
+### What this retires
+
+- **#48's attribution is refuted, not merely unneeded.** It concluded the defect was "the artifact's
+  sandboxed cross-origin iframe, not WebKit." The sandbox has now been tested directly and does not
+  produce the symptom.
+- **"Date entry cannot be judged inside a published artifact" is wrong, and provably so.** It can. An
+  artifact reproduces plain-page date-picker behaviour exactly. A prototype ticket may judge date
+  entry in an artifact, provided it does not remount the control — which is a requirement of the
+  production build anyway, so the prototype and the product are held to the same rule.
+- **§7's hedge is discharged.** The sentence "neither ticket has ever run a date input inside an
+  artifact" was true when written and is no longer.
+
+### The Deadline/Defer asymmetry, at mechanism level
+
+§7 correctly downgraded this from observation to prediction, and it is still not an observation of
+those two named fields. But the mechanism behind it has now been demonstrated *in the artifact*:
+
+- **Row 3** — an `input` handler that rebuilds an ancestor via `innerHTML` — is Deadline's pattern. It
+  **dismissed** inside the sandbox.
+- **Row 2** — an `input` handler that assigns to a variable and touches no DOM — is Defer's pattern
+  (`t.defer.date = e.target.value`). It **stayed open** inside the sandbox.
+
+So the two handler shapes really do behave differently in the exact container where the defect was
+reported. Reporting this as the named fields' behaviour would still be a claim beyond the evidence;
+reporting it as the handler shapes' behaviour is now direct observation.
+
+### Cost of the closing round
+
+Two taps on one phone, reusing an instrument that already existed. Worth recording because the
+question bought **no spec change** — `task-guide` never runs in an iframe (#6) — only prototype
+methodology. It was cheap enough to be worth settling anyway, and the reason it was cheap is that the
+probe was built with control rows rather than as a single pass/fail test.
+
+**Standing caveat, unchanged from #48 and §7:** one device, one OS version, one moment. And this tests
+one artifact host's sandbox on one day, which is a moving target — a negative result here is weaker
+evidence about the future than a positive one would have been.
