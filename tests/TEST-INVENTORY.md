@@ -204,6 +204,9 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - three contiguous absences derive **one** obligation, due before the first
 - a derived Task is never `Unprocessed` and never `Stale`
 - a derived Task cannot be postponed
+- a moved instance on an **Overridden** date still does not derive — the moved case driven through
+  the absence check rather than around it
+- a renamed instance the shape still carries derives nothing
 
 ---
 

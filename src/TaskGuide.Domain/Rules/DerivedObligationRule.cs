@@ -38,6 +38,14 @@ public interface IDerivedObligationRule
 /// </summary>
 internal static class DerivedTask
 {
+    /// <summary>
+    /// A rule's hard-coded Duration, read off the registry rather than written as a literal.
+    /// A bucket that does not exist throws here instead of silently producing an `Unprocessed`
+    /// obligation — which is the one failure this mechanism cannot tolerate.
+    /// </summary>
+    internal static TagValue Bucket(string minutes) =>
+        KnownDimensions.DurationBuckets.Single(known => known.Value == minutes);
+
     internal static TaskItem From(
         DerivedObligationContext context,
         RuleId rule,
@@ -167,7 +175,7 @@ public sealed class AbsenceRule : IDerivedObligationRule
             }
 
             yield return DerivedTask.From(
-                context, Id, triggerId, $"Tell {commitment.Name} you'll be out", due, new TagValue("10"));
+                context, Id, triggerId, $"Tell {commitment.Name} you'll be out", due, DerivedTask.Bucket("10"));
         }
     }
 
@@ -245,6 +253,10 @@ public sealed class AbsenceRule : IDerivedObligationRule
     /// strictly between two absences is necessarily one that was <em>not</em> absent, and it
     /// breaks the run.
     /// </summary>
+    /// <remarks>
+    /// Day-by-day, and the two absences can in principle be a year apart — cheap in practice
+    /// because both ends are records already in hand, and a run of absences is a trip.
+    /// </remarks>
     private static bool NothingAssumedBetween(
         DerivedObligationContext context, EventPrototype commitment, DateOnly from, DateOnly to)
     {
@@ -265,36 +277,50 @@ public sealed class AbsenceRule : IDerivedObligationRule
 /// deadline — <c>#timeoff</c>, <c>#planetickets</c>, <c>#placetostay</c>. Each is a small rule in
 /// code; each words its Task differently, so there is nothing to generalise.
 /// </summary>
-public sealed class TagDeclaredRule(RuleId id, string tag, string title, Offset lead, TagValue duration)
-    : IDerivedObligationRule
+/// <remarks>
+/// <b>The constructor is private.</b> The members below are the whole family, so a rule cannot be
+/// assembled from data at run time and the parameterisation stays an implementation detail rather
+/// than a configuration surface. A fourth obligation is a fourth member here — a code change.
+/// </remarks>
+public sealed class TagDeclaredRule : IDerivedObligationRule
 {
+    private readonly RuleId _id;
+    private readonly string _tag;
+    private readonly string _title;
+    private readonly Offset _lead;
+    private readonly TagValue _duration;
+
+    private TagDeclaredRule(RuleId id, string tag, string title, Offset lead, TagValue duration) =>
+        (_id, _tag, _title, _lead, _duration) = (id, tag, title, lead, duration);
+
     /// <summary>Ask off work three weeks out — the first of the family, and the reason it exists.</summary>
     public static TagDeclaredRule TimeOff { get; } = new(
-        new RuleId("timeoff"), "timeoff", "Ask off work", new BeforeOffset(3, OffsetUnit.Weeks), new TagValue("10"));
+        new RuleId("timeoff"), "timeoff", "Ask off work",
+        new BeforeOffset(3, OffsetUnit.Weeks), DerivedTask.Bucket("10"));
 
     public static TagDeclaredRule PlaneTickets { get; } = new(
         new RuleId("planetickets"), "planetickets", "Buy plane tickets",
-        new BeforeOffset(2, OffsetUnit.Months), new TagValue("30"));
+        new BeforeOffset(2, OffsetUnit.Months), DerivedTask.Bucket("30"));
 
     public static TagDeclaredRule PlaceToStay { get; } = new(
         new RuleId("placetostay"), "placetostay", "Book a place to stay",
-        new BeforeOffset(1, OffsetUnit.Months), new TagValue("30"));
+        new BeforeOffset(1, OffsetUnit.Months), DerivedTask.Bucket("30"));
 
-    public RuleId Id => id;
+    public RuleId Id => _id;
 
     /// <summary>The loose Tag on a dated Event that declares this obligation.</summary>
-    public string Tag => tag;
+    public string Tag => _tag;
 
     /// <summary>The hard-coded shape of the Task this rule produces — never the trigger's.</summary>
-    public string Title => title;
+    public string Title => _title;
 
-    public Offset Lead => lead;
+    public Offset Lead => _lead;
 
-    public TagValue Duration => duration;
+    public TagValue Duration => _duration;
 
     public IEnumerable<TaskItem> Derive(DerivedObligationContext context)
     {
-        var declared = new LooseTag(tag);
+        var declared = new LooseTag(_tag);
 
         foreach (var trigger in context.DatedEvents)
         {
@@ -305,14 +331,14 @@ public sealed class TagDeclaredRule(RuleId id, string tag, string title, Offset 
                 continue;
             }
 
-            var due = lead.ResolveAgainst(trigger.Date);
+            var due = _lead.ResolveAgainst(trigger.Date);
 
-            if (DerivedTask.IsDone(context, id, trigger.Id.Value, due))
+            if (DerivedTask.IsDone(context, _id, trigger.Id.Value, due))
             {
                 continue;
             }
 
-            yield return DerivedTask.From(context, id, trigger.Id.Value, title, due, duration);
+            yield return DerivedTask.From(context, _id, trigger.Id.Value, _title, due, _duration);
         }
     }
 }

@@ -270,11 +270,18 @@ public sealed class DerivedObligationRuleTests
     [Fact]
     public void A_deleted_instance_Event_exception_derives_it()
     {
+        var deleted = new[] { new EventException(FirstSunday, MinistryId, Deleted: true, null, null, null) };
+
         var derived = Assert.Single(Absence.Derive(Context(
-            shapes: MinistryEverySunday(FirstSunday),
-            exceptions: [new EventException(FirstSunday, MinistryId, Deleted: true, null, null, null)])));
+            shapes: MinistryEverySunday(FirstSunday), exceptions: deleted)));
 
         Assert.Equal(new DateOnly(2026, 8, 30), derived.Deadline);
+
+        // The exception is the fact, and the rule reads it directly. Deleting an instance does
+        // not stamp an Override, so the date's Windows stay under live Pattern propagation and
+        // whether a shape reader has layered the deletion is not this rule's business — the
+        // honest "I'm not going" gesture is absence either way.
+        Assert.Single(Absence.Derive(Context(shapes: MinistryEverySunday(), exceptions: deleted)));
     }
 
     [Fact]
@@ -293,6 +300,48 @@ public sealed class DerivedObligationRuleTests
                 new EventException(
                     FirstSunday, MinistryId, Deleted: false, null, new TimeOnly(14, 0), new TimeOnly(16, 0)),
             ])));
+    }
+
+    [Fact]
+    public void A_moved_instance_on_an_Overridden_date_still_does_not_derive()
+    {
+        // The date carries an Override, so it *is* a candidate — the moved instance therefore
+        // has to be recognised as presence rather than skipped for want of a trigger record.
+        var moved = new FakeShapes(date => date == FirstSunday
+            ? [MinistryOn(date, start: new TimeOnly(14, 0))]
+            : Array.Empty<Event>());
+
+        Assert.Empty(Absence.Derive(Context(
+            overrides: [TravelDay(FirstSunday)],
+            shapes: moved,
+            exceptions:
+            [
+                new EventException(
+                    FirstSunday, MinistryId, Deleted: false, null, new TimeOnly(14, 0), new TimeOnly(16, 0)),
+            ])));
+    }
+
+    [Fact]
+    public void A_renamed_instance_the_shape_still_carries_derives_nothing()
+    {
+        const string Renamed = "Student ministry (in the chapel)";
+
+        var renamed = new FakeShapes(date => date == FirstSunday
+            ? [MinistryOn(date, name: Renamed)]
+            : Array.Empty<Event>());
+
+        var exceptions = new[]
+        {
+            new EventException(FirstSunday, MinistryId, Deleted: false, Renamed, null, null),
+        };
+
+        // Nothing removed it, so it is not a candidate at all.
+        Assert.Empty(Absence.Derive(Context(shapes: renamed, exceptions: exceptions)));
+
+        // And when an Override does make the date a candidate, the exception is what says which
+        // name the shape should be carrying — a rename is not an absence.
+        Assert.Empty(Absence.Derive(Context(
+            overrides: [TravelDay(FirstSunday)], shapes: renamed, exceptions: exceptions)));
     }
 
     [Fact]
