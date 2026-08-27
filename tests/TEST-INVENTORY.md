@@ -26,6 +26,10 @@ walking skeleton (#51).
 - a recurring Task with N-1 consecutive misses and one completion between them reads `Active`
 - a Task past its Deadline reads `Active` — overdue is not a state
 - nothing in the model can write a Status; the type exposes no setter and storage carries no field
+- a Task with non-null `Provenance` is never `Unprocessed` and never `Stale` — a derived Task was
+  neither captured nor neglected
+- a Task with non-null `Provenance` cannot be postponed; `CanPostpone` is a pure query, so the
+  rule is readable without reaching into the Task's lifecycle
 
 ### Eligibility and the two clocks
 
