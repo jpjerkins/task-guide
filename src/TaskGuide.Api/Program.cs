@@ -1,6 +1,7 @@
 using TaskGuide.Api.Endpoints;
 using TaskGuide.Domain.Common;
 using TaskGuide.Infrastructure.BackgroundServices;
+using TaskGuide.Infrastructure.Configuration;
 using TaskGuide.Infrastructure.Ids;
 
 // One container: API + SPA + the ~30s tick loop (#5, #6). Host-mode port 8007, tailnet-only,
@@ -8,6 +9,14 @@ using TaskGuide.Infrastructure.Ids;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.UseUrls("http://0.0.0.0:8007"); // host-mode, tailnet-only, TLS terminated by Tailscale Serve
+
+// Pushover's two secrets arrive here, not through compose's `env_file:`. vault-t2 serves this
+// path over FUSE to UID 50013 alone and denies even root, so the docker client cannot read it at
+// deploy time — the process must read it itself, at runtime, as its own UID (#51). Optional:
+// there is no FUSE mount outside the container, and PushoverClient already no-ops unconfigured.
+builder.Configuration.AddEnvFile(
+    builder.Configuration["Secrets:EnvFile"] ?? "/run/vault-t2-fs/envfiles/task-guide",
+    optional: true);
 
 // builder.Host.UseSerilog(...);            // rolling daily file sink, retention count. Receipts land here.
 // builder.Services.AddTaskGuideDomain();   // Dimension registry, rules, clock
