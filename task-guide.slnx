@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TaskGuide.Api/TaskGuide.Api.csproj" />
+    <Project Path="src/TaskGuide.Application/TaskGuide.Application.csproj" />
+    <Project Path="src/TaskGuide.Domain/TaskGuide.Domain.csproj" />
+    <Project Path="src/TaskGuide.Infrastructure/TaskGuide.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TaskGuide.Api.Tests/TaskGuide.Api.Tests.csproj" />
+    <Project Path="tests/TaskGuide.Application.Tests/TaskGuide.Application.Tests.csproj" />
+    <Project Path="tests/TaskGuide.Domain.Tests/TaskGuide.Domain.Tests.csproj" />
+    <Project Path="tests/TaskGuide.Storage.Tests/TaskGuide.Storage.Tests.csproj" />
+  </Folder>
+</Solution>

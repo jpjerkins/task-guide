@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../TaskGuide.Infrastructure/TaskGuide.Infrastructure.csproj" />
+  </ItemGroup>
+  <!-- The React SPA builds into wwwroot/ and is served from this same container (#6). -->
+</Project>

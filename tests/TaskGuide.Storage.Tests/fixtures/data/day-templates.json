@@ -1,0 +1,21 @@
+[
+  { "id": "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "name": "Ordinary weekday",
+    "windows": [
+      { "id": "w_01ARZ3NDEKTSV4RRFFQ69G5H00", "name": "Morning admin", "start": "08:00", "end": "08:30",
+        "dimensions": { "location": ["desk"], "energy": "medium" }, "looseTags": [] },
+      { "id": "w_01ARZ3NDEKTSV4RRFFQ69G5H01", "name": "Evening prep", "start": "17:30", "end": "19:00",
+        "dimensions": { "location": ["home", "garage"] }, "looseTags": [] }],
+    "eventPrototypes": [] },
+
+  { "id": "dt_01ARZ3NDEKTSV4RRFFQ69G5G01", "name": "Volleyball Tuesday",
+    "windows": [
+      { "id": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "name": "Evening prep", "start": "17:30", "end": "18:00",
+        "dimensions": { "location": ["home"] }, "looseTags": [] }],
+    "eventPrototypes": [
+      { "id": "ep_01ARZ3NDEKTSV4RRFFQ69G5J00", "name": "Karate", "start": "18:30", "end": "19:30",
+        "dimensions": {}, "looseTags": [],
+        "absenceNotice": { "kind": "lastWeekdayBefore", "weekday": "sunday" } }] },
+
+  { "id": "dt_01ARZ3NDEKTSV4RRFFQ69G5G02", "name": "Travel day",
+    "windows": [], "eventPrototypes": [] }
+]

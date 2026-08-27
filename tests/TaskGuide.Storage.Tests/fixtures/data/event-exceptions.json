@@ -1,0 +1,7 @@
+[
+  { "date": "2026-08-18", "prototypeId": "ep_01ARZ3NDEKTSV4RRFFQ69G5J00", "deleted": true,
+    "name": null, "start": null, "end": null },
+
+  { "date": "2026-08-25", "prototypeId": "ep_01ARZ3NDEKTSV4RRFFQ69G5J00", "deleted": false,
+    "name": "Karate (late)", "start": "19:30", "end": "20:30" }
+]

@@ -1,0 +1,16 @@
+[
+  { "date": "2026-08-15",
+    "used": { "templateId": "dt_01ARZ3NDEKTSV4RRFFQ69G5G01", "templateName": "Volleyball Tuesday" },
+    "windows": [
+      { "id": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "name": "Evening prep", "start": "17:30", "end": "18:00",
+        "dimensions": { "location": ["home"] }, "looseTags": [] }] },
+
+  { "date": "2026-09-11", "used": null,
+    "windows": [
+      { "id": "w_01ARZ3NDEKTSV4RRFFQ69G5H03", "name": "Late afternoon", "start": "16:00", "end": "18:45",
+        "dimensions": { "location": ["home"], "energy": "low" }, "looseTags": ["kidhome"] }] },
+
+  { "date": "2026-09-12",
+    "used": { "templateId": "dt_01ARZ3NDEKTSV4RRFFQ69G5G02", "templateName": "Travel day" },
+    "windows": [] }
+]

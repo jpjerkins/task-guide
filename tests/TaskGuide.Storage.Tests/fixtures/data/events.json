@@ -1,0 +1,9 @@
+[
+  { "id": "evt_01ARZ3NDEKTSV4RRFFQ69G5M00", "date": "2026-09-12", "name": "Band concert",
+    "start": "19:00", "end": "21:00",
+    "dimensions": {}, "looseTags": [], "absenceNotice": null },
+
+  { "id": "evt_01ARZ3NDEKTSV4RRFFQ69G5M01", "date": "2026-10-03", "name": "Ana's flight",
+    "start": "11:20", "end": "12:00",
+    "dimensions": {}, "looseTags": ["timeoff"], "absenceNotice": null }
+]

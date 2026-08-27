@@ -36,7 +36,10 @@ and an Override's **use record**, and settled Pattern deletion, and
 [Liveness](https://github.com/jpjerkins/task-guide/issues/25), which added **Liveness** and gave the
 silence guarantee its precondition, and
 [Backup integration](https://github.com/jpjerkins/task-guide/issues/31), which added **Backup**,
-distinguished it from **Snapshot**, and settled that a restore requires the service stopped.
+distinguished it from **Snapshot**, and settled that a restore requires the service stopped, and
+[Spec assembly](https://github.com/jpjerkins/task-guide/issues/41), which settled how a date is
+reached when an **Override** is authored from scratch, and emitted the build skeleton under `src/`
+and `tests/`.
 The effort's map is [Map: task-guide](https://github.com/jpjerkins/task-guide/issues/1).
 
 ## Glossary
@@ -718,6 +721,18 @@ for how a single week of one is moved or skipped.
   so **conflicts are unrepresentable rather than resolved**: no nesting, no precedence rule, no
   "what wins" edge case. Applying an Override to an already-overridden date is a replacement, and
   the UI confirms before clobbering.
+
+  **The authoring gesture takes a start–end range** and writes one Override per date, each
+  independently editable afterwards — so "one authoring gesture" is literal rather than a figure of
+  speech. When the range lands on dates that already carry an Override, the replacements are
+  confirmed **in one batch before the write**, which is the same visible-blast-radius rule the
+  single-date case already follows.
+- **A date is reached by the rail, or by picking it.** The schedule's **±10-day rail** is the
+  near-term surface; beside it sits a **"pick a date…"** escape opening a plain date control, and
+  the rail never grows past its ten days. This is exactly **Postpone**'s shape — a few fixed
+  choices plus an escape — so the system has one answer for *usually near, occasionally far* rather
+  than two. Without the escape, an annual shape is unreachable: "Christmas Day" is stamped eleven
+  months out, and a trip is authored the day it is booked.
 - **An Override always stores copied Windows, never a reference.** Applying a named Day template is
   a **stamp**, not a link — it lays the shape down and the connection ends there. Subsequent edits
   to that template do not reach the date, and edits to the date do not reach the template or any

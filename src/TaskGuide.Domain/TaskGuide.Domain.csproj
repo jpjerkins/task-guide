@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The onion's core. No I/O, no framework references, no package references.
+       Everything here is a record or a pure function. -->
+</Project>

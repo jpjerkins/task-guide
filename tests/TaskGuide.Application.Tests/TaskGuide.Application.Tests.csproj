@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit" Version="*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TaskGuide.Application/TaskGuide.Application.csproj" />
+  </ItemGroup>
+</Project>
