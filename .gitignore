@@ -5,3 +5,4 @@ dist/
 src/TaskGuide.Api/wwwroot/
 *.user
 .DS_Store
+.superpowers/
