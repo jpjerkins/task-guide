@@ -47,11 +47,14 @@ ENV DOTNET_GCHeapHardLimit=0x10000000 \
     ASPNETCORE_ENVIRONMENT=Production
 
 # Non-root. NOTE: the host bind-mount /mnt/data/task-guide -> /data is created by DCM
-# (data_dir: true) and its ownership has been inconsistent across existing services
-# (docs/research/dcm-dotnet-deployment.md §6) - confirm this UID can write it post-deploy, or
-# chown the host directory to match.
-RUN groupadd --gid 10001 appuser \
-    && useradd --uid 10001 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser
+# (data_dir: true), so the host directory must be chowned to this UID for writes to succeed.
+#
+# 50013 is not arbitrary: vault-t2 serves Tier 2 secrets over FUSE at /run/vault-t2-fs/ with
+# access controlled by UID, and requires one UID per service from the reserved range 50000-50099
+# declared in acl.yaml. Running as anything outside that range makes the Pushover credentials
+# unreadable. No OS user is required on the host - the check is numeric.
+RUN groupadd --gid 50013 appuser \
+    && useradd --uid 50013 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser
 
 COPY --from=dotnet-build /app/publish .
 COPY --from=web-build /src/TaskGuide.Api/wwwroot ./wwwroot
