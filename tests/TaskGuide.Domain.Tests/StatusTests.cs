@@ -310,13 +310,20 @@ public sealed class StatusTests
         var provenance = new DerivedProvenance(new RuleId("tell-them-you-are-out"), "evt_01");
         var empty = CompletionLog.Empty(Id);
 
-        // No Duration and 59 days old — both triggers, neither of which can reach it.
-        var derived = Item(now.AddDays(-59), tags: TagSet.Empty, provenance: provenance);
+        // The rule that produced it hard-codes a Duration, so `Unprocessed` never arises; and it
+        // is 59 days old, well past the stale threshold, because its lifetime is bounded by its
+        // trigger rather than by neglect.
+        var derived = Item(now.AddDays(-59), provenance: provenance);
         Assert.Equal(Status.Active, Of(derived, empty, now));
 
-        // The same Task without its Provenance reads `Unprocessed`, so both rules really fired.
-        Assert.Equal(Status.Unprocessed, Of(derived with { Provenance = null }, empty, now));
-        Assert.Equal(Status.Stale, Of(derived with { Provenance = null, Tags = Duration("30") }, empty, now));
+        // The same Task without its Provenance stales, so the guard really fired.
+        Assert.Equal(Status.Stale, Of(derived with { Provenance = null }, empty, now));
+
+        // The two reasons are not the same reason. `Unprocessed` is read off the Duration axis
+        // for every Task alike, so a derived Task that somehow reached the model without one is
+        // `Unprocessed` like any other — a state `CONTEXT.md` says cannot arise, and the one
+        // ADR-0007 refuses to let Status paper over.
+        Assert.Equal(Status.Unprocessed, Of(derived with { Tags = TagSet.Empty }, empty, now));
 
         // Completion still outranks: marking it done is the only interaction it has.
         Assert.Equal(Status.Done, Of(derived, Log(new CompletionEntry(null, Noon("2026-08-26"))), now));

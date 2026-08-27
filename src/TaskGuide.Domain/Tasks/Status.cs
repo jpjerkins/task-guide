@@ -51,20 +51,20 @@ public static class StatusRules
             return Status.Done;
         }
 
-        // A derived Task is a projection of a trigger through a rule — nobody captured it and
-        // nobody neglected it, so neither the missing-Duration rule nor either stale clock has
-        // anything to say about one.
-        if (task.Provenance is null)
+        // `Unprocessed` derives from the Duration axis alone, for every Task. A derived Task is
+        // never `Unprocessed` because *the rule supplies a Duration* — not because Status exempts
+        // it. Exempting it here is the one hole ADR-0007 exists to close: it would let a
+        // Duration-less Task reach matching as `Active`.
+        if (task.Tags.SingleOn(DurationDimension(registry).Id) is null)
         {
-            if (task.Tags.SingleOn(DurationDimension(registry).Id) is null)
-            {
-                return Status.Unprocessed;
-            }
+            return Status.Unprocessed;
+        }
 
-            if (IsStale(task, log, thresholds, now, boundary))
-            {
-                return Status.Stale;
-            }
+        // Staleness is different, and this one *is* a precedence rule: a derived Task's lifetime
+        // is bounded by its trigger, so neither stale clock has anything to say about one.
+        if (task.Provenance is null && IsStale(task, log, thresholds, now, boundary))
+        {
+            return Status.Stale;
         }
 
         return Status.Active;
