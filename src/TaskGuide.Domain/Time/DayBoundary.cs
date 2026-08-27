@@ -17,8 +17,14 @@ public sealed class DayBoundary(TimeZoneInfo zone)
 
     public TimeZoneInfo Zone { get; } = zone;
 
-    public DateOnly DateOf(DateTimeOffset instant) => throw new NotImplementedException();
+    public DateOnly DateOf(DateTimeOffset instant) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, Zone).DateTime);
 
     /// <summary>The instant the given date ends — i.e. the next local midnight.</summary>
-    public DateTimeOffset EndOf(DateOnly date) => throw new NotImplementedException();
+    public DateTimeOffset EndOf(DateOnly date)
+    {
+        var nextMidnightLocal = date.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var offset = Zone.GetUtcOffset(nextMidnightLocal);
+        return new DateTimeOffset(nextMidnightLocal, offset);
+    }
 }
