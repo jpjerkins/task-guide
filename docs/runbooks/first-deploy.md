@@ -2,11 +2,19 @@
 
 Walking skeleton (#51), step 6. Run on **pi5** as `philj` unless a step says otherwise.
 
-Nothing here has been executed. Each step ends in a verification with its expected output; if one
-does not match, **stop** — the next step assumes it passed.
+**Executed end to end on 2026-08-27**, and corrected against what actually happened. Each step
+ends in a verification with its expected output; if one does not match, **stop** — the next step
+assumes it passed.
 
-Modelled on `tto-web-api` in `~/dev/dcm/registry.yaml`, the closest working analogue: a .NET
-service on Swarm with a `/data` bind mount and a generated env file.
+> **Two things this runbook originally got wrong**, both fixed below:
+> 1. `env_files` pointing at a vault-t2 FUSE path **cannot work**. Compose resolves `env_file:`
+>    client-side at deploy time as root, and vault-t2 denies even root. See step 6.
+> 2. `sudo -u '#50013'` fails on pi5 — it runs **sudo-rs**, which does not support the `#uid`
+>    form. Use `setpriv` instead.
+
+Modelled on two services in `~/dev/dcm/registry.yaml`: `tto-web-api` for the shape (a .NET
+service on Swarm with a `/data` bind mount), and **`gmail-mcp` for secrets** (bind-mount
+`/run/vault-t2-fs` read-only, read it in-process as the service's own UID).
 
 **Facts this deploy depends on**
 
@@ -19,8 +27,9 @@ service on Swarm with a `/data` bind mount and a generated env file.
 | Secrets | `pushover_user`, `pushover_token_task-guide` | vault-t2 Tier 2, read over FUSE |
 | Runtime | `swarm` | DCM's default `artifact_format` |
 
-No OS user needs creating. The vault and the kernel both check the UID numerically — hence the
-vault docs' `sudo -u '#50013'`.
+No OS user needs creating. The vault and the kernel both check the UID numerically. The vault docs
+use `sudo -u '#50013'` for this, but **pi5 runs sudo-rs, which does not support the `#uid` form** —
+every such command below uses `setpriv --reuid/--regid` instead.
 
 ---
 
@@ -48,7 +57,7 @@ happens with Pushover unconfigured.
 
 That is survivable but must be closed deliberately, because the tick loop's one-push flag counts
 an unconfigured no-op as "attempted". A container that boots without credentials will never push,
-even after the secrets appear. **Step 9 restarts it for exactly this reason — do not skip it.**
+even after the secrets appear. **Step 7 restarts it for exactly this reason — do not skip it.**
 
 ---
 
@@ -64,8 +73,10 @@ The container runs non-root as 50013; a directory it cannot write makes every `P
 sudo mkdir -p /mnt/data/task-guide
 sudo chown 50013:50013 /mnt/data/task-guide
 sudo chmod 750 /mnt/data/task-guide
-sudo -u '#50013' touch /mnt/data/task-guide/.probe \
-  && sudo -u '#50013' rm /mnt/data/task-guide/.probe \
+# pi5 runs sudo-rs, which rejects `sudo -u '#50013'` with "unknown user #50013". setpriv is
+# the portable equivalent and needs no OS user to exist.
+sudo setpriv --reuid=50013 --regid=50013 --clear-groups touch /mnt/data/task-guide/.probe \
+  && sudo setpriv --reuid=50013 --regid=50013 --clear-groups rm /mnt/data/task-guide/.probe \
   && echo "writable by 50013"
 ```
 
@@ -79,7 +90,7 @@ sudo -u '#50013' touch /mnt/data/task-guide/.probe \
 
 ```bash
 dcm secrets acl-generate | grep -n 50013
-sudo grep -n 50013 /etc/vault-t2/acl.yaml
+sudo grep -n 50013 /etc/vault-t2/acl.yaml   # sudo-rs is fine here; only -u '#uid' is unsupported
 grep -n "vault_uid" ~/dev/dcm/registry.yaml
 ```
 
@@ -110,11 +121,16 @@ Use the **HTTP API**, not the `dcm_deploy` MCP tool: that tool's arguments omit 
 `env_files` and `runtime.user`, all of which this service needs. `POST /deploy` takes the full
 `ServiceSpec` (`lib/registry.py:366`).
 
-Get the repo onto pi5 first — the build runs there, natively on ARM64:
+Get the repo onto pi5 first — the build runs there, natively on ARM64. **`walking-skeleton` has
+never been pushed**, so there is nothing to clone; rsync the working tree from the Mac instead
+(excluding build outputs the image must produce itself):
 
 ```bash
-cd ~/dev && git clone <this-repo> task-guide 2>/dev/null || (cd task-guide && git fetch)
-cd ~/dev/task-guide && git checkout walking-skeleton
+# from the repo root on the Mac
+rsync -az --delete \
+  --exclude 'bin/' --exclude 'obj/' --exclude 'node_modules/' --exclude '.git/' \
+  --exclude 'src/TaskGuide.Api/wwwroot/' \
+  ./ pi5:~/dev/task-guide/
 ```
 
 DCM's API listens on **8765** (`api/server.py:40`) and requires a bearer token read from
@@ -145,12 +161,13 @@ curl -s -X POST http://localhost:8765/deploy \
   ],
   "mounts": [
     { "type": "bind", "target": "/data", "source": "/mnt/data/task-guide",
-      "read_only": false, "purpose": "data" }
+      "read_only": false, "purpose": "data" },
+    { "type": "bind", "target": "/run/vault-t2-fs", "source": "/run/vault-t2-fs",
+      "read_only": true, "purpose": "secret" }
   ],
   "environment": {
     "Storage__DataDir": "/data"
   },
-  "env_files": ["/run/vault-t2-fs/envfiles/task-guide"],
   "runtime": { "user": "50013:50013" },
   "vault_uid": 50013,
   "vault_secrets": ["pushover_user", "pushover_token_task-guide"],
@@ -162,6 +179,20 @@ JSON
 
 `stop-first` matters: the store is memory-authoritative with a single writer, so two replicas
 overlapping would have two processes owning the same file.
+
+**There is deliberately no `env_files` here** — see step 6 for why it cannot work. The
+`/run/vault-t2-fs` bind mount replaces it, and `purpose` must be `secret` (singular); the API
+rejects `secrets` with a 422 enum error.
+
+**If the service is already registered**, `POST /deploy` answers
+`{"detail":"Service 'task-guide' already exists in registry"}`. Amend it in place instead — this
+does not re-render the stack file, so follow it with `POST /upgrade/task-guide`:
+
+```bash
+curl -s -X PATCH http://localhost:8765/registry/task-guide \
+  -H "Authorization: Bearer $DCM_TOKEN" -H "Content-Type: application/json" \
+  -d '{"env_files": [], "mounts": [ ... ]}'
+```
 
 ---
 
@@ -181,8 +212,9 @@ dcm secrets check
 **The real test is not that the file looks right:**
 
 ```bash
-sudo -u '#50013' cat /run/vault-t2-fs/pushover_user | head -c 4; echo
-sudo -u '#50013' cat /run/vault-t2-fs/envfiles/task-guide
+AS_SVC="sudo setpriv --reuid=50013 --regid=50013 --clear-groups"
+$AS_SVC cat /run/vault-t2-fs/pushover_user | head -c 4; echo
+$AS_SVC cat /run/vault-t2-fs/envfiles/task-guide | cut -d= -f1   # key names only
 ```
 
 **Expected:** four characters of the user key, then two lines `Pushover__Token=...` and
@@ -194,7 +226,36 @@ sudo -u '#50013' cat /run/vault-t2-fs/envfiles/task-guide
 
 **This is the one step DCM does not own.** There is no `envfiles` handling anywhere in the DCM
 source, so this file is edited directly. The app binds `Pushover:Token` / `Pushover:UserKey` from
-configuration, and `__` is .NET's nested-key separator, so no code change is needed.
+configuration, and `__` is .NET's nested-key separator, so the names map across untranslated.
+
+### Why compose's `env_file:` cannot be used for this
+
+The original version of this runbook put `/run/vault-t2-fs/envfiles/task-guide` in the service's
+`env_files`. That fails, and not merely on ordering:
+
+```
+open /run/vault-t2-fs/envfiles/task-guide: no such file or directory
+```
+
+Compose resolves `env_file:` **client-side, at deploy time**, as the user running `docker stack
+deploy` — root. And vault-t2 serves each envfile to its declared UID *alone*, denying even root:
+
+```
+$ sudo cat /run/vault-t2-fs/envfiles/gmail-mcp
+cat: Permission denied
+```
+
+So the only process permitted to read the file is the service itself, at runtime. Creating the
+file earlier would only have turned "no such file" into "permission denied".
+
+`gmail-mcp`, `youtube-mcp` and `shortcuts-api` all solve this the same way: bind-mount
+`/run/vault-t2-fs` read-only and read it in-process as their own UID. None uses `env_file`. This
+service now does likewise — `Program.cs` calls `AddEnvFile(...)` on the path below, `optional:
+true` so that local runs without a FUSE mount still start.
+
+(`tto-web-api` *does* use `env_file`, but pointed at `~/secrets/tto-web-api.env`, which DCM
+renders from a `secret_env` mapping. That writes credentials to disk in plaintext — the existing
+file is mode `0664`. The FUSE route keeps them off disk entirely, which is why it was chosen.)
 
 ```bash
 sudo cp /etc/vault-t2/envfiles.yaml /etc/vault-t2/envfiles.yaml.bak
@@ -234,10 +295,21 @@ curl -s -X POST http://localhost:8765/restart/task-guide \
   -H "Authorization: Bearer $(cat ~/secrets/dcm_api_key)"
 
 sleep 10
-docker exec $(docker ps -qf name=task-guide) env | grep -c Pushover__
+docker exec $(docker ps -qf name=task-guide) \
+  sh -c 'cut -d= -f1 /run/vault-t2-fs/envfiles/task-guide'
 ```
 
-**Expected:** `2`. A `0` means the envfile is not reaching the container — recheck steps 5 and 6.
+**Expected:** `Pushover__Token` and `Pushover__UserKey`.
+
+**Note the check changed** along with the mechanism. The secrets are no longer container
+*environment variables*, so `env | grep -c Pushover__` now correctly returns `0` — the process
+reads the mounted file at startup instead. Check the mount, not the environment.
+
+**This restart is still load-bearing** on a clean run. `POST /deploy` registers *and* starts the
+service in one call, so the container's first start precedes the ACL and envfile of steps 5–6,
+and `AddEnvFile` reads the file only at startup. (If a failed deploy meant the container never
+started until after steps 5–6 — as happened on 2026-08-27 — it comes up configured and this
+restart is a no-op.)
 
 ---
 
@@ -305,7 +377,8 @@ for Swarm.)
 reach the container:
 
 ```bash
-docker exec $(docker ps -qf name=task-guide) env | grep -c Pushover__   # expect 2
+docker exec $(docker ps -qf name=task-guide) \
+  sh -c 'cut -d= -f1 /run/vault-t2-fs/envfiles/task-guide'   # expect both key names
 ```
 
 Being explicit about what this proves: a push landing on your phone is the **first** evidence that
@@ -316,19 +389,23 @@ only against an unconfigured token.
 
 ## Step 11 — Tailscale Serve
 
+Check what is already served before claiming a port — `:8443` on pi5 is **already taken**
+(proxying to `127.0.0.1:18080`). `:443` was free as of 2026-08-27:
+
 ```bash
+tailscale serve status            # confirm :443 is unclaimed first
 sudo tailscale serve --bg --https=443 http://localhost:8007
 tailscale serve status
 ```
 
-The client-facing name is the MagicDNS name `pi5.<tailnet>.ts.net` — **not** `pi5.local`, which
-does not resolve from the Mac at all today.
+The client-facing name is the MagicDNS name **`pi5.taile6b761.ts.net`** — **not** `pi5.local`,
+which does not resolve from the Mac at all today.
 
 **Funnel is an explicit never.** Do not add `--funnel`; this service has no auth and is gated
 entirely at the network layer.
 
 ```bash
-curl -s https://pi5.<tailnet>.ts.net/health    # from another tailnet device
+curl -s https://pi5.taile6b761.ts.net/health   # from another tailnet device
 ```
 
 ---
@@ -353,6 +430,25 @@ curl -s -X DELETE http://localhost:8765/registry/task-guide \
 `/mnt/data/task-guide` is deliberately left alone — it holds the only copy of anything captured.
 
 ---
+
+## Outcome of the 2026-08-27 run
+
+| Step | Result |
+|---|---|
+| 1 data dir | ✅ `50013:50013 750`, writable by 50013 (via `setpriv`) |
+| 2 UID free | ✅ ACL held 50010–50012 only |
+| 3 secrets | ✅ both already present — skipped |
+| 4 register/deploy | ⚠️ registered and built; stack deploy failed on `env_file` — see step 6 |
+| 5 ACL | ✅ purely additive; `dcm secrets check` in sync |
+| 6 envfile | ✅ 50013 reads both keys; **root denied**, as designed |
+| 7 restart | ✅ n/a — container's first successful start already had credentials |
+| 8 data dir intact | ✅ unchanged |
+| 9 vertical slice | ✅ 201 + ULID + `Location`; on disk; health `writable: true` |
+| 10 **Pushover** | ✅ `POST api.pushover.net → 200`, **notification confirmed on the phone** |
+| 11 Tailscale Serve | ⏳ not yet applied |
+
+The ownership question below is now settled: a non-root container writing to a host directory
+chowned to its UID works on Linux, proven by step 9's 201 rather than a 503.
 
 ## Known-unproven going in
 
