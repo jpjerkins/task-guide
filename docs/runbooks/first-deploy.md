@@ -39,6 +39,17 @@ Worth stating up front, because it determines which steps are API calls and whic
 
 The last two are the only places this runbook reaches past the API, and both are deliberate.
 
+### Why the order below looks odd
+
+There is a genuine circularity: `dcm secrets acl-generate` derives the ACL from `registry.yaml`'s
+`vault_uid`/`vault_secrets`, and those only exist **after** the service is registered. So the
+service must be deployed before its secrets can be authorised — which means its first start
+happens with Pushover unconfigured.
+
+That is survivable but must be closed deliberately, because the tick loop's one-push flag counts
+an unconfigured no-op as "attempted". A container that boots without credentials will never push,
+even after the secrets appear. **Step 9 restarts it for exactly this reason — do not skip it.**
+
 ---
 
 ## Step 1 — Create the data directory
@@ -93,41 +104,7 @@ read -rs SECRET && printf '%s' "$SECRET" | t2-set pushover_token_task-guide && u
 
 ---
 
-## Step 4 — Map the secrets to environment variables
-
-**This is the one step DCM does not own.** There is no `envfiles` handling anywhere in the DCM
-source, so this file is edited directly. The app binds `Pushover:Token` / `Pushover:UserKey` from
-configuration, and `__` is .NET's nested-key separator, so no code change is needed.
-
-```bash
-sudo cp /etc/vault-t2/envfiles.yaml /etc/vault-t2/envfiles.yaml.bak
-sudo $EDITOR /etc/vault-t2/envfiles.yaml
-```
-
-Add:
-
-```yaml
-task-guide:
-  uid: 50013
-  env:
-    Pushover__Token: pushover_token_task-guide
-    Pushover__UserKey: pushover_user
-```
-
-> **This restart affects every Tier 2 service, not just this one.** `vault-t2-fuse` reads
-> `envfiles.yaml` once at daemon start, and all Tier 2 services read their secrets through that
-> mount. Do it when a brief interruption is acceptable.
-
-```bash
-sudo systemctl restart vault-t2-fuse
-systemctl is-active vault-t2-fuse
-```
-
-**Expected:** `active`.
-
----
-
-## Step 5 — Register and deploy
+## Step 4 — Register and deploy
 
 Use the **HTTP API**, not the `dcm_deploy` MCP tool: that tool's arguments omit `mounts`,
 `env_files` and `runtime.user`, all of which this service needs. `POST /deploy` takes the full
@@ -140,8 +117,14 @@ cd ~/dev && git clone <this-repo> task-guide 2>/dev/null || (cd task-guide && gi
 cd ~/dev/task-guide && git checkout walking-skeleton
 ```
 
+DCM's API listens on **8765** (`api/server.py:40`) and requires a bearer token read from
+`~/secrets/dcm_api_key`. If it is missing, the API answers 503 with `Run: dcm api generate-key`.
+
 ```bash
-curl -s -X POST http://localhost:<dcm-port>/deploy \
+DCM_TOKEN=$(cat ~/secrets/dcm_api_key)
+
+curl -s -X POST http://localhost:8765/deploy \
+  -H "Authorization: Bearer $DCM_TOKEN" \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
@@ -182,7 +165,7 @@ overlapping would have two processes owning the same file.
 
 ---
 
-## Step 6 — Apply the vault ACL
+## Step 5 — Apply the vault ACL
 
 `vault_uid`/`vault_secrets` land in `registry.yaml` at registration; the ACL is generated from
 them rather than hand-written.
@@ -207,7 +190,58 @@ sudo -u '#50013' cat /run/vault-t2-fs/envfiles/task-guide
 
 ---
 
-## Step 7 — Confirm the data dir survived
+## Step 6 — Map the secrets to environment variables
+
+**This is the one step DCM does not own.** There is no `envfiles` handling anywhere in the DCM
+source, so this file is edited directly. The app binds `Pushover:Token` / `Pushover:UserKey` from
+configuration, and `__` is .NET's nested-key separator, so no code change is needed.
+
+```bash
+sudo cp /etc/vault-t2/envfiles.yaml /etc/vault-t2/envfiles.yaml.bak
+sudo $EDITOR /etc/vault-t2/envfiles.yaml
+```
+
+Add:
+
+```yaml
+task-guide:
+  uid: 50013
+  env:
+    Pushover__Token: pushover_token_task-guide
+    Pushover__UserKey: pushover_user
+```
+
+> **This restart affects every Tier 2 service, not just this one.** `vault-t2-fuse` reads
+> `envfiles.yaml` once at daemon start, and all Tier 2 services read their secrets through that
+> mount. Do it when a brief interruption is acceptable.
+
+```bash
+sudo systemctl restart vault-t2-fuse
+systemctl is-active vault-t2-fuse
+```
+
+**Expected:** `active`.
+
+---
+
+## Step 7 — Restart so the service picks up its credentials
+
+Its first start had no envfile. Without this it stays unconfigured for the life of the container,
+and the one-push flag means it will never send.
+
+```bash
+curl -s -X POST http://localhost:8765/restart/task-guide \
+  -H "Authorization: Bearer $(cat ~/secrets/dcm_api_key)"
+
+sleep 10
+docker exec $(docker ps -qf name=task-guide) env | grep -c Pushover__
+```
+
+**Expected:** `2`. A `0` means the envfile is not reaching the container — recheck steps 5 and 6.
+
+---
+
+## Step 8 — Confirm the data dir survived
 
 DCM may have touched `/mnt/data/task-guide` during deploy.
 
@@ -219,7 +253,7 @@ stat -c '%u:%g %a' /mnt/data/task-guide
 
 ---
 
-## Step 8 — Prove the vertical slice on the device
+## Step 9 — Prove the vertical slice on the device
 
 ```bash
 curl -s http://localhost:8007/health
@@ -249,7 +283,7 @@ curl -s http://localhost:8007/health
 
 ---
 
-## Step 9 — The Pushover push
+## Step 10 — The Pushover push
 
 The last unproven integration point in #51, and the only one not verifiable from a terminal:
 **watch your phone.**
@@ -280,7 +314,7 @@ only against an unconfigured token.
 
 ---
 
-## Step 10 — Tailscale Serve
+## Step 11 — Tailscale Serve
 
 ```bash
 sudo tailscale serve --bg --https=443 http://localhost:8007
@@ -302,13 +336,19 @@ curl -s https://pi5.<tailnet>.ts.net/health    # from another tailnet device
 ## Rolling back
 
 ```bash
-curl -s -X POST http://localhost:<dcm-port>/stop/task-guide
+curl -s -X POST http://localhost:8765/stop/task-guide \
+  -H "Authorization: Bearer $(cat ~/secrets/dcm_api_key)"
 sudo cp /etc/vault-t2/envfiles.yaml.bak /etc/vault-t2/envfiles.yaml
 sudo cp /etc/vault-t2/acl.yaml.bak     /etc/vault-t2/acl.yaml
 sudo systemctl restart vault-t2-fuse
 ```
 
-To deregister entirely: `curl -s -X DELETE http://localhost:<dcm-port>/registry/task-guide`
+To deregister entirely:
+
+```bash
+curl -s -X DELETE http://localhost:8765/registry/task-guide \
+  -H "Authorization: Bearer $(cat ~/secrets/dcm_api_key)"
+```
 
 `/mnt/data/task-guide` is deliberately left alone — it holds the only copy of anything captured.
 
@@ -320,7 +360,6 @@ To deregister entirely: `curl -s -X DELETE http://localhost:<dcm-port>/registry/
   enforce host UID ownership across its VM file sharing, so a non-root container writing to a
   host-owned directory succeeds on the Mac and proves nothing about Linux. Steps 1 and 7 exist
   for this.
-- **The `<dcm-port>` placeholder** — fill in from however the API is reached on pi5.
 - **Playwright on ARM64/Debian 12** — verified in research, never executed. Not needed here.
 - **Backups.** `docs/research/dcm-dotnet-deployment.md` §6 recorded the `/mnt/data` → `/mnt/backup`
   routine as broken; corrected as of 2026-08-26 but **user-reported, not device-verified**. Confirm
