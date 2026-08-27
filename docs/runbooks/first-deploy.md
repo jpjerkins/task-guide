@@ -2,102 +2,102 @@
 
 Walking skeleton (#51), step 6. Run on **pi5** as `philj` unless a step says otherwise.
 
-Nothing here has been executed. Every command is written to be checked before it is run, and
-each step ends with a verification whose expected output is stated. If a verification does not
-match, **stop** — the next step assumes it passed.
+Nothing here has been executed. Each step ends in a verification with its expected output; if one
+does not match, **stop** — the next step assumes it passed.
+
+Modelled on `tto-web-api` in `~/dev/dcm/registry.yaml`, the closest working analogue: a .NET
+service on Swarm with a `/data` bind mount and a generated env file.
 
 **Facts this deploy depends on**
 
 | Thing | Value | Why |
 |---|---|---|
-| Service UID/GID | `50013` | vault-t2 requires one UID per service from the reserved range 50000–50099 |
+| Service UID/GID | `50013` | vault-t2 requires one UID per service from 50000–50099, declared in `acl.yaml` |
 | Container port | `8007` | `Program.cs` hardcodes `http://0.0.0.0:8007`. **Not 8080** |
 | Published port | `8007`, host mode | tailnet-only, TLS terminated by Tailscale Serve |
-| Data dir | `/mnt/data/task-guide` → `/data` | DCM `data_dir: true` |
+| Data dir | `/mnt/data/task-guide` → `/data` | explicit bind mount — see step 1 |
 | Secrets | `pushover_user`, `pushover_token_task-guide` | vault-t2 Tier 2, read over FUSE |
-| Update order | `stop-first` | single writer; the store is memory-authoritative |
+| Runtime | `swarm` | DCM's default `artifact_format` |
 
-No OS user needs creating. The vault and the kernel both check the UID numerically — this is why
-the vault docs use `sudo -u '#50013'`.
+No OS user needs creating. The vault and the kernel both check the UID numerically — hence the
+vault docs' `sudo -u '#50013'`.
 
 ---
 
-## Step 1 — Confirm 50013 is actually free
+## What DCM does and does not own
 
-`50013` was chosen without sight of the live ACL. Verify before relying on it.
+Worth stating up front, because it determines which steps are API calls and which are not:
+
+| Concern | Owner | How |
+|---|---|---|
+| Service registration, build, deploy | **DCM** | `POST /deploy` with a `ServiceSpec` |
+| vault-t2 `acl.yaml` | **DCM** | generated from `registry.yaml`'s `vault_uid`/`vault_secrets` |
+| ACL drift detection | **DCM** | `dcm secrets check` |
+| `~/secrets/<name>.env` | **DCM** | rendered from `secret_env` mappings |
+| vault-t2 `envfiles.yaml` | **not DCM** | no reference anywhere in the DCM source; edited by hand |
+| Data dir on **Swarm** | **not DCM** | `lib/deployer.py` creates it only when `not swarm_runtime` |
+
+The last two are the only places this runbook reaches past the API, and both are deliberate.
+
+---
+
+## Step 1 — Create the data directory
+
+**DCM will not create this.** `lib/deployer.py:925` guards data-dir creation with
+`if spec.data_dir and not swarm_runtime`, and this service is Swarm. `data_dir: true` is still
+passed for registry correctness, but the directory and its ownership are ours.
+
+The container runs non-root as 50013; a directory it cannot write makes every `POST` a 503.
 
 ```bash
-sudo cat /etc/vault-t2/acl.yaml | grep -n 50013
-grep -rn "vault_uid" ~/dev/dcm/registry.yaml
+sudo mkdir -p /mnt/data/task-guide
+sudo chown 50013:50013 /mnt/data/task-guide
+sudo chmod 750 /mnt/data/task-guide
+sudo -u '#50013' touch /mnt/data/task-guide/.probe \
+  && sudo -u '#50013' rm /mnt/data/task-guide/.probe \
+  && echo "writable by 50013"
 ```
 
-**Expected:** no match for `50013` in either. If something already claims it, pick another free
-number in 50000–50099 and substitute it everywhere below — including the Dockerfile, which bakes
-it in and would need a rebuild.
+**Expected:** `writable by 50013`.
 
 ---
 
-## Step 2 — Store the Pushover secrets (skip if already stored)
+## Step 2 — Confirm 50013 is free
+
+`50013` was chosen without sight of the live ACL.
+
+```bash
+dcm secrets acl-generate | grep -n 50013
+sudo grep -n 50013 /etc/vault-t2/acl.yaml
+grep -n "vault_uid" ~/dev/dcm/registry.yaml
+```
+
+**Expected:** no existing service claims it. If one does, pick another free number in 50000–50099
+and substitute everywhere — **including the Dockerfile, which bakes it in and needs a rebuild.**
+
+---
+
+## Step 3 — Store the Pushover secrets (skip if present)
 
 ```bash
 t2-list | grep -E "pushover_user|pushover_token_task-guide"
 ```
 
-**Expected:** both names listed. If either is missing:
+**Expected:** both listed. If either is missing:
 
 ```bash
-# Paste the value at the prompt; it is not echoed and does not enter shell history.
-read -rs SECRET && printf '%s' "$SECRET" | t2-set pushover_user   && unset SECRET
+# Value is not echoed and does not enter shell history.
+read -rs SECRET && printf '%s' "$SECRET" | t2-set pushover_user             && unset SECRET
 read -rs SECRET && printf '%s' "$SECRET" | t2-set pushover_token_task-guide && unset SECRET
 ```
 
 ---
 
-## Step 3 — Grant UID 50013 read access to both secrets
-
-Preferred, because it keeps the UID declared with the service rather than in a file someone has
-to remember. In DCM's `registry.yaml`, on the `task-guide` service:
-
-```yaml
-task-guide:
-  vault_uid: 50013
-  vault_secrets:
-    - pushover_user
-    - pushover_token_task-guide
-```
-
-Then regenerate:
-
-```bash
-sudo cp /etc/vault-t2/acl.yaml /etc/vault-t2/acl.yaml.bak   # keep a way back
-dcm secrets acl-generate | sudo vault-t2-acl-update
-```
-
-**Verify — this is the real test, not that the file looks right:**
-
-```bash
-sudo -u '#50013' cat /run/vault-t2-fs/pushover_user | head -c 4; echo
-```
-
-**Expected:** the first four characters of the user key. `Permission denied` means the ACL did not
-take.
-
-<details>
-<summary>Fallback if <code>acl-generate</code> is not wired up for this service</summary>
-
-```bash
-sudo $EDITOR /etc/vault-t2/acl.yaml
-```
-Add `50013` under both `pushover_user` and `pushover_token_task-guide`, then re-run the verify
-above.
-</details>
-
----
-
 ## Step 4 — Map the secrets to environment variables
 
-The app binds `Pushover:Token` and `Pushover:UserKey` from configuration, so the envfile pattern
-needs **no code change**. Double underscore is .NET's separator for nested config keys.
+**This is the one step DCM does not own.** There is no `envfiles` handling anywhere in the DCM
+source, so this file is edited directly. The app binds `Pushover:Token` / `Pushover:UserKey` from
+configuration, and `__` is .NET's nested-key separator, so no code change is needed.
 
 ```bash
 sudo cp /etc/vault-t2/envfiles.yaml /etc/vault-t2/envfiles.yaml.bak
@@ -114,9 +114,9 @@ task-guide:
     Pushover__UserKey: pushover_user
 ```
 
-> **This restart affects more than task-guide.** `vault-t2-fuse` reads `envfiles.yaml` once at
-> daemon start, and every Tier 2 service reads its secrets through this mount. Expect a brief
-> window where they cannot. Do this when a short interruption is acceptable.
+> **This restart affects every Tier 2 service, not just this one.** `vault-t2-fuse` reads
+> `envfiles.yaml` once at daemon start, and all Tier 2 services read their secrets through that
+> mount. Do it when a brief interruption is acceptable.
 
 ```bash
 sudo systemctl restart vault-t2-fuse
@@ -125,54 +125,101 @@ systemctl is-active vault-t2-fuse
 
 **Expected:** `active`.
 
-```bash
-sudo -u '#50013' cat /run/vault-t2-fs/envfiles/task-guide
-```
-
-**Expected:** two lines, `Pushover__Token=...` and `Pushover__UserKey=...`, with real values.
-
 ---
 
-## Step 5 — Create the data directory with the right owner
+## Step 5 — Register and deploy
 
-This is the step most likely to be skipped and most likely to bite. The container runs non-root as
-50013; a directory it cannot write makes every `POST` return 503.
+Use the **HTTP API**, not the `dcm_deploy` MCP tool: that tool's arguments omit `mounts`,
+`env_files` and `runtime.user`, all of which this service needs. `POST /deploy` takes the full
+`ServiceSpec` (`lib/registry.py:366`).
 
-```bash
-sudo mkdir -p /mnt/data/task-guide
-sudo chown 50013:50013 /mnt/data/task-guide
-sudo chmod 750 /mnt/data/task-guide
-sudo -u '#50013' touch /mnt/data/task-guide/.probe && sudo -u '#50013' rm /mnt/data/task-guide/.probe && echo "writable by 50013"
-```
-
-**Expected:** `writable by 50013`.
-
-> If DCM's `data_dir: true` creates this directory itself during deploy, it may reset ownership.
-> Re-run the `chown` and the probe **after** step 6 and before trusting the service.
-
----
-
-## Step 6 — Register and deploy
-
-Registration uses a `build` block so pi5 builds the image natively on ARM64. Trust
-`lib/registry.py` over the documented `ServiceSpec` — the docs are known incomplete.
+Get the repo onto pi5 first — the build runs there, natively on ARM64:
 
 ```bash
-cd ~/dev && git clone <this-repo> task-guide || (cd task-guide && git pull)
+cd ~/dev && git clone <this-repo> task-guide 2>/dev/null || (cd task-guide && git fetch)
 cd ~/dev/task-guide && git checkout walking-skeleton
 ```
 
-Register with:
+```bash
+curl -s -X POST http://localhost:<dcm-port>/deploy \
+  -H "Content-Type: application/json" \
+  -d @- <<'JSON'
+{
+  "name": "task-guide",
+  "description": "Opportunistic task reminder — walking skeleton (#51)",
+  "artifact_format": "swarm",
+  "managed": true,
+  "upgrade_strategy": "build",
+  "data_dir": true,
+  "build": {
+    "context": "/home/philj/dev/task-guide",
+    "dockerfile": "Dockerfile",
+    "target_image": "localhost:5000/task-guide",
+    "platform": "linux/arm64"
+  },
+  "ports": [
+    { "target": 8007, "published": 8007, "protocol": "tcp", "mode": "host" }
+  ],
+  "mounts": [
+    { "type": "bind", "target": "/data", "source": "/mnt/data/task-guide",
+      "read_only": false, "purpose": "data" }
+  ],
+  "environment": {
+    "Storage__DataDir": "/data"
+  },
+  "env_files": ["/run/vault-t2-fs/envfiles/task-guide"],
+  "runtime": { "user": "50013:50013" },
+  "vault_uid": 50013,
+  "vault_secrets": ["pushover_user", "pushover_token_task-guide"],
+  "update_policy": { "order": "stop-first" },
+  "replicas": 1
+}
+JSON
+```
 
-- `build` block pointing at the repo root (the `Dockerfile` is there)
-- `data_dir: true`
-- ports: `{"target": 8007, "published": 8007, "protocol": "tcp", "mode": "host"}`
-- `user: "50013:50013"`
-- `env_file: /run/vault-t2-fs/envfiles/task-guide`
-- `update_config: {"order": "stop-first"}`
-- `vault_uid: 50013` and `vault_secrets` as in step 3
+`stop-first` matters: the store is memory-authoritative with a single writer, so two replicas
+overlapping would have two processes owning the same file.
 
-**Verify:**
+---
+
+## Step 6 — Apply the vault ACL
+
+`vault_uid`/`vault_secrets` land in `registry.yaml` at registration; the ACL is generated from
+them rather than hand-written.
+
+```bash
+sudo cp /etc/vault-t2/acl.yaml /etc/vault-t2/acl.yaml.bak
+dcm secrets acl-generate | sudo vault-t2-acl-update
+dcm secrets check
+```
+
+**Expected:** `dcm secrets check` reports no drift.
+
+**The real test is not that the file looks right:**
+
+```bash
+sudo -u '#50013' cat /run/vault-t2-fs/pushover_user | head -c 4; echo
+sudo -u '#50013' cat /run/vault-t2-fs/envfiles/task-guide
+```
+
+**Expected:** four characters of the user key, then two lines `Pushover__Token=...` and
+`Pushover__UserKey=...` with real values. `Permission denied` means the ACL did not take.
+
+---
+
+## Step 7 — Confirm the data dir survived
+
+DCM may have touched `/mnt/data/task-guide` during deploy.
+
+```bash
+stat -c '%u:%g %a' /mnt/data/task-guide
+```
+
+**Expected:** `50013:50013 750`. If not, re-run step 1's `chown` and probe.
+
+---
+
+## Step 8 — Prove the vertical slice on the device
 
 ```bash
 curl -s http://localhost:8007/health
@@ -180,12 +227,8 @@ curl -s http://localhost:8007/health
 
 **Expected:** `{"ok":true,...,"storage":{"readable":true,"writable":null},...}`
 
-`writable` is `null` before the first write — that is correct, not a fault. It means "nothing
-observed yet" rather than an unverified `true`.
-
----
-
-## Step 7 — Prove the vertical slice on the device
+`writable: null` before the first write is correct, not a fault — it means "nothing observed yet"
+rather than an unverified `true`.
 
 ```bash
 curl -s -i -X POST http://localhost:8007/api/tasks \
@@ -193,8 +236,8 @@ curl -s -i -X POST http://localhost:8007/api/tasks \
   -d '{"title":"first task on pi5","duration":10}'
 ```
 
-**Expected:** `HTTP/1.1 201 Created` with a `t_`-prefixed ULID and a `Location` header.
-**A 503 means the data directory is not writable by 50013 — go back to step 5.**
+**Expected:** `HTTP/1.1 201 Created`, a `t_`-prefixed ULID, a `Location` header.
+**A 503 means the data directory is not writable by 50013 — go back to step 1.**
 
 ```bash
 curl -s http://localhost:8007/api/tasks
@@ -206,53 +249,52 @@ curl -s http://localhost:8007/health
 
 ---
 
-## Step 8 — The Pushover push
+## Step 9 — The Pushover push
 
-This is the last unproven integration point in #51 and the only one that cannot be verified from
-a terminal: **watch your phone.**
+The last unproven integration point in #51, and the only one not verifiable from a terminal:
+**watch your phone.**
 
-The tick loop fires roughly every 30 s and sends exactly one push, once at least one Task exists —
-then never again for the life of the container. A task exists as of step 7, so the next tick
-should deliver it.
+The tick fires roughly every 30 s and sends exactly one push once at least one Task exists, then
+never again for the life of the container. A task exists as of step 8.
 
 ```bash
-sleep 35 && dcm logs task-guide 2>/dev/null | tail -20
+sleep 35
+docker service logs --tail 30 task-guide_task-guide
 ```
+
+(`dcm logs` and `dcm exec` do not exist — `bin/` has no such commands. Use `docker service logs`
+for Swarm.)
 
 **Expected:** one send, and one notification on your phone.
 
-**If the log says `Pushover is not configured (missing Token or UserKey)`** the envfile did not
-reach the container. Check:
+**If the log says `Pushover is not configured (missing Token or UserKey)`**, the envfile did not
+reach the container:
 
 ```bash
-dcm exec task-guide env | grep -c Pushover__     # expect 2
+docker exec $(docker ps -qf name=task-guide) env | grep -c Pushover__   # expect 2
 ```
 
-Being explicit about what this proves: a push landing on your phone is the *first* evidence that
-Pushover works at all. Everything before this — the client, the one-push limit, the missing-token
-no-op — was tested only against an unconfigured token.
+Being explicit about what this proves: a push landing on your phone is the **first** evidence that
+Pushover works at all. The client, the one-push limit and the missing-token no-op were all tested
+only against an unconfigured token.
 
 ---
 
-## Step 9 — Tailscale Serve
+## Step 10 — Tailscale Serve
 
 ```bash
 sudo tailscale serve --bg --https=443 http://localhost:8007
 tailscale serve status
 ```
 
-**Expected:** a mapping from the MagicDNS name to `localhost:8007`.
-
 The client-facing name is the MagicDNS name `pi5.<tailnet>.ts.net` — **not** `pi5.local`, which
-does not resolve reliably (it does not resolve from the Mac at all today).
+does not resolve from the Mac at all today.
 
 **Funnel is an explicit never.** Do not add `--funnel`; this service has no auth and is gated
 entirely at the network layer.
 
-Verify from another tailnet device:
-
 ```bash
-curl -s https://pi5.<tailnet>.ts.net/health
+curl -s https://pi5.<tailnet>.ts.net/health    # from another tailnet device
 ```
 
 ---
@@ -260,24 +302,27 @@ curl -s https://pi5.<tailnet>.ts.net/health
 ## Rolling back
 
 ```bash
-dcm stop task-guide
+curl -s -X POST http://localhost:<dcm-port>/stop/task-guide
 sudo cp /etc/vault-t2/envfiles.yaml.bak /etc/vault-t2/envfiles.yaml
-sudo cp /etc/vault-t2/acl.yaml.bak /etc/vault-t2/acl.yaml
+sudo cp /etc/vault-t2/acl.yaml.bak     /etc/vault-t2/acl.yaml
 sudo systemctl restart vault-t2-fuse
 ```
 
-`/mnt/data/task-guide` is left alone deliberately — it holds the only copy of anything captured.
+To deregister entirely: `curl -s -X DELETE http://localhost:<dcm-port>/registry/task-guide`
+
+`/mnt/data/task-guide` is deliberately left alone — it holds the only copy of anything captured.
 
 ---
 
 ## Known-unproven going in
 
-- **Ownership of `/mnt/data/task-guide`.** Could not be tested locally: Docker Desktop on macOS
-  does not enforce host UID ownership across its VM file sharing, so a non-root container writing
-  to a host-owned directory succeeds on the Mac and may not on Linux. Step 5 exists for this.
-- **Playwright on ARM64/Debian 12** — verified in research, never executed. Not needed for this
-  deploy.
+- **Ownership of `/mnt/data/task-guide`.** Untestable locally: Docker Desktop on macOS does not
+  enforce host UID ownership across its VM file sharing, so a non-root container writing to a
+  host-owned directory succeeds on the Mac and proves nothing about Linux. Steps 1 and 7 exist
+  for this.
+- **The `<dcm-port>` placeholder** — fill in from however the API is reached on pi5.
+- **Playwright on ARM64/Debian 12** — verified in research, never executed. Not needed here.
 - **Backups.** `docs/research/dcm-dotnet-deployment.md` §6 recorded the `/mnt/data` → `/mnt/backup`
-  routine as broken; that is corrected as of 2026-08-26 but **user-reported, not device-verified**.
-  Confirm `/mnt/data/task-guide` is actually included before treating captured data as safe, and
-  before the Restore drill (#49).
+  routine as broken; corrected as of 2026-08-26 but **user-reported, not device-verified**. Confirm
+  `/mnt/data/task-guide` is actually included before treating captured data as safe, and before
+  the Restore drill (#49).
