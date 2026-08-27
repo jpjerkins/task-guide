@@ -6,6 +6,7 @@
     <PackageReference Include="xunit" Version="*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="*" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/TaskGuide.Api/TaskGuide.Api.csproj" />
