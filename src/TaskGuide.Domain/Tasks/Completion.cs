@@ -18,6 +18,24 @@ public sealed record CompletionEntry(DateOnly? Due, DateTimeOffset Done);
 public sealed record CompletionLog(TaskId TaskId, IReadOnlyList<CompletionEntry> Entries)
 {
     public static CompletionLog Empty(TaskId id) => new(id, Array.Empty<CompletionEntry>());
+
+    /// <summary>The most recently done entry, or null. Completion rules read `done`.</summary>
+    public CompletionEntry? Latest => Entries.Count == 0 ? null : Entries.MaxBy(e => e.Done);
+
+    /// <summary>
+    /// Whether an entry satisfies the instance due on <paramref name="due"/>. Calendar rules
+    /// read `due` to count misses; a one-off Task's Deadline (or null) is its only `due`.
+    /// </summary>
+    public bool Covers(DateOnly? due) => Entries.Any(entry => entry.Due == due);
+
+    /// <summary>Appends a completion — the recurring case, where every instance is kept.</summary>
+    public CompletionLog With(CompletionEntry entry) => this with { Entries = [.. Entries, entry] };
+
+    /// <summary>
+    /// Records the single completion a one-off Task can have. At most one entry, structurally:
+    /// there is only ever one instance to satisfy, and that entry is what makes it `Done`.
+    /// </summary>
+    public CompletionLog WithOnlyCompletion(CompletionEntry entry) => this with { Entries = [entry] };
 }
 
 /// <summary>
