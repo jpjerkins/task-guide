@@ -63,7 +63,9 @@ needs to zoom into. A document must be held whole to be written; a skeleton is c
 navigation versus picking**, handed over by #46 and belonging to no other ticket — and (b) emit the
 skeleton. It keeps `wayfinder:grilling`, and closing it closes the map.
 
-### 3. Cut a walking skeleton — one session, not parallel → **#51**
+### 3. Cut a walking skeleton — one session, not parallel → **#51** ✅ deployed 2026-08-26
+
+*6 of 7 boxes ticked; only Playwright on ARM64 remains, and it blocks nothing.*
 
 This is the step that produces running code, and it **cannot** be parallelised: concurrent agents
 collide on `.sln`, DI wiring and the storage layer.
@@ -82,10 +84,14 @@ and carrying no `wayfinder:` label: wayfinder plans and hands off, and it has no
 building the thing — `task` earns its place *"by unblocking a decision, not by delivering the
 destination."* #51 is the other side of that handoff, and the first implementation ticket.
 
-### 4. Five ADRs, not forty-eight — and split `CONTEXT.md`
+### 4. Five ADRs, not forty-eight — and split `CONTEXT.md` ✅ done 2026-08-27
 
-`docs/agents/domain.md` instructs engineering agents to read `docs/adr/`. **The directory does not
-exist.** The decisions live in issue bodies and a 105 KB map body, and no subagent will read
+*Landed as **seven** ADRs in `docs/adr/` (`3e1f9b0`). `CONTEXT.md` was **indexed rather than split** —
+see `CONTEXT-INDEX.md`; the cross-references between entries are dense enough that splitting would
+break more than it saves.*
+
+`docs/agents/domain.md` instructs engineering agents to read `docs/adr/`. **The directory did not
+exist** when this was written. The decisions live in issue bodies and a 105 KB map body, and no subagent will read
 forty-eight issues.
 
 ADR only the decisions a coding agent would otherwise violate:
@@ -130,8 +136,9 @@ Both are now tracked as `wayfinder:task` tickets.
 
 ## Live unknowns worth carrying into the build
 
-- **Override date entry** (#46) — flagged as an open *navigation-versus-picking* question and handed
-  to #41. If #41 does not answer it, a UI agent will invent an answer.
+- ~~**Override date entry** (#46)~~ — **answered.** #41 settled it before closing: a date is reached
+  by the ±10-day rail or by the "pick a date…" escape beside it, mirroring Postpone's shape. See the
+  **Override** entry in `CONTEXT.md`. No longer an unknown.
 - **Shortcut name prefix relation** — untested deliberately; no shipping name creates the case. A
   fourth capture path must probe it first, because the failure mode is invoking the *wrong*
   Shortcut, which is silent.
