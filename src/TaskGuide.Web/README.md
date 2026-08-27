@@ -8,6 +8,29 @@ app code, and AOT pushes several MB more, against a few hundred KB gzipped for a
 Blazor Server was ruled out earlier for needing a persistent SignalR connection — a poor fit for
 "tap a cold Pushover link on a phone that was asleep".
 
+## Types come from the API, never from here
+
+`src/api/schema.d.ts` is generated — do not edit it, and do not hand-write a type for anything
+the API returns. `src/api/client.ts` derives its wire types from it and is the one place a
+response is normalised before component code sees it.
+
+To regenerate, the script needs a live API on `localhost:8007`:
+
+```sh
+# from the repo root, in another shell — /data is not writable on a dev machine
+Storage__DataDir=$(mktemp -d) dotnet run --project src/TaskGuide.Api
+# then, from this directory
+npm run gen:api
+```
+
+`tests/TaskGuide.Api.Tests/OpenApiDocumentTests.cs` guards the document's shape. A Minimal API
+handler that returns plain `Results.Ok(...)` is typed `IResult`, so the generator infers nothing
+and emits a bare `200: OK` with no schema — use `TypedResults` for anything the SPA consumes.
+
+Note .NET 10 describes an int32 as `integer | string`, so a generated numeric field arrives as
+`number | string`. Coerce it in `client.ts`, and assert the coercion on the *value*: `${x}m`
+renders `30` and `'30'` identically, so a DOM assertion cannot hold it.
+
 ## Shell — variant D, "moment-first, merged"
 
 A four-tab bar (**Now / Tasks / Schedule / More**), a Today-style home screen, and quick-add as a
