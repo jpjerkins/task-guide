@@ -445,7 +445,11 @@ curl -s -X DELETE http://localhost:8765/registry/task-guide \
 | 8 data dir intact | ✅ unchanged |
 | 9 vertical slice | ✅ 201 + ULID + `Location`; on disk; health `writable: true` |
 | 10 **Pushover** | ✅ `POST api.pushover.net → 200`, **notification confirmed on the phone** |
-| 11 Tailscale Serve | ⏳ not yet applied |
+| 11 Tailscale Serve | ✅ `https://pi5.taile6b761.ts.net/` → `:8007`, tailnet only, no Funnel |
+
+Verified from the Mac over the tailnet: `/health`, `/api/tasks` and the SPA all answer over TLS.
+`tailscale funnel status` reports both entries as "tailnet only". The pre-existing `:8443` →
+`127.0.0.1:18080` mapping was left untouched.
 
 The ownership question below is now settled: a non-root container writing to a host directory
 chowned to its UID works on Linux, proven by step 9's 201 rather than a 503.
