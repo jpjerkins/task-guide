@@ -1,4 +1,7 @@
+using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Matching;
 using TaskGuide.Domain.Schedule;
+using TaskGuide.Domain.Tags;
 
 namespace TaskGuide.Domain.Firing;
 
@@ -11,7 +14,14 @@ public static class SnoozePolicy
     public static readonly TimeSpan Cap = TimeSpan.FromMinutes(30);
 
     /// <summary>clamp(25% of Window duration, 5 minutes, 30 minutes). Repeats are unlimited, same interval each time.</summary>
-    public static TimeSpan IntervalFor(TimeSpan windowLength) => throw new NotImplementedException();
+    public static TimeSpan IntervalFor(TimeSpan windowLength)
+    {
+        var quarter = windowLength * 0.25;
+
+        return quarter < Floor ? Floor
+            : quarter > Cap ? Cap
+            : quarter;
+    }
 
     /// <summary>
     /// <c>offered ⟺ now + interval &lt; the Reminder's Day boundary</c>. Nothing here is a
@@ -35,4 +45,52 @@ public static class SnoozePolicy
     /// </summary>
     public static TimeSpan RemainingIn(AvailabilityWindow window, DateTimeOffset end, DateTimeOffset now) =>
         end - now;
+
+    /// <summary>
+    /// The re-derived Duration ceiling: from the time <b>actually remaining</b> while any is
+    /// left, and floored at the smallest bucket once the span is spent. Flooring at the
+    /// smallest bucket rather than at whatever was last derived is what keeps the rule
+    /// <b>stateless</b> — no chain remembers anything, and the answer does not depend on when
+    /// the user happened to snooze or how many times.
+    /// </summary>
+    public static TagValue CeilingFor(TimeSpan remaining, IReadOnlyList<TagValue> orderedBuckets) =>
+        remaining > TimeSpan.Zero
+            ? DurationCeiling.WindowCeiling(remaining, orderedBuckets)
+            : SmallestBucketOf(orderedBuckets);
+
+    /// <summary>
+    /// The smallest bucket that names a minute count, read off the registry's own declared
+    /// values — never a literal restating them. It is identified by being the first sized one,
+    /// the same way <see cref="DurationCeiling"/> identifies <c>longer</c> by what it is not.
+    /// </summary>
+    private static TagValue SmallestBucketOf(IReadOnlyList<TagValue> orderedBuckets) =>
+        orderedBuckets.First(bucket => int.TryParse(bucket.Value, out _));
+
+    /// <summary>
+    /// The re-fire's filter: the original Window as it stands, so every Dimension value stays
+    /// frozen at its authored value — only Duration moves, to <see cref="CeilingFor"/>.
+    /// </summary>
+    public static MatchContext ReFireContext(
+        AvailabilityWindow window,
+        TimeSpan remaining,
+        IReadOnlyList<TagValue> orderedBuckets,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
+        IReadOnlyList<DimensionId> failedFetches) =>
+        new(window, CeilingFor(remaining, orderedBuckets), fetched, failedFetches);
+
+    /// <summary>
+    /// <b>An empty re-fire pushes once, then ends the chain.</b> The request is answered rather
+    /// than silently dropped — nobody asked for the Window to stay quiet, but they did ask for
+    /// this — and it cannot become repetitive, because once the ceiling has floored every later
+    /// re-fire runs a strictly narrower query and can only repeat the same emptiness.
+    /// </summary>
+    public static ReFireOutcome OutcomeOf(int matchedCount) =>
+        matchedCount == 0 ? ReFireOutcome.PushAndEndChain : ReFireOutcome.PushAndContinue;
+}
+
+/// <summary>What a re-fire does. Both cases push: the difference is whether Snooze is offered again.</summary>
+public enum ReFireOutcome
+{
+    PushAndContinue,
+    PushAndEndChain,
 }
