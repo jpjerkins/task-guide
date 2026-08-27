@@ -96,6 +96,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a Window's ceiling is derived from its length and cannot be authored
 - a 60-minute Window admits the 60 bucket exactly (boundary)
 - 60 minutes snaps to the 60 bucket, not `longer` (boundary)
+- both directions derive their bucket minutes from `KnownDimensions.DurationBuckets`, not a
+  private copy — one test per declared sized bucket (2/10/30/60)
 - raw minutes from a capture path snap **up** to the next bucket (45 → 60)
 - 61 minutes snaps to `Longer`
 

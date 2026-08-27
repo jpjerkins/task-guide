@@ -9,17 +9,31 @@ namespace TaskGuide.Domain.Matching;
 /// the bucket the estimate needs <b>at least</b>. Same buckets, opposite direction — never
 /// collapsed into one function (ADR-0007).
 /// </summary>
+/// <remarks>
+/// Neither function owns a bucket list of its own — both take the ordinal Duration
+/// Dimension's declared values (<c>KnownDimensions.DurationBuckets</c>) as a parameter, the
+/// same way <c>Matcher</c> takes a <c>MatchContext</c> rather than reaching for a static.
+/// A bucket's minute count is read from its own value string (<c>"30"</c> parses as 30), so
+/// there is nothing here to fall out of step with the registry: a bucket renamed, resized or
+/// reordered there changes what this derives from it, not a second literal restating it.
+/// </remarks>
 public static class DurationCeiling
 {
-    private static readonly (int Minutes, TagValue Value)[] SizedBuckets =
-    [
-        (2, new TagValue("2")),
-        (10, new TagValue("10")),
-        (30, new TagValue("30")),
-        (60, new TagValue("60")),
-    ];
+    /// <summary>
+    /// The declared buckets that name a minute count, each paired with that count — every
+    /// bucket except the one whose value cannot parse as a number (<c>longer</c>).
+    /// </summary>
+    private static IEnumerable<(int Minutes, TagValue Value)> SizedBucketsOf(IReadOnlyList<TagValue> orderedBuckets) =>
+        orderedBuckets
+            .Where(bucket => int.TryParse(bucket.Value, out _))
+            .Select(bucket => (int.Parse(bucket.Value), bucket));
 
-    private static readonly TagValue Longer = new("longer");
+    /// <summary>
+    /// The one declared bucket with no minute count — "longer" names no length, so it is
+    /// identified by what it is <em>not</em> (parseable as minutes) rather than by position.
+    /// </summary>
+    private static TagValue UnsizedBucketOf(IReadOnlyList<TagValue> orderedBuckets) =>
+        orderedBuckets.Single(bucket => !int.TryParse(bucket.Value, out _));
 
     /// <summary>
     /// The Window's ceiling: the largest sized bucket that fits <b>inside</b> the resolved
@@ -33,12 +47,13 @@ public static class DurationCeiling
     /// never fires. Its ceiling is never consulted for matching, so this falls back to the
     /// smallest bucket rather than declaring a rule for a case matching never reaches.
     /// </remarks>
-    public static TagValue WindowCeiling(TimeSpan length)
+    public static TagValue WindowCeiling(TimeSpan length, IReadOnlyList<TagValue> orderedBuckets)
     {
         var minutes = length.TotalMinutes;
-        var ceiling = SizedBuckets[0].Value;
+        var sized = SizedBucketsOf(orderedBuckets).ToArray();
+        var ceiling = sized[0].Value;
 
-        foreach (var bucket in SizedBuckets)
+        foreach (var bucket in sized)
         {
             if (bucket.Minutes <= minutes) ceiling = bucket.Value;
         }
@@ -51,13 +66,13 @@ public static class DurationCeiling
     /// direction from the Window's ceiling. An estimate must not under-claim: 45 minutes snaps
     /// to 60, and anything past the largest sized bucket (61+) snaps to <c>longer</c>.
     /// </summary>
-    public static TagValue SnapUp(int rawMinutes)
+    public static TagValue SnapUp(int rawMinutes, IReadOnlyList<TagValue> orderedBuckets)
     {
-        foreach (var bucket in SizedBuckets)
+        foreach (var bucket in SizedBucketsOf(orderedBuckets))
         {
             if (rawMinutes <= bucket.Minutes) return bucket.Value;
         }
 
-        return Longer;
+        return UnsizedBucketOf(orderedBuckets);
     }
 }

@@ -28,6 +28,6 @@ public sealed record AvailabilityWindow(
     /// date — never read from <see cref="Tags"/>. There is no window-side Duration Tag to
     /// author and no way to set one; the ceiling cannot disagree with the clock.
     /// </summary>
-    public TagValue DurationCeiling(DateOnly date, ClockTimeResolution resolution) =>
-        Matching.DurationCeiling.WindowCeiling(resolution.LengthOf(date, Start, End));
+    public TagValue DurationCeiling(DateOnly date, ClockTimeResolution resolution, IReadOnlyList<TagValue> orderedBuckets) =>
+        Matching.DurationCeiling.WindowCeiling(resolution.LengthOf(date, Start, End), orderedBuckets);
 }
