@@ -12,6 +12,9 @@ namespace TaskGuide.Domain.Time;
 /// </remarks>
 public sealed class ClockTimeResolution(DayBoundary boundary)
 {
+    private readonly DayBoundary _boundary = boundary;
+
+
     /// <summary>
     /// Ambiguous (fall back): the <b>first</b> occurrence — a Window fires at its start.
     /// Nonexistent (spring forward): <b>clamp</b> to the first valid instant, i.e. the gap's end.

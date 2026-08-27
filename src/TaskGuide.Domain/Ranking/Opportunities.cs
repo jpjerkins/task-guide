@@ -11,6 +11,10 @@ namespace TaskGuide.Domain.Ranking;
 /// </summary>
 public sealed class OpportunityCounter(IDayShapeReader shapes, DimensionRegistry registry)
 {
+    private readonly IDayShapeReader _shapes = shapes;
+    private readonly DimensionRegistry _registry = registry;
+
+
     /// <summary>
     /// A rolling <c>min(7 days, time to Deadline)</c> measured from now — not the Pattern's
     /// Sun–Sat week. Once the Deadline has passed the bound is <b>dropped</b> and the horizon

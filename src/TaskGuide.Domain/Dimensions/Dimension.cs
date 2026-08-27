@@ -1,3 +1,5 @@
+using TaskGuide.Domain.Tags;
+
 namespace TaskGuide.Domain.Dimensions;
 
 /// <summary>
@@ -36,7 +38,15 @@ public sealed record OrdinalDimension(
 {
     public override IReadOnlyList<TagValue> Values => OrderedValues;
 
-    public int RankOf(TagValue value) => OrderedValues.IndexOf(value);
+    public int RankOf(TagValue value)
+    {
+        for (var i = 0; i < OrderedValues.Count; i++)
+        {
+            if (OrderedValues[i] == value) return i;
+        }
+
+        return -1;
+    }
 }
 
 /// <summary>
