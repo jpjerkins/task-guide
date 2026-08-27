@@ -1,0 +1,18 @@
+# Build inputs the image must produce itself, not inherit from whoever runs `docker build`.
+**/bin/
+**/obj/
+**/node_modules/
+.git/
+src/TaskGuide.Api/wwwroot/
+
+# Editor/OS noise, not needed in the build context.
+.claude/
+.vs/
+.vscode/
+.DS_Store
+*.user
+
+# Docs, tests, and scripts aren't part of the published image.
+docs/
+tests/
+scripts/
