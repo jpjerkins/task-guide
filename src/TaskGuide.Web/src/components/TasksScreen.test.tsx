@@ -33,6 +33,34 @@ describe('TasksScreen', () => {
     expect(screen.getByText('10m')).toBeInTheDocument()
   })
 
+  it('renders a task with a null duration and no duration pill', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([{ id: '1', title: 'Water the plants', duration: null }]),
+      ),
+    )
+
+    const { container } = render(<TasksScreen />)
+
+    expect(await screen.findByText('Water the plants')).toBeInTheDocument()
+    expect(container.querySelector('.pill.dur')).not.toBeInTheDocument()
+  })
+
+  it('coerces a string duration from the API into a rendered minutes label', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([{ id: '1', title: 'Water the plants', duration: '30' }]),
+      ),
+    )
+
+    render(<TasksScreen />)
+
+    expect(await screen.findByText('Water the plants')).toBeInTheDocument()
+    expect(screen.getByText('30m')).toBeInTheDocument()
+  })
+
   it('renders the empty state when the API returns no tasks', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])))
 

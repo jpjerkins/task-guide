@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createTask, fetchTasks } from '../api/client'
-import type { Task } from '../api/types'
+import { createTask, fetchTasks, type Task } from '../api/client'
 import { QuickAdd } from './QuickAdd'
 
 type LoadState =
@@ -63,7 +62,9 @@ export function TasksScreen() {
                   <div className="body">
                     <div className="title">{t.title}</div>
                     <div className="meta">
-                      <span className="pill dur">{durLabel(t.duration)}</span>
+                      {t.duration !== null && (
+                        <span className="pill dur">{durLabel(t.duration)}</span>
+                      )}
                     </div>
                   </div>
                 </div>

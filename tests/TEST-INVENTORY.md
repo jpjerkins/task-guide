@@ -338,6 +338,19 @@ Against `fixtures/data`, the golden store.
 - `GET /api/patterns/active/switch-impact` returns the orphan count **before** the switch
 - `/health` is reachable without traversing `/api`
 
+## `TaskGuide.Web` (vitest)
+
+The SPA's `Task` type is generated from the OpenAPI document (`npm run gen:api`); nothing about
+a Task's shape is written by hand. `src/api/client.ts` is the normalisation boundary.
+
+- a string `duration` off the wire is coerced to a **number** — the generator describes an int32
+  as `integer | string`, and only a value assertion catches this: `${x}m` renders `30` and `'30'`
+  identically, so no component test can tell them apart
+- a null `duration` stays null rather than becoming `0`
+- a Task with a null `duration` renders its title and **no duration pill**
+- a non-OK GET and a rejected fetch both land on the error state
+- the quick-add duration chip IS the submit, and is inert while the title is empty
+
 ## `TaskGuide.E2E`
 
 - capture a Task in the SPA, see it in the list, mark it off
