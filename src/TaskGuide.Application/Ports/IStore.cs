@@ -31,6 +31,16 @@ public interface IStore
     /// heals itself.
     /// </summary>
     Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// <b>Observed, not probed</b> (#51/#25) — the outcome of the most recent
+    /// <see cref="MutateAsync"/> call's actual disk write: <c>null</c> before any write has been
+    /// attempted since this process started (an unwritten store is not evidence of anything
+    /// wrong, only an <em>observed</em> failure is), <c>true</c> after the write succeeded,
+    /// <c>false</c> after it threw. Never a synthetic write on the health path — Liveness reads
+    /// this off work the store was already doing.
+    /// </summary>
+    bool? LastWriteSucceeded { get; }
 }
 
 public interface IStoreView

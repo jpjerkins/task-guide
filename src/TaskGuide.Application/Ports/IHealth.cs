@@ -30,4 +30,7 @@ public interface IHealthReporter
 /// <param name="LastTick">Also the one line Liveness surfaces in the app — the last fire, on a screen that already exists.</param>
 public sealed record HealthReport(bool Ok, DateTimeOffset? LastTick, StorageHealth Storage, TimeSpan Uptime);
 
-public sealed record StorageHealth(bool Readable, bool Writable);
+/// <param name="Writable"><c>null</c> when no write has been attempted since boot — represented
+/// honestly rather than defaulted to <c>true</c>. Does not by itself fail <see cref="HealthReport.Ok"/>;
+/// only an <em>observed</em> <c>false</c> does (see <see cref="IStore.LastWriteSucceeded"/>).</param>
+public sealed record StorageHealth(bool Readable, bool? Writable);

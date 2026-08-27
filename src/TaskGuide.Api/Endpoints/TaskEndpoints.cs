@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -22,7 +23,7 @@ public static class TaskEndpoints
         tasks.MapGet("/", (IStore store) =>
             Results.Ok(store.Read().Tasks.Select(ToResponse)));
 
-        tasks.MapPost("/", async (CreateTaskRequest request, IStore store, IIdMinter minter, CancellationToken ct) =>
+        tasks.MapPost("/", async (CreateTaskRequest request, IStore store, IIdMinter minter, ILogger<TaskEndpointsLogCategory> logger, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Title))
             {
@@ -50,9 +51,19 @@ public static class TaskEndpoints
                 Recurrence: null,
                 DateTimeOffset.UtcNow);
 
-            await store.MutateAsync(
-                view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, task]]),
-                ct);
+            try
+            {
+                await store.MutateAsync(
+                    view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, task]]),
+                    ct);
+            }
+            catch (Exception ex)
+            {
+                // A failed persist is a deliberate 503, never a raw 500 — the disk rejecting a
+                // write is an infrastructure condition the caller can retry, not a server bug.
+                logger.LogError(ex, "Failed to persist Task {TaskId}", task.Id);
+                return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Storage is temporarily unavailable");
+            }
 
             return Results.Created($"/api/tasks/{task.Id.Value}", ToResponse(task));
         });
@@ -95,3 +106,6 @@ public static class TaskEndpoints
 public sealed record CreateTaskRequest(string Title, int Duration);
 
 public sealed record TaskResponse(string Id, string Title, int? Duration, DateTimeOffset CreatedAt);
+
+/// <summary>A logging-category marker — <see cref="TaskEndpoints"/> is static and can't be used as one directly.</summary>
+public sealed class TaskEndpointsLogCategory;

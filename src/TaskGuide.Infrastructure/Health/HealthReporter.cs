@@ -6,20 +6,15 @@ namespace TaskGuide.Infrastructure.Health;
 
 /// <summary>
 /// <see cref="IHealthReporter"/> for the walking skeleton (#51): liveness is tick freshness plus
-/// a store read, not an HTTP 200. Peer to <see cref="JsonStore"/> — both understand the physical
-/// file layout — rather than reaching through <see cref="IStore"/>, because "read health parses
-/// the file" (the XML docs on <see cref="IHealthReporter"/>) means re-parsing what's on disk
-/// right now, not trusting the in-memory cache a corrupting write happened after.
+/// a store read, not an HTTP 200. Read health re-parses <c>tasks.json</c> directly (peer to
+/// <see cref="JsonStore"/> — both understand the physical file layout — because "read health
+/// parses the file", the XML docs on <see cref="IHealthReporter"/>, means re-parsing what's on
+/// disk right now, not trusting the in-memory cache a corrupting write happened after). Write
+/// health is read off <paramref name="store"/>'s <see cref="IStore.LastWriteSucceeded"/> —
+/// <b>observed, not probed</b>: work the store was already doing, never a synthetic write
+/// manufactured for the health check.
 /// </summary>
-/// <remarks>
-/// <b>Write health is a stand-in, not the documented mechanism.</b> The real design reads write
-/// health off the retention sweep's outcome — work already touching the filesystem every tick —
-/// specifically so it is never a probe. That sweep doesn't exist yet (#51 is storage substrate
-/// plus one endpoint, not the domain). Rather than fabricate a probe that contradicts "not a
-/// probe", <see cref="StorageHealth.Writable"/> is hardcoded <c>true</c> here, and this needs
-/// revisiting the moment the retention sweep lands.
-/// </remarks>
-public sealed class HealthReporter(string dataDir) : IHealthReporter
+public sealed class HealthReporter(IStore store, string dataDir) : IHealthReporter
 {
     /// <summary>
     /// A tick loop with a ~30s cadence: three missed ticks (90s) before the reporter calls it
@@ -41,12 +36,17 @@ public sealed class HealthReporter(string dataDir) : IHealthReporter
     {
         var now = DateTimeOffset.UtcNow;
         var readable = TryParseTasksJson();
-        const bool writable = true; // see remarks — stand-in until the retention sweep exists
+        var writable = store.LastWriteSucceeded; // null = no write attempted yet since boot
 
         var lastTickUtcTicks = Interlocked.Read(ref _lastTickUtcTicks);
         DateTimeOffset? lastTick = lastTickUtcTicks == 0 ? null : new DateTimeOffset(lastTickUtcTicks, TimeSpan.Zero);
         var fresh = lastTick is { } tick && now - tick <= StalenessThreshold;
-        var ok = fresh && readable && writable;
+
+        // Unknown does not fail `ok`: a service that simply hasn't written anything yet (nothing
+        // captured since boot) is not evidence of anything wrong. Only an *observed* failed write
+        // (writable == false) does — "observed, not probed" applies to the predicate too, not
+        // just to how the value is obtained.
+        var ok = fresh && readable && writable != false;
 
         return new HealthReport(ok, lastTick, new StorageHealth(readable, writable), now - _startedAt);
     }

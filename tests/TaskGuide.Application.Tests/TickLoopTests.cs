@@ -35,6 +35,7 @@ public sealed class TickLoopTests : IDisposable
 
         public IStoreView Read() => new View(Tasks);
         public Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public bool? LastWriteSucceeded => null;
     }
 
     private sealed class CapturingPushoverClient : IPushoverClient
@@ -64,7 +65,7 @@ public sealed class TickLoopTests : IDisposable
     {
         var store = new FakeStore();
         var pushover = new CapturingPushoverClient();
-        var health = new HealthReporter(_dataDir);
+        var health = new HealthReporter(store, _dataDir);
         var loop = new TickLoop(store, pushover, health);
 
         await loop.TickOnceAsync(CancellationToken.None);
@@ -78,7 +79,7 @@ public sealed class TickLoopTests : IDisposable
     {
         var store = new FakeStore();
         var pushover = new CapturingPushoverClient();
-        var health = new HealthReporter(_dataDir);
+        var health = new HealthReporter(store, _dataDir);
         var loop = new TickLoop(store, pushover, health);
         store.Tasks.Add(NewTask("Fix the shelf bracket"));
 

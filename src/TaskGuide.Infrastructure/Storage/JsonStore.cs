@@ -41,6 +41,21 @@ public sealed class JsonStore : IStore
     /// <summary>Not a copy — the current immutable view, swapped by reference on every successful mutation.</summary>
     public IStoreView Read() => _current;
 
+    // 0 = no write attempted yet, 1 = last write succeeded, 2 = last write failed. An int
+    // (not bool?) so it can be updated and read via Interlocked without a lock — Read()-adjacent
+    // health checks must never block on the write lock.
+    private const int NoWriteYet = 0;
+    private const int WriteSucceeded = 1;
+    private const int WriteFailed = 2;
+    private int _lastWriteOutcome = NoWriteYet;
+
+    public bool? LastWriteSucceeded => Interlocked.CompareExchange(ref _lastWriteOutcome, 0, 0) switch
+    {
+        WriteSucceeded => true,
+        WriteFailed => false,
+        _ => null,
+    };
+
     /// <summary>
     /// Only a Tasks write is supported today: <paramref name="mutation"/> must return a
     /// <see cref="StoreMutation"/> whose single write is the new <see cref="TaskItem"/> list.
@@ -55,6 +70,8 @@ public sealed class JsonStore : IStore
 
             if (result.OrderedWrites is not [IReadOnlyList<TaskItem> callerTasks])
             {
+                // A malformed StoreMutation is a caller/programming bug, not a disk failure —
+                // deliberately not recorded as a write outcome either way.
                 throw new NotImplementedException(
                     "JsonStore only writes tasks.json today — a StoreMutation must carry exactly one IReadOnlyList<TaskItem> write.");
             }
@@ -66,9 +83,19 @@ public sealed class JsonStore : IStore
             IReadOnlyList<TaskItem> tasks = callerTasks.ToArray();
 
             var extras = view.TaskExtras;
-            await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks, extras), cancellationToken);
+
+            try
+            {
+                await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks, extras), cancellationToken);
+            }
+            catch
+            {
+                Interlocked.Exchange(ref _lastWriteOutcome, WriteFailed);
+                throw;
+            }
 
             _current = new StoreView(tasks, extras);
+            Interlocked.Exchange(ref _lastWriteOutcome, WriteSucceeded);
         }
         finally
         {

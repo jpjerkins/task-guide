@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
@@ -44,6 +45,7 @@ public sealed class TaskEndpointsTests : IDisposable
 
     public void Dispose()
     {
+        if (!OperatingSystem.IsWindows()) Chmod(_dataDir, 0b111_101_101); // undo any chmod a test applied
         _client.Dispose();
         _factory.Dispose();
         Directory.Delete(_dataDir, recursive: true);
@@ -97,5 +99,33 @@ public sealed class TaskEndpointsTests : IDisposable
     {
         var response = await _client.PostAsJsonAsync("/api/tasks", new { title = "Water the plants", duration = 0 });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The exact repro reported live against the running API: chmod the data dir unwritable
+    /// after boot, then POST — a failed persist must be a deliberate 503 with the exception
+    /// logged, never a raw 500.
+    /// </summary>
+    [Fact]
+    public async Task A_disk_write_failure_is_a_503_not_a_raw_500()
+    {
+        if (OperatingSystem.IsWindows()) return; // chmod-based denial is POSIX-specific; see HealthReporterTests
+
+        Chmod(_dataDir, 0b101_000_000); // 500: r-x for the owner, no write — even for the owner, not root
+
+        var response = await _client.PostAsJsonAsync("/api/tasks", new { title = "should fail", duration = 5 });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [DllImport("libc", SetLastError = true, EntryPoint = "chmod")]
+    private static extern int chmod(string pathname, int mode);
+
+    private static void Chmod(string path, int mode)
+    {
+        if (chmod(path, mode) != 0)
+        {
+            throw new IOException($"chmod({path}, {Convert.ToString(mode, 8)}) failed: {Marshal.GetLastWin32Error()}");
+        }
     }
 }
