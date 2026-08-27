@@ -52,16 +52,28 @@ public sealed class MatcherTests
         new(WId, "Some window", new TimeOnly(9, 0), new TimeOnly(10, 0), tags);
 
     /// <summary>The window-side default Duration ceiling ("30") — irrelevant to every test here.</summary>
-    private static MatchContext Context(TagSet windowTags) => new(
+    private static MatchContext Context(
+        TagSet windowTags,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>>? fetched = null) => new(
         Window(windowTags),
         DurationCeiling: new TagValue("30"),
-        Fetched: new Dictionary<DimensionId, IReadOnlyList<TagValue>>(),
+        Fetched: fetched ?? new Dictionary<DimensionId, IReadOnlyList<TagValue>>(),
         FailedFetches: Array.Empty<DimensionId>());
 
     private static bool FitsWithDuration(TaskItem task, TagSet windowTags, string durationBucket = "30") =>
         Matcher.Fits(
             task with { Tags = Merge(task.Tags, Categorical(KnownDimensions.Duration, durationBucket)) },
             Context(windowTags),
+            Registry);
+
+    private static bool FitsWithFetched(
+        TaskItem task,
+        TagSet windowTags,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
+        string durationBucket = "30") =>
+        Matcher.Fits(
+            task with { Tags = Merge(task.Tags, Categorical(KnownDimensions.Duration, durationBucket)) },
+            Context(windowTags, fetched),
             Registry);
 
     [Theory]
@@ -173,8 +185,27 @@ public sealed class MatcherTests
         Assert.True(FitsWithDuration(task, TagSet.Empty));
 
         // A loose Tag on the Window likewise satisfies nothing — it isn't a declared condition.
+        // Using the exact string the Task needs (not a near-miss) is what makes this
+        // discriminate: a Matcher that wrongly read the Window's loose bag would pass here.
         var taggedTask = Item(Categorical(KnownDimensions.Location, "garage"));
-        Assert.False(FitsWithDuration(taggedTask, Loose("garage-ish")));
+        Assert.False(FitsWithDuration(taggedTask, Loose("garage")));
+    }
+
+    [Fact]
+    public void A_fetched_axis_reads_its_Window_side_set_from_Fetched_not_the_Window_s_authored_Tags()
+    {
+        // Weather is Fetched: its Window-side value never lives on the Window's own Tags.
+        var dryTask = Item(Categorical(KnownDimensions.Weather, "dry"));
+
+        var fetchedDry = new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+        {
+            [KnownDimensions.Weather] = [new TagValue("dry")],
+        };
+        Assert.True(FitsWithFetched(dryTask, TagSet.Empty, fetchedDry));
+
+        // Unknown/unfetched resolves to the empty set — fails closed, same as absence anywhere
+        // else on a categorical axis.
+        Assert.False(FitsWithFetched(dryTask, TagSet.Empty, new Dictionary<DimensionId, IReadOnlyList<TagValue>>()));
     }
 
     [Fact]

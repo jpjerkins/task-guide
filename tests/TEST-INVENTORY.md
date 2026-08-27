@@ -76,7 +76,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 | `{Sam, Ana}` | `{Sam}` | **no** |
 | `{Sam, Ana}` | `{Sam, Ana, the kids}` | yes |
 
-- ordinal: task value ≤ window value fits; above it does not
+- ordinal: task value ≤ window value fits
+- ordinal: a task value above the window's ceiling does not fit
 - an ordinal axis silent on the Task side takes the task-side default
 - an ordinal axis silent on the Window side takes the window-side default
 - **a categorical axis has no default on either side** — absence is ∅, and a Window declaring
@@ -85,11 +86,16 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a rule reads only its own axis
 - **loose Tags are ignored by matching** on both sides
 - a mistyped Tag (`#garge`) admits the Task to *more* Windows, not fewer
+- a fetched axis (Weather) reads its Window-side set from the fetched values, not the Window's
+  own authored Tags; unfetched/unknown resolves to ∅ and fails closed, the same as absence
+  anywhere else on a categorical axis
 
 ### Duration as a derived ceiling
 
 - a 45-minute Window admits the 30 bucket and below, and not 60
 - a Window's ceiling is derived from its length and cannot be authored
+- a 60-minute Window admits the 60 bucket exactly (boundary)
+- 60 minutes snaps to the 60 bucket, not `longer` (boundary)
 - raw minutes from a capture path snap **up** to the next bucket (45 → 60)
 - 61 minutes snaps to `Longer`
 
