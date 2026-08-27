@@ -100,9 +100,22 @@ boundary.
 - **An Override's copy must preserve each Window's id.** Copying is not minting. Otherwise an
   already-fired Window reads as unfired and pushes again a minute later.
 
+## Liveness: the staleness threshold is 90 s
+
+`HealthReporter.StalenessThreshold` is **90 seconds — three missed ticks at the ~30 s cadence.**
+Approved by the user 2026-08-27; it is a decision, not an inherited default.
+
+It is the line between *a slow tick* and *the loop is dead*, so it inherits this ADR's central
+property: **downtime is indistinguishable from a slow tick**, and the threshold is what decides how
+much of that indistinguishability `/health` is willing to absorb before it stops absorbing. Three
+ticks is tolerant of one lost tick and one slow one, and still names a stall inside two minutes.
+
+**If the tick interval changes, this changes with it.** The constant is 3× the cadence, not an
+independent number — decoupling them would let a slower tick read as permanently unhealthy.
+
 ## Known scaffolding to remove
 
 The walking skeleton's tick pushes only once and only when a real Task exists, gated by a one-push
-flag. **That flag is scaffolding and dies with this ADR's implementation** — it must not be inherited.
-The **90 s staleness threshold** (3× tick interval) in the health report is likewise an agent-chosen
-constant awaiting confirmation.
+flag (`TickLoop`, an `Interlocked` 0/1). **That flag is scaffolding and dies with this ADR's
+implementation** — it must not be inherited, and neither must the push-only-once-a-real-Task-exists
+behaviour it gates. Both describe the skeleton, and the engine above replaces them wholesale.

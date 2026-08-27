@@ -18,8 +18,12 @@ public sealed class HealthReporter(IStore store, string dataDir) : IHealthReport
 {
     /// <summary>
     /// A tick loop with a ~30s cadence: three missed ticks (90s) before the reporter calls it
-    /// stale. Not documented anywhere as an exact number — a deliberate, simple multiple of the
-    /// interval, chosen so one slow tick doesn't flap <c>ok</c>.
+    /// stale — tolerant of one lost tick and one slow one, and still naming a stall inside two
+    /// minutes. Approved 2026-08-27 and recorded in <c>docs/adr/0005-firing-engine.md</c>.
+    /// <para>
+    /// This is <b>3× the tick interval, not an independent number</b>. If the cadence changes,
+    /// change this with it — decoupling them lets a slower tick read as permanently unhealthy.
+    /// </para>
     /// </summary>
     public static readonly TimeSpan StalenessThreshold = TimeSpan.FromSeconds(90);
 
