@@ -90,6 +90,20 @@ public sealed class DayBoundaryTests
         Assert.Equal(TimeSpan.Zero, length);
     }
 
+    [Fact]
+    public void DateOf_converts_an_arbitrary_offset_instant_through_Chicago_before_naming_the_date()
+    {
+        var boundary = new DayBoundary(Chicago);
+
+        // Chicago midnight starting 2026-06-15 (CDT, -05:00) is 2026-06-15T05:00:00Z. One hour
+        // before that, expressed in UTC (not Chicago's own offset), is still the previous day in
+        // Chicago — a check that only passes if `DateOf` actually converts through `Zone` rather
+        // than reading the DateTime component of whatever offset the instant happened to carry.
+        var utcInstant = new DateTimeOffset(2026, 6, 15, 4, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(new DateOnly(2026, 6, 14), boundary.DateOf(utcInstant));
+    }
+
     [Theory]
     [InlineData("2026-01-16")] // ordinary winter day
     [InlineData("2026-03-09")] // day after the spring transition

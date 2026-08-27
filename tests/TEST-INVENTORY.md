@@ -148,6 +148,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - an ambiguous start on the fall-back day resolves to the **first** occurrence
 - a nonexistent start in the spring gap **clamps to the gap's end**
 - a span crossing a transition is honestly an hour shorter or longer
+- a span crossing the spring transition is honestly an hour shorter
+- a span crossing the fall-back transition is honestly an hour longer
 - **a Window lying entirely inside the spring gap has zero length and does not fire**
 - Deadline, Defer and Postpone resolve at the day boundary
 
