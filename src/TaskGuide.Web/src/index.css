@@ -328,3 +328,7 @@ button {
   color: var(--accent-ink);
   font-weight: 600;
 }
+
+.chipset button:disabled {
+  opacity: 0.5;
+}

@@ -7,15 +7,17 @@ interface QuickAddProps {
   onAdd: (title: string, duration: number) => void | Promise<void>
 }
 
+// The duration chip IS the submit — matches docs/prototypes/ui-screens.prototype.html's
+// captureSheet (`data-act="capture"` fires straight off the chip tap). There is no
+// separate confirm button. A chip is inert until a title has been entered.
 export function QuickAdd({ onCancel, onAdd }: QuickAddProps) {
   const [title, setTitle] = useState('')
-  const [duration, setDuration] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const canSubmit = title.trim().length > 0 && duration !== null && !submitting
+  const canSubmit = title.trim().length > 0 && !submitting
 
-  async function submit() {
-    if (!canSubmit || duration === null) return
+  async function submit(duration: number) {
+    if (!canSubmit) return
     setSubmitting(true)
     try {
       await onAdd(title.trim(), duration)
@@ -45,18 +47,11 @@ export function QuickAdd({ onCancel, onAdd }: QuickAddProps) {
           <div className="lbl">How long?</div>
           <div className="chipset">
             {DURATIONS.map((d) => (
-              <button
-                key={d}
-                aria-pressed={duration === d}
-                onClick={() => setDuration(d)}
-              >
+              <button key={d} disabled={!canSubmit} onClick={() => submit(d)}>
                 {d}m
               </button>
             ))}
           </div>
-          <button className="btn primary wide" disabled={!canSubmit} onClick={submit}>
-            Add
-          </button>
         </div>
       </div>
     </div>

@@ -60,7 +60,7 @@ describe('TasksScreen', () => {
     expect(await screen.findByText(/couldn.t load/i)).toBeInTheDocument()
   })
 
-  it('quick-add POSTs the entered title and duration, then re-fetches', async () => {
+  it('quick-add: tapping a duration chip POSTs the entered title and duration, then re-fetches', async () => {
     const user = userEvent.setup()
     const fetchMock = vi
       .fn()
@@ -79,8 +79,8 @@ describe('TasksScreen', () => {
 
     await user.click(screen.getByLabelText(/quick add a task/i))
     await user.type(screen.getByPlaceholderText(/what is it/i), 'Call the vet')
+    // The duration chip IS the submit — no separate confirm button.
     await user.click(screen.getByRole('button', { name: '30m' }))
-    await user.click(screen.getByRole('button', { name: /^add$/i }))
 
     await screen.findByText('Call the vet')
 
@@ -92,5 +92,22 @@ describe('TasksScreen', () => {
       duration: 30,
     })
     expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('quick-add: a duration chip does not submit while the title is empty', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<TasksScreen />)
+    await screen.findByText(/nothing here/i)
+
+    await user.click(screen.getByLabelText(/quick add a task/i))
+    // No title typed — the chip should be inert.
+    await user.click(screen.getByRole('button', { name: '30m' }))
+
+    // Still just the initial GET; no POST fired, and the sheet is still open.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByPlaceholderText(/what is it/i)).toBeInTheDocument()
   })
 })
