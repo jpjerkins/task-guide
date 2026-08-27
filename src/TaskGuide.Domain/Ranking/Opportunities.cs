@@ -1,6 +1,9 @@
 using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Matching;
 using TaskGuide.Domain.Schedule;
+using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
+using TaskGuide.Domain.Time;
 
 namespace TaskGuide.Domain.Ranking;
 
@@ -9,10 +12,19 @@ namespace TaskGuide.Domain.Ranking;
 /// the input Scarcity ranks on — the two words stay separate because more Opportunities is
 /// better for a Task and worse for its rank.
 /// </summary>
-public sealed class OpportunityCounter(IDayShapeReader shapes, DimensionRegistry registry)
+public sealed class OpportunityCounter(
+    IDayShapeReader shapes,
+    DimensionRegistry registry,
+    ClockTimeResolution resolution,
+    DayBoundary boundary)
 {
     private readonly IDayShapeReader _shapes = shapes;
     private readonly DimensionRegistry _registry = registry;
+    private readonly ClockTimeResolution _resolution = resolution;
+    private readonly DayBoundary _boundary = boundary;
+
+    /// <summary>A true rolling 7 x 24h, measured from now — not the Pattern's Sun-Sat week.</summary>
+    private static readonly TimeSpan RollingHorizon = TimeSpan.FromDays(7);
 
 
     /// <summary>
@@ -21,14 +33,104 @@ public sealed class OpportunityCounter(IDayShapeReader shapes, DimensionRegistry
     /// reverts to a plain rolling 7 days; without that it goes negative and every overdue Task
     /// misreports as an Orphan.
     /// </summary>
-    public int CountAhead(TaskItem task, DateTimeOffset now) => throw new NotImplementedException();
+    public int CountAhead(TaskItem task, DateTimeOffset now)
+    {
+        var horizonEnd = HorizonEnd(task.Deadline, now);
+
+        return WindowsOn(DatesFrom(_boundary.DateOf(now), _boundary.DateOf(horizonEnd)), _shapes)
+            .Count(slot => StartsWithin(slot, now, horizonEnd) && Admits(task, slot));
+    }
 
     /// <summary>
     /// The second count, and the one that tells the two kinds of zero apart: could any Window in
     /// the <em>active Pattern</em> ever admit this Task? Defined for every Task whether or not it
     /// is currently eligible, which is why an absent value is not a zero.
     /// </summary>
-    public int CountInPatternWeek(TaskItem task) => throw new NotImplementedException();
+    public int CountInPatternWeek(
+        TaskItem task,
+        Pattern pattern,
+        IReadOnlyList<DayTemplate> templates,
+        DateOnly weekOf) =>
+        DatesFrom(weekOf, weekOf.AddDays(6))
+            .SelectMany(date => TemplateOn(pattern, templates, date).Windows.Select(window => (date, window)))
+            .Count(slot => Admits(task, slot));
+
+    /// <summary>
+    /// <c>min(7 days, time to Deadline)</c>, and both halves are load-bearing. A Deadline whose
+    /// day is already over is <b>dropped</b> rather than clamped: clamping to zero would report
+    /// every overdue Task as having no Opportunity at all, which reads as an Orphan.
+    /// </summary>
+    private DateTimeOffset HorizonEnd(DateOnly? deadline, DateTimeOffset now)
+    {
+        var rolling = now + RollingHorizon;
+        if (deadline is null) return rolling;
+
+        // The end of the Deadline day, so the number reads "3 chances before it is due" — not
+        // the same clock time on it, which would silently drop that day's own Windows.
+        var dueBy = _boundary.EndOf(deadline.Value);
+
+        return dueBy <= now || dueBy > rolling ? rolling : dueBy;
+    }
+
+    /// <summary>
+    /// Ahead of now, and inside the horizon — half-open at both ends, which is what makes a
+    /// once-a-week opportunity count exactly once whatever hour it is asked.
+    /// </summary>
+    private bool StartsWithin((DateOnly Date, AvailabilityWindow Window) slot, DateTimeOffset now, DateTimeOffset horizonEnd)
+    {
+        var start = _resolution.Resolve(slot.Date, slot.Window.Start);
+
+        return start >= now && start < horizonEnd;
+    }
+
+    /// <summary>
+    /// Would this Window admit this Task on this date? A Window whose resolved length is zero —
+    /// the spring-gap case — is no opportunity at all, so it never counts.
+    /// </summary>
+    private bool Admits(TaskItem task, (DateOnly Date, AvailabilityWindow Window) slot) =>
+        _resolution.LengthOf(slot.Date, slot.Window.Start, slot.Window.End) > TimeSpan.Zero
+        && Matcher.Fits(task, ContextFor(slot.Date, slot.Window), _registry);
+
+    /// <summary>
+    /// A future Window's fetched axes are simply not known, and unknown resolves to the empty
+    /// set — the same fail-closed rule absence already follows.
+    /// </summary>
+    private MatchContext ContextFor(DateOnly date, AvailabilityWindow window) => new(
+        window,
+        DurationBuckets is { Count: > 0 } buckets ? window.DurationCeiling(date, _resolution, buckets) : default,
+        new Dictionary<DimensionId, IReadOnlyList<TagValue>>(),
+        Array.Empty<DimensionId>());
+
+    /// <summary>
+    /// The ordinal axis whose window-side value is derived from the Window's length — read off
+    /// the registry's algebra, the same discriminator <c>Matcher</c> uses, never off a static.
+    /// </summary>
+    private IReadOnlyList<TagValue> DurationBuckets => _registry.Dimensions
+        .OfType<OrdinalDimension>()
+        .SingleOrDefault(dimension => dimension.WindowSource == WindowValueSource.Derived)
+        ?.OrderedValues ?? Array.Empty<TagValue>();
+
+    /// <summary>The shape each real date actually has — Overrides and Events already applied.</summary>
+    private static IEnumerable<(DateOnly Date, AvailabilityWindow Window)> WindowsOn(
+        IEnumerable<DateOnly> dates,
+        IDayShapeReader shapes) =>
+        dates.SelectMany(date => shapes.For(date).Windows.Select(window => (date, window)));
+
+    /// <summary>
+    /// A Pattern is an assumption, not a calendar: its weekday's Day template is read straight
+    /// through, so no Override and no Event can reach this count. A Pattern referencing a
+    /// template that is not there is a defect, not a zero.
+    /// </summary>
+    private static DayTemplate TemplateOn(Pattern pattern, IReadOnlyList<DayTemplate> templates, DateOnly date) =>
+        templates.Single(template => template.Id == pattern[date.DayOfWeek]);
+
+    private static IEnumerable<DateOnly> DatesFrom(DateOnly first, DateOnly last)
+    {
+        for (var date = first; date <= last; date = date.AddDays(1))
+        {
+            yield return date;
+        }
+    }
 }
 
 /// <summary>

@@ -140,6 +140,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - the count walks real dates, so an Override removing the only admitting Window drops it
 - a dated Event displacing a Window drops it
 - switching the active Pattern moves the count
+- the Pattern-week count ignores Overrides and Events
+- the Pattern-week count is defined for a Task that is not currently eligible
 
 ### Orphan detection
 
