@@ -3,10 +3,10 @@
     <ProjectReference Include="../TaskGuide.Application/TaskGuide.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Serilog.AspNetCore" Version="*" />
-    <PackageReference Include="Serilog.Sinks.File" Version="*" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="*" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="*" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="*" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
   </ItemGroup>
 </Project>
