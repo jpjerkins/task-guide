@@ -319,6 +319,11 @@ Against `fixtures/data`, the golden store.
 ## `TaskGuide.Api.Tests`
 
 - every endpoint in `Endpoints/` appears in the OpenAPI document
+- the OpenAPI document carries a `TaskResponse` schema with its four members — the SPA's
+  `Task` type is generated from it, so a bare `200: OK` is a broken contract, not a cosmetic gap
+- `GET /api/tasks` documents its 200 as an **array of** `TaskResponse`
+- `POST /api/tasks` documents 201 (with a `TaskResponse` body), 400 and 503
+- `TaskResponse.duration` is documented as a **nullable** integer
 - `POST /api/reminders/{date}/{windowId}/snooze` **rejects** a re-fire crossing the day boundary,
   with the same line the disabled control shows
 - `PUT /api/right-now/matching-on` writes through to that date's Override and does not stack

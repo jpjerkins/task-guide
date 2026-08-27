@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -21,18 +22,18 @@ public static class TaskEndpoints
         // Recurrence or Dimensions beyond the one (Duration) the skeleton needs to prove the
         // substrate end to end.
         tasks.MapGet("/", (IStore store) =>
-            Results.Ok(store.Read().Tasks.Select(ToResponse)));
+            TypedResults.Ok(store.Read().Tasks.Select(ToResponse)));
 
-        tasks.MapPost("/", async (CreateTaskRequest request, IStore store, IIdMinter minter, ILogger<TaskEndpointsLogCategory> logger, CancellationToken ct) =>
+        tasks.MapPost("/", async Task<Results<Created<TaskResponse>, BadRequest<object>, ProblemHttpResult>> (CreateTaskRequest request, IStore store, IIdMinter minter, ILogger<TaskEndpointsLogCategory> logger, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Title))
             {
-                return Results.BadRequest(new { error = "title is required" });
+                return TypedResults.BadRequest<object>(new { error = "title is required" });
             }
 
             if (request.Duration <= 0)
             {
-                return Results.BadRequest(new { error = "duration must be a positive integer" });
+                return TypedResults.BadRequest<object>(new { error = "duration must be a positive integer" });
             }
 
             var task = new TaskItem(
@@ -62,11 +63,12 @@ public static class TaskEndpoints
                 // A failed persist is a deliberate 503, never a raw 500 — the disk rejecting a
                 // write is an infrastructure condition the caller can retry, not a server bug.
                 logger.LogError(ex, "Failed to persist Task {TaskId}", task.Id);
-                return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Storage is temporarily unavailable");
+                return TypedResults.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Storage is temporarily unavailable");
             }
 
-            return Results.Created($"/api/tasks/{task.Id.Value}", ToResponse(task));
-        });
+            return TypedResults.Created($"/api/tasks/{task.Id.Value}", ToResponse(task));
+        })
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         // ?status=unprocessed|stale|active|done|orphan — Status is derived per request, never read
         // from storage. `orphan` is a third, disjoint filter, not a Status.
