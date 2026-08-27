@@ -142,6 +142,10 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - switching the active Pattern moves the count
 - the Pattern-week count ignores Overrides and Events
 - the Pattern-week count is defined for a Task that is not currently eligible
+- a Window already begun is not an Opportunity ahead of now
+- a fetched axis constrains nothing in the Pattern-week count, so a weather-tagged Task is not an
+  Orphan
+- `CountAhead` still fails closed on a fetched axis it cannot know for a future Window
 
 ### Orphan detection
 

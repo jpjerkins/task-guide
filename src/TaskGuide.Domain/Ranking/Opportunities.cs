@@ -38,7 +38,7 @@ public sealed class OpportunityCounter(
         var horizonEnd = HorizonEnd(task.Deadline, now);
 
         return WindowsOn(DatesFrom(_boundary.DateOf(now), _boundary.DateOf(horizonEnd)), _shapes)
-            .Count(slot => StartsWithin(slot, now, horizonEnd) && Admits(task, slot));
+            .Count(slot => StartsWithin(slot, now, horizonEnd) && Admits(task, slot, NoFetchedValues));
     }
 
     /// <summary>
@@ -53,7 +53,7 @@ public sealed class OpportunityCounter(
         DateOnly weekOf) =>
         DatesFrom(weekOf, weekOf.AddDays(6))
             .SelectMany(date => TemplateOn(pattern, templates, date).Windows.Select(window => (date, window)))
-            .Count(slot => Admits(task, slot));
+            .Count(slot => Admits(task, slot, EveryFetchedValue));
 
     /// <summary>
     /// <c>min(7 days, time to Deadline)</c>, and both halves are load-bearing. A Deadline whose
@@ -87,19 +87,42 @@ public sealed class OpportunityCounter(
     /// Would this Window admit this Task on this date? A Window whose resolved length is zero —
     /// the spring-gap case — is no opportunity at all, so it never counts.
     /// </summary>
-    private bool Admits(TaskItem task, (DateOnly Date, AvailabilityWindow Window) slot) =>
+    private bool Admits(
+        TaskItem task,
+        (DateOnly Date, AvailabilityWindow Window) slot,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched) =>
         _resolution.LengthOf(slot.Date, slot.Window.Start, slot.Window.End) > TimeSpan.Zero
-        && Matcher.Fits(task, ContextFor(slot.Date, slot.Window), _registry);
+        && Matcher.Fits(task, ContextFor(slot.Date, slot.Window, fetched), _registry);
+
+    private MatchContext ContextFor(
+        DateOnly date,
+        AvailabilityWindow window,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched) => new(
+        window,
+        DurationBuckets is { Count: > 0 } buckets ? window.DurationCeiling(date, _resolution, buckets) : default,
+        fetched,
+        Array.Empty<DimensionId>());
 
     /// <summary>
     /// A future Window's fetched axes are simply not known, and unknown resolves to the empty
-    /// set — the same fail-closed rule absence already follows.
+    /// set — the same fail-closed rule absence already follows. This is the right rule for
+    /// <em>"will this fire?"</em>, which is the question <see cref="CountAhead"/> asks.
     /// </summary>
-    private MatchContext ContextFor(DateOnly date, AvailabilityWindow window) => new(
-        window,
-        DurationBuckets is { Count: > 0 } buckets ? window.DurationCeiling(date, _resolution, buckets) : default,
-        new Dictionary<DimensionId, IReadOnlyList<TagValue>>(),
-        Array.Empty<DimensionId>());
+    private static IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> NoFetchedValues { get; } =
+        new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
+    /// <summary>
+    /// Every value a fetched axis declares, so that axis constrains nothing. The Pattern-week
+    /// count asks whether any Window could <b>ever</b> admit this Task — an explicitly
+    /// counterfactual, structural question, in which a live condition is not a constraint at all.
+    /// Failing it closed here would report every weather-tagged Task as an Orphan, sending the
+    /// user to declare a Tag on a Dimension whose window side is blank by design.
+    /// </summary>
+    private IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> EveryFetchedValue =>
+        _registry.Dimensions
+            .OfType<CategoricalDimension>()
+            .Where(dimension => dimension.WindowSource == WindowValueSource.Fetched)
+            .ToDictionary(dimension => dimension.Id, dimension => dimension.DeclaredValues);
 
     /// <summary>
     /// The ordinal axis whose window-side value is derived from the Window's length — read off

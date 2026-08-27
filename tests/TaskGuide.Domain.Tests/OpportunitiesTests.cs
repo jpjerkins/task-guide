@@ -41,6 +41,22 @@ public sealed class OpportunitiesTests
         Recurrence: null,
         CreatedAt: Resolution.Resolve(new DateOnly(2026, 8, 1), new TimeOnly(9, 0)));
 
+    /// <summary>The same Task, plus a Tag on the one axis whose Window-side value is fetched.</summary>
+    private static TaskItem SunnyHalfHourTask()
+    {
+        var plain = HalfHourTask();
+
+        return plain with
+        {
+            Tags = new TagSet(
+                new Dictionary<DimensionId, IReadOnlyList<TagValue>>(plain.Tags.Dimensions)
+                {
+                    [KnownDimensions.Weather] = [new TagValue("sunny")],
+                },
+                Array.Empty<LooseTag>()),
+        };
+    }
+
     private static AvailabilityWindow Window(string id, int startHour, int endHour, int endMinute = 0) =>
         new(new WindowId(id), "Some window", new TimeOnly(startHour, 0), new TimeOnly(endHour, endMinute), TagSet.Empty);
 
@@ -104,12 +120,25 @@ public sealed class OpportunitiesTests
     [Fact]
     public void With_a_Deadline_ahead_the_horizon_runs_to_the_end_of_that_day()
     {
-        var shapes = EveryDay(Window("w_morning", 9, 10));
+        var shapes = EveryDay(Window("w_morning", 9, 10), Window("w_night", 22, 23));
         var now = At(Tuesday, 12);
 
-        // Two mornings before it is due — and the Deadline day's own Window is included, because
-        // the horizon runs to the end of that day rather than to the same clock time on it.
-        Assert.Equal(2, CounterOver(shapes).CountAhead(HalfHourTask(deadline: Tuesday.AddDays(2)), now));
+        // Tonight's Window and two Windows on each of the two days before it is due. The night
+        // Window on the Deadline day is the one that matters: it falls after this midday "now",
+        // so a horizon running to the same clock time on the Deadline day would score 4 and
+        // silently drop it.
+        Assert.Equal(5, CounterOver(shapes).CountAhead(HalfHourTask(deadline: Tuesday.AddDays(2)), now));
+    }
+
+    [Fact]
+    public void A_Window_already_begun_is_not_an_Opportunity_ahead_of_now()
+    {
+        var shapes = OnWeekday(DayOfWeek.Wednesday, Window("w_evening", 18, 19));
+        var halfwayThrough = Resolution.Resolve(Wednesday, new TimeOnly(18, 30));
+
+        // A Window firing *is* the reminder, and it fired half an hour ago — this Task has already
+        // had its chance to surface there. Only next week's counts.
+        Assert.Equal(1, CounterOver(shapes).CountAhead(HalfHourTask(), halfwayThrough));
     }
 
     [Fact]
@@ -220,6 +249,36 @@ public sealed class OpportunitiesTests
 
         Assert.Equal(0, counter.CountAhead(HalfHourTask(), At(Tuesday, 12)));
         Assert.Equal(1, counter.CountInPatternWeek(HalfHourTask(), pattern, [workday, restday], Tuesday));
+    }
+
+    [Fact]
+    public void A_fetched_axis_constrains_nothing_in_the_Pattern_week_count_so_a_weather_tagged_Task_is_not_an_Orphan()
+    {
+        var workday = new DayTemplate(new DayTemplateId("dt_workday"), "Workday", [Window("w_evening", 18, 19)], []);
+        var pattern = new Pattern(new PatternId("p_normal"), "Normal", [.. Enumerable.Repeat(workday.Id, 7)]);
+        var counter = CounterOver(EveryDay(Window("w_evening", 18, 19)));
+        var sunny = SunnyHalfHourTask();
+
+        // Could any Window in the active Pattern *ever* admit this Task? The weather is not a
+        // constraint on that question — no Window declares a Weather value and none ever could,
+        // so failing it closed here would badge a perfectly well-formed Task as an Orphan and
+        // send the user to declare a Tag on a Dimension whose window side is blank by design.
+        var patternWeekCount = counter.CountInPatternWeek(sunny, pattern, [workday], Tuesday);
+
+        Assert.Equal(7, patternWeekCount);
+        Assert.False(OrphanDetection.IsOrphan(sunny, Status.Active, patternWeekCount));
+    }
+
+    [Fact]
+    public void CountAhead_still_fails_closed_on_a_fetched_axis_it_cannot_know_for_a_future_Window()
+    {
+        var counter = CounterOver(EveryDay(Window("w_evening", 18, 19)));
+        var now = At(Tuesday, 12);
+
+        // The same seven Windows the untagged Task counts. Nothing has been fetched for a Window
+        // three days out, and unknown resolves to the empty set — so this one counts none.
+        Assert.Equal(7, counter.CountAhead(HalfHourTask(), now));
+        Assert.Equal(0, counter.CountAhead(SunnyHalfHourTask(), now));
     }
 
     [Fact]
