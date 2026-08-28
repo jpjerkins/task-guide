@@ -140,11 +140,17 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void A_one_off_day_round_trips_with_a_null_used()
     {
-        var (overrides, _) = OverrideCodec.Read(FixtureJson("overrides.json"));
+        var (overrides, extras) = OverrideCodec.Read(FixtureJson("overrides.json"));
         var oneOff = Assert.Single(overrides, o => o.Date == new DateOnly(2026, 9, 11));
-
         Assert.True(oneOff.IsOneOffDay);
         Assert.Null(oneOff.Used);
+
+        var written = RoundTripOverrides(overrides, extras);
+        using var document = JsonDocument.Parse(written);
+        var writtenOneOff = document.RootElement.EnumerateArray()
+            .Single(e => CodecPrimitives.ReadDate(e.GetProperty("date")) == new DateOnly(2026, 9, 11));
+
+        Assert.Equal(JsonValueKind.Null, writtenOneOff.GetProperty("used").ValueKind);
     }
 
     [Fact]
