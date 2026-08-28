@@ -9,10 +9,15 @@ namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
 /// The <see cref="IStore"/> substrate for the walking skeleton (#51): memory-authoritative,
-/// one global write lock, atomic whole-file writes to a bind mount. Only <c>tasks.json</c> is
-/// wired up — every other file named in the golden store fixture is a later ticket, and
-/// <see cref="StoreView"/> throws <see cref="NotImplementedException"/> for all of it rather
-/// than pretending.
+/// one global write lock, atomic whole-file writes to a bind mount. <c>Load</c> reads every file
+/// named in the golden store fixture — <c>tasks.json</c>, <c>day-templates.json</c>,
+/// <c>patterns.json</c>, <c>overrides.json</c>, <c>events.json</c>,
+/// <c>event-exceptions.json</c>, every <c>completions/&lt;taskId&gt;.json</c> plus
+/// <c>completions/derived.json</c>, and every <c>fires/&lt;date&gt;.json</c> — into a fully
+/// populated <see cref="StoreView"/>; a missing file loads as the empty collection and a corrupt
+/// one throws here, at construction. <b>Writing is still Tasks-only</b>: <see cref="MutateAsync"/>
+/// accepts only a Tasks write today and throws for anything else — the rest of the store is
+/// read-only until a later ticket wires up its writes.
 /// </summary>
 public sealed class JsonStore : IStore
 {

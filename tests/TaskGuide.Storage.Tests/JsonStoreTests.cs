@@ -15,8 +15,10 @@ namespace TaskGuide.Storage.Tests;
 
 /// <summary>
 /// Against `fixtures/data`, the golden store (`tests/TEST-INVENTORY.md`'s "Sequential ·
-/// TaskGuide.Storage.Tests" section). Only the Tasks slice of the substrate is wired up for
-/// the walking skeleton (#51) — every test here exercises `tasks.json` only.
+/// TaskGuide.Storage.Tests" section). The whole store now loads (every collection in the golden
+/// store, not only `tasks.json`) and most tests here still exercise the Tasks slice, since
+/// writing is still Tasks-only for the walking skeleton (#51) — `MutateAsync` accepts only a
+/// Tasks write and throws for anything else.
 /// </summary>
 public sealed class JsonStoreTests : IDisposable
 {
