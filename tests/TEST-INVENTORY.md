@@ -374,6 +374,11 @@ Against `fixtures/data`, the golden store.
 - a fire row carries the Window's name and span **as they were**
 - `(date, null, "fallback")` is unique per day
 - a completion log is not rewritten when its Task's title changes
+- each completion log round-trips the golden store unchanged
+- a one-off Task's entry round-trips a null `due`
+- `completions/derived.json` round-trips, keyed on `ruleId` + `triggerId` + `due`
+- the Task id comes from the filename, so a log file carries no id of its own
+- no codec writes a `status` property, whatever type it would carry — `CompletionCodec`
 - a restore under a running service is invisible, and the next mutation destroys it *(the one test
   that documents a failure mode rather than preventing it — see #49's restore drill)*
 - every minted id carries its type's prefix and 26 Crockford Base32 characters
