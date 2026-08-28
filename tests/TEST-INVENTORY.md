@@ -370,6 +370,10 @@ Against `fixtures/data`, the golden store.
 - `Unused` is false for a template referenced only by a **dormant** Pattern
 - `Unused` is false for a template stamped within ±13 months, in **either** direction
 - deleting an `Unused` template corrupts no record
+- a template stamped 14 months ago is `Unused`
+- a template stamped 14 months ahead is `Unused`
+- an Override span of one date yields exactly that date
+- an Override span yields every date inclusive of both ends, in ascending order
 - fires older than 30 days are unlinked as whole files
 - a fire row carries the Window's name and span **as they were**
 - `(date, null, "fallback")` is unique per day

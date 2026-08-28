@@ -46,5 +46,19 @@ public static class DayTemplateLifecycle
         DayTemplateId template,
         IReadOnlyList<Pattern> allPatterns,
         IReadOnlyList<DateOverride> overrides,
-        DateOnly today) => throw new NotImplementedException();
+        DateOnly today)
+    {
+        var referencedByAnyPattern = allPatterns.Any(p => p.Days.Contains(template));
+        if (referencedByAnyPattern)
+        {
+            return false;
+        }
+
+        var earliest = today.AddMonths(-UseRecordHorizonMonths);
+        var latest = today.AddMonths(UseRecordHorizonMonths);
+        var stampedWithinHorizon = overrides.Any(o =>
+            o.Used?.TemplateId == template && o.Date >= earliest && o.Date <= latest);
+
+        return !stampedWithinHorizon;
+    }
 }

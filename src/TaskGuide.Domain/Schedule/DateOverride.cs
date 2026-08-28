@@ -58,5 +58,11 @@ public sealed record DayTemplateUse(DayTemplateId TemplateId, string TemplateNam
 /// </remarks>
 public sealed record OverrideSpanRequest(DateOnly From, DateOnly To, DayTemplateId? Stamp)
 {
-    public IEnumerable<DateOnly> Dates() => throw new NotImplementedException();
+    public IEnumerable<DateOnly> Dates()
+    {
+        for (var date = From; date <= To; date = date.AddDays(1))
+        {
+            yield return date;
+        }
+    }
 }
