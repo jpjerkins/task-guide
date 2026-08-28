@@ -106,6 +106,11 @@ Categorical, from `CONTEXT.md`'s table, one test each:
   private copy — one test per declared sized bucket (2/10/30/60)
 - raw minutes from a capture path snap **up** to the next bucket (45 → 60)
 - 61 minutes snaps to `Longer`
+- a Window **longer** than the largest sized bucket derives the unsized bucket — 90 minutes and
+  four hours both derive `longer`, and so does one minute past the boundary on both directions
+- a Window exactly at the largest sized bucket still derives that bucket, not the unsized one
+  (the boundary must not drift)
+- a `longer` Task fits a long Window and still fails one at the largest sized bucket
 
 ### Dimension registry
 

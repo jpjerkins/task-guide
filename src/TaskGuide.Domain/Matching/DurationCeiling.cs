@@ -36,21 +36,34 @@ public static class DurationCeiling
         orderedBuckets.Single(bucket => !int.TryParse(bucket.Value, out _));
 
     /// <summary>
-    /// The Window's ceiling: the largest sized bucket that fits <b>inside</b> the resolved
-    /// length — it rounds down. A 45-minute Window admits the 30 bucket and below, not 60.
-    /// There is no window-side <c>longer</c> ceiling: "longer" names no length to fit inside,
-    /// so a Window's promise is capped at the largest sized bucket, 60.
+    /// The Window's ceiling: the largest bucket that fits <b>inside</b> the resolved length — it
+    /// rounds down. A 45-minute Window admits the 30 bucket and below, not 60. Past the largest
+    /// sized bucket the ceiling is the <b>unsized</b> one: a 90-minute or four-hour Window
+    /// derives <c>longer</c>, because <c>SnapUp</c> gives any estimate of 61+ minutes that same
+    /// bucket and a Task there would otherwise be permanently unmatchable — <c>longer</c> ranks
+    /// above every reachable window value, so it would count zero Opportunities and be badged an
+    /// Orphan whose advertised repair (declare this Tag on some Window) cannot be performed,
+    /// Duration's window side being derived and refusing an authored Tag.
     /// </summary>
     /// <remarks>
+    /// The bucket is a transient conversion for the matching comparison only. A Window goes on
+    /// storing its real span — <c>AvailabilityWindow</c>'s authored <c>Start</c>/<c>End</c> clock
+    /// times — and nothing here is cached: the ceiling is re-derived per date from the resolved
+    /// length, so an Override, an Event or a DST fold changes it the same day it changes the span.
+    /// <para>
     /// A length shorter than the smallest bucket (2 minutes) is a degenerate Window — the
     /// spring-gap case that clamps to zero length and, per the Availability Window entry,
     /// never fires. Its ceiling is never consulted for matching, so this falls back to the
     /// smallest bucket rather than declaring a rule for a case matching never reaches.
+    /// </para>
     /// </remarks>
     public static TagValue WindowCeiling(TimeSpan length, IReadOnlyList<TagValue> orderedBuckets)
     {
         var minutes = length.TotalMinutes;
         var sized = SizedBucketsOf(orderedBuckets).ToArray();
+
+        if (minutes > sized[^1].Minutes) return UnsizedBucketOf(orderedBuckets);
+
         var ceiling = sized[0].Value;
 
         foreach (var bucket in sized)
