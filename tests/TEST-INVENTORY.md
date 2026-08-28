@@ -356,8 +356,11 @@ Against `fixtures/data`, the golden store.
 - an Event's `absenceNotice` round-trips, and a null one stays null
 - no codec writes a `status` property, whatever type it would carry — `EventCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
+- `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
+- a Snapshot is a whole-file copy, not a re-serialisation
+- a Snapshot recreates the relative directory structure of the paths it is given
 - an Event-plus-Override write puts the **Event first**
 - a crash between the two leaves the state the overlap check detects, and the next read re-offers
   the prompt
