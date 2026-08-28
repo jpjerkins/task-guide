@@ -356,6 +356,11 @@ Against `fixtures/data`, the golden store.
 - an Event's `absenceNotice` round-trips, and a null one stays null
 - no codec writes a `status` property, whatever type it would carry — `EventCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
+- a store already at `CurrentVersion` runs no migration step and takes no snapshot
+- a version ahead of this binary refuses to start, named — a rollback must not silently
+  down-migrate
+- `manifest.json` is written only after every migration step succeeds
+- the registry sweep promotes a loose Tag the registry now claims, and writes the change
 - `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
