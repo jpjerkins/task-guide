@@ -79,7 +79,8 @@ public sealed class OpportunityCounter(
     /// ceiling from the time <em>actually remaining</em> — and the landing page a notification
     /// opens is read inside a running Window by construction, so "3 chances before it is due" was
     /// off by one exactly when it is read most. The far edge stays on the start and stays
-    /// half-open, which is what makes a once-a-week opportunity count exactly once.
+    /// half-open: a once-a-week opportunity counts exactly once at any hour outside it, and twice
+    /// while you are standing in it, when the one you are in and next week's both count.
     /// </summary>
     private bool FallsWithin((DateOnly Date, AvailabilityWindow Window) slot, DateTimeOffset now, DateTimeOffset horizonEnd)
     {

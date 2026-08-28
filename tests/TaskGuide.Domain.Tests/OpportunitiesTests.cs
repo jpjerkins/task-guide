@@ -108,7 +108,7 @@ public sealed class OpportunitiesTests
     [InlineData(18)]
     [InlineData(19)]
     [InlineData(23)]
-    public void A_once_a_week_opportunity_counts_exactly_once_whatever_hour_it_is_asked(int hour)
+    public void A_once_a_week_opportunity_counts_exactly_once_at_any_hour_outside_it(int hour)
     {
         var shapes = OnWeekday(DayOfWeek.Wednesday, Window("w_evening", 18, 19));
 

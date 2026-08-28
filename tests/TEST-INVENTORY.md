@@ -144,7 +144,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 ### Opportunities and the horizon
 
 - without a Deadline the horizon is a true rolling 7 × 24h
-- a once-a-week opportunity counts **exactly once** whatever hour it is asked
+- **a once-a-week opportunity counts exactly once at any hour outside it** — and twice while you
+  are standing in it, when the one you are in and next week's both count
 - with a Deadline ahead the horizon runs to the end of that day
 - **with a Deadline passed the bound is dropped** and the horizon reverts to a rolling 7 days
 - an overdue Task therefore never misreports as an Orphan
