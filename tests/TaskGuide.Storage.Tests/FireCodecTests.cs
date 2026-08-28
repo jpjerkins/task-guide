@@ -80,11 +80,78 @@ public sealed class FireCodecTests
     }
 
     [Fact]
+    public void Two_fire_rows_differing_only_in_windowId_both_load()
+    {
+        const string json = """
+            [
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "window",
+                "windowName": "Evening prep", "windowStart": "17:30", "windowEnd": "18:00",
+                "dueAt": null, "firedAt": "2026-08-15T22:45:03Z", "matched": 4, "carried": null },
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H03", "kind": "window",
+                "windowName": "Morning prep", "windowStart": "08:00", "windowEnd": "09:00",
+                "dueAt": null, "firedAt": "2026-08-15T13:00:07Z", "matched": 2, "carried": null }
+            ]
+            """;
+
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+
+        Assert.Equal(2, fires.Rows.Count);
+        Assert.Single(fires.Rows, r => r.WindowId == new WindowId("w_01ARZ3NDEKTSV4RRFFQ69G5H02"));
+        Assert.Single(fires.Rows, r => r.WindowId == new WindowId("w_01ARZ3NDEKTSV4RRFFQ69G5H03"));
+    }
+
+    [Fact]
+    public void Two_fire_rows_sharing_windowId_and_kind_are_rejected_at_read_with_the_date_named()
+    {
+        const string json = """
+            [
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "window",
+                "windowName": "Evening prep", "windowStart": "17:30", "windowEnd": "18:00",
+                "dueAt": null, "firedAt": "2026-08-15T22:45:03Z", "matched": 4, "carried": null },
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "window",
+                "windowName": "Evening prep", "windowStart": "17:30", "windowEnd": "18:00",
+                "dueAt": null, "firedAt": "2026-08-15T22:49:11Z", "matched": 1, "carried": null }
+            ]
+            """;
+
+        var ex = Assert.Throws<JsonException>(() => FireCodec.Read(new DateOnly(2026, 8, 15), json));
+        Assert.Contains("2026-08-15", ex.Message);
+        Assert.Contains("w_01ARZ3NDEKTSV4RRFFQ69G5H02", ex.Message);
+        Assert.Contains("window", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("window", FireKind.Window)]
+    [InlineData("unconditional", FireKind.Unconditional)]
+    [InlineData("snooze", FireKind.Snooze)]
+    [InlineData("fallback", FireKind.Fallback)]
+    public void Every_FireKind_round_trips_through_its_own_JSON_string(string kind, FireKind expected)
+    {
+        var json = $$"""
+            [
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "{{kind}}",
+                "windowName": null, "windowStart": null, "windowEnd": null,
+                "dueAt": null, "firedAt": "2026-08-15T22:45:03Z", "matched": null, "carried": null }
+            ]
+            """;
+
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+        Assert.Equal(expected, Assert.Single(fires.Rows).Kind);
+
+        var written = RoundTrip(fires);
+        using var document = JsonDocument.Parse(written);
+        Assert.Equal(kind, document.RootElement[0].GetProperty("kind").GetString());
+    }
+
+    [Fact]
     public void Fires_2026_08_15_json_round_trips_the_golden_store_unchanged()
     {
         var original = FixtureJson("2026-08-15.json");
 
-        var written = RoundTrip(new DateOnly(2026, 8, 15), original);
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), original);
+        Assert.Equal(new DateOnly(2026, 8, 15), fires.Date);
+
+        var written = RoundTrip(fires);
 
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
     }
@@ -138,6 +205,18 @@ public sealed class FireCodecTests
             Assert.Equal(new DateOnly(year, month, day), actual);
             Assert.Equal(fileName, FireCodec.FileNameFor(actual));
         }
+    }
+
+    [Theory]
+    [InlineData("2026-8-15.json")]
+    [InlineData("2026-08-5.json")]
+    [InlineData("2026/08/15.json")]
+    [InlineData("2026-08-15T00:00:00.json")]
+    [InlineData("08-15-2026.json")]
+    [InlineData("2026-02-30.json")]
+    public void A_fire_file_name_whose_date_is_not_exactly_yyyy_MM_dd_is_not_a_fire_file(string fileName)
+    {
+        Assert.Null(FireCodec.DateFromFileName(fileName));
     }
 
     [Fact]

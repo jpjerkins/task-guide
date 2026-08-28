@@ -388,6 +388,12 @@ Against `fixtures/data`, the golden store.
 - a pending Snooze row round-trips with a null `firedAt` and reads `IsPendingSnooze`
 - Fire dates are read from fire file names without parsing contents
 - no codec writes a `status` property, whatever type it would carry — `FireCodec`
+- two fire rows differing only in `windowId` both load — the key is the whole `(windowId, kind)`,
+  not the kind alone
+- two fire rows sharing `windowId` and `kind` are rejected at read, with the date named — the
+  uniqueness rule is general, not a fallback special case
+- a fire file name whose date is not exactly `yyyy-MM-dd` is not a fire file
+- every `FireKind` round-trips through its own JSON string
 - a restore under a running service is invisible, and the next mutation destroys it *(the one test
   that documents a failure mode rather than preventing it — see #49's restore drill)*
 - every minted id carries its type's prefix and 26 Crockford Base32 characters
