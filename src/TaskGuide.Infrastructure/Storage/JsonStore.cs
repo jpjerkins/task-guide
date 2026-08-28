@@ -15,12 +15,13 @@ namespace TaskGuide.Infrastructure.Storage;
 /// <c>event-exceptions.json</c>, every <c>completions/&lt;taskId&gt;.json</c> plus
 /// <c>completions/derived.json</c>, and every <c>fires/&lt;date&gt;.json</c> — into a fully
 /// populated <see cref="StoreView"/>; a missing file loads as the empty collection and a corrupt
-/// one throws here, at construction. <b>Writing is still Tasks-only</b>: <see cref="MutateAsync"/>
-/// accepts only a Tasks write today and throws for anything else — the rest of the store is
-/// read-only until a later ticket wires up its writes.
+/// one throws here, at construction. <see cref="MutateAsync"/> writes every collection: a
+/// <see cref="StoreMutation"/> carries one payload per file kind (<see cref="TasksWrite"/> and the
+/// rest of `StoreWrites.cs`), applied in list order, each atomic on its own.
 /// </summary>
 public sealed class JsonStore : IStore
 {
+    private readonly string _dataDir;
     private readonly string _tasksPath;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private volatile StoreView _current;
@@ -28,6 +29,7 @@ public sealed class JsonStore : IStore
     public JsonStore(string dataDir)
     {
         Directory.CreateDirectory(dataDir);
+        _dataDir = dataDir;
         _tasksPath = Path.Combine(dataDir, "tasks.json");
         _current = Load(dataDir);
     }
@@ -182,8 +184,12 @@ public sealed class JsonStore : IStore
     };
 
     /// <summary>
-    /// Only a Tasks write is supported today: <paramref name="mutation"/> must return a
-    /// <see cref="StoreMutation"/> whose single write is the new <see cref="TaskItem"/> list.
+    /// Applies <see cref="StoreMutation.OrderedWrites"/> in list order, each write atomic on its
+    /// own file. Every other collection is carried forward unchanged from the pre-mutation view —
+    /// a write touching only some collections must not erase what the rest of the view already
+    /// held. A write that throws part-way leaves the earlier files written on disk (the accepted
+    /// design — see <see cref="IStore.MutateAsync"/>'s doc comment); <see cref="_current"/> is
+    /// swapped only once every write in the list has succeeded.
     /// </summary>
     public async Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken)
     {
@@ -193,25 +199,137 @@ public sealed class JsonStore : IStore
             var view = _current;
             var result = mutation(view);
 
-            if (result.OrderedWrites is not [IReadOnlyList<TaskItem> callerTasks])
-            {
-                // A malformed StoreMutation is a caller/programming bug, not a disk failure —
-                // deliberately not recorded as a write outcome either way.
-                throw new NotImplementedException(
-                    "JsonStore only writes tasks.json today — a StoreMutation must carry exactly one IReadOnlyList<TaskItem> write.");
-            }
-
-            // A defensive copy: the store must own its storage. `callerTasks` came straight out
-            // of the caller's StoreMutation and IReadOnlyList<T> is not a promise of
-            // immutability — a caller that keeps its own reference and mutates it later must
-            // not be able to reach a view any concurrent reader already holds.
-            IReadOnlyList<TaskItem> tasks = callerTasks.ToArray();
-
-            var extras = view.TaskExtras;
+            // Carried forward from `view` and replaced in place, one field at a time, as each
+            // write in the list is applied — never all at once, so a write list that only
+            // touches some collections leaves the rest exactly as they were.
+            var tasks = view.Tasks;
+            var taskExtras = view.TaskExtras;
+            var dayTemplates = view.DayTemplates;
+            var dayTemplateExtras = view.DayTemplateExtras;
+            var patterns = view.Patterns;
+            var patternExtras = view.PatternExtras;
+            var patternEnvelopeExtras = view.PatternEnvelopeExtras;
+            var overrides = view.Overrides;
+            var overrideExtras = view.OverrideExtras;
+            var events = view.Events;
+            var eventExtras = view.EventExtras;
+            var eventExceptions = view.EventExceptions;
+            var completionLogs = view.CompletionLogs;
+            var completionExtras = view.CompletionExtras;
+            var derivedCompletions = view.DerivedCompletions;
+            var derivedCompletionExtras = view.DerivedCompletionExtras;
+            var fires = view.Fires;
+            var fireExtras = view.FireExtras;
 
             try
             {
-                await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks, extras), cancellationToken);
+                foreach (var write in result.OrderedWrites)
+                {
+                    switch (write)
+                    {
+                        case TasksWrite w:
+                            // A defensive copy: the store must own its storage. `w.Tasks` came
+                            // straight out of the caller's StoreMutation and IReadOnlyList<T> is
+                            // not a promise of immutability — a caller that keeps its own
+                            // reference and mutates it later must not be able to reach a view any
+                            // concurrent reader already holds. Every write below makes the same
+                            // copy for the same reason.
+                            tasks = w.Tasks.ToArray();
+                            await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks, taskExtras), cancellationToken);
+                            break;
+
+                        case DayTemplatesWrite w:
+                            dayTemplates = w.Templates.ToArray();
+                            await WriteAtomicAsync(
+                                Path.Combine(_dataDir, "day-templates.json"),
+                                writer => DayTemplateCodec.Write(writer, dayTemplates, dayTemplateExtras),
+                                cancellationToken);
+                            break;
+
+                        case PatternsWrite w:
+                            patterns = w.Book with { Patterns = w.Book.Patterns.ToArray() };
+                            await WriteAtomicAsync(
+                                Path.Combine(_dataDir, "patterns.json"),
+                                writer => PatternCodec.Write(writer, patterns, patternExtras, patternEnvelopeExtras),
+                                cancellationToken);
+                            break;
+
+                        case OverridesWrite w:
+                            overrides = w.Overrides.ToArray();
+                            await WriteAtomicAsync(
+                                Path.Combine(_dataDir, "overrides.json"),
+                                writer => OverrideCodec.Write(writer, overrides, overrideExtras),
+                                cancellationToken);
+                            break;
+
+                        case EventsWrite w:
+                            events = w.Events.ToArray();
+                            await WriteAtomicAsync(
+                                Path.Combine(_dataDir, "events.json"),
+                                writer => EventCodec.Write(writer, events, eventExtras),
+                                cancellationToken);
+                            break;
+
+                        case EventExceptionsWrite w:
+                            eventExceptions = w.Exceptions.ToArray();
+                            await WriteAtomicAsync(
+                                Path.Combine(_dataDir, "event-exceptions.json"),
+                                writer => EventCodec.WriteExceptions(writer, eventExceptions),
+                                cancellationToken);
+                            break;
+
+                        case CompletionLogWrite w:
+                            {
+                                var log = w.Log with { Entries = w.Log.Entries.ToArray() };
+                                var updatedLogs = new Dictionary<TaskId, CompletionLog>(completionLogs) { [log.TaskId] = log };
+                                completionLogs = updatedLogs;
+
+                                var completionsDir = Path.Combine(_dataDir, "completions");
+                                Directory.CreateDirectory(completionsDir);
+                                var logExtras = completionExtras.TryGetValue(log.TaskId, out var extra) ? extra : EmptyExtras<int>();
+                                await WriteAtomicAsync(
+                                    Path.Combine(completionsDir, CompletionCodec.FileNameFor(log.TaskId)),
+                                    writer => CompletionCodec.Write(writer, log, logExtras),
+                                    cancellationToken);
+                            }
+                            break;
+
+                        case DerivedCompletionsWrite w:
+                            derivedCompletions = w.Entries.ToArray();
+                            {
+                                var completionsDir = Path.Combine(_dataDir, "completions");
+                                Directory.CreateDirectory(completionsDir);
+                                await WriteAtomicAsync(
+                                    Path.Combine(completionsDir, "derived.json"),
+                                    writer => CompletionCodec.WriteDerived(writer, derivedCompletions, derivedCompletionExtras),
+                                    cancellationToken);
+                            }
+                            break;
+
+                        case FiresWrite w:
+                            {
+                                var dayFires = w.Fires with { Rows = w.Fires.Rows.ToArray() };
+                                var updatedFires = new Dictionary<DateOnly, DayFires>(fires) { [dayFires.Date] = dayFires };
+                                fires = updatedFires;
+
+                                var firesDir = Path.Combine(_dataDir, "fires");
+                                Directory.CreateDirectory(firesDir);
+                                var fireExtrasForDate = fireExtras.TryGetValue(dayFires.Date, out var extra) ? extra : EmptyExtras<FireKey>();
+                                await WriteAtomicAsync(
+                                    Path.Combine(firesDir, FireCodec.FileNameFor(dayFires.Date)),
+                                    writer => FireCodec.Write(writer, dayFires, fireExtrasForDate),
+                                    cancellationToken);
+                            }
+                            break;
+
+                        default:
+                            // An unrecognised payload is a caller/programming bug. It is thrown
+                            // like any other failure in this loop: if an earlier write in the
+                            // same list already landed on disk, LastWriteSucceeded must still
+                            // report that truthfully rather than staying silent about it.
+                            throw new NotImplementedException($"JsonStore does not know how to write a {write.GetType().Name}.");
+                    }
+                }
             }
             catch
             {
@@ -219,18 +337,16 @@ public sealed class JsonStore : IStore
                 throw;
             }
 
-            // Every other collection is carried forward unchanged from the pre-mutation view —
-            // a Tasks-only write must not erase what StoreView.Load(dataDir) already put there.
             _current = new StoreView(
-                tasks, extras,
-                view.DayTemplates, view.DayTemplateExtras,
-                view.Patterns, view.PatternExtras, view.PatternEnvelopeExtras,
-                view.Overrides, view.OverrideExtras,
-                view.Events, view.EventExtras,
-                view.EventExceptions,
-                view.CompletionLogs, view.CompletionExtras,
-                view.DerivedCompletions, view.DerivedCompletionExtras,
-                view.Fires, view.FireExtras);
+                tasks, taskExtras,
+                dayTemplates, dayTemplateExtras,
+                patterns, patternExtras, patternEnvelopeExtras,
+                overrides, overrideExtras,
+                events, eventExtras,
+                eventExceptions,
+                completionLogs, completionExtras,
+                derivedCompletions, derivedCompletionExtras,
+                fires, fireExtras);
             Interlocked.Exchange(ref _lastWriteOutcome, WriteSucceeded);
         }
         finally

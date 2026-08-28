@@ -160,7 +160,7 @@ public sealed class JsonStoreTests : IDisposable
         var store = new JsonStore(_dataDir);
         var newTask = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "Water the plants");
 
-        await store.MutateAsync(view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, newTask]]), CancellationToken.None);
+        await store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, newTask])]), CancellationToken.None);
 
         var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json"))).Tasks;
         Assert.Single(onDisk);
@@ -190,7 +190,7 @@ public sealed class JsonStoreTests : IDisposable
             DateTimeOffset.UtcNow);
 
         await Assert.ThrowsAnyAsync<JsonException>(() =>
-            store.MutateAsync(view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, poisoned]]), CancellationToken.None));
+            store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, poisoned])]), CancellationToken.None));
 
         var tasksPath = Path.Combine(_dataDir, "tasks.json");
         Assert.Equal(originalJson, File.ReadAllText(tasksPath));
@@ -210,7 +210,7 @@ public sealed class JsonStoreTests : IDisposable
 
         var mutations = Enumerable.Range(0, 20)
             .Select(i => store.MutateAsync(
-                view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask($"t_{i:D26}", $"Task {i}")]]),
+                view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask($"t_{i:D26}", $"Task {i}")])]),
                 CancellationToken.None));
 
         await Task.WhenAll(mutations);
@@ -236,7 +236,7 @@ public sealed class JsonStoreTests : IDisposable
             .Select(i => NewTask($"t_{i:D26}", new string('x', 500)))
             .ToArray();
 
-        var mutate = store.MutateAsync(view => new StoreMutation([(IReadOnlyList<TaskItem>)manyTasks]), CancellationToken.None);
+        var mutate = store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)manyTasks)]), CancellationToken.None);
         var readDuringWrite = Task.Run(() => store.Read().Tasks.Count);
 
         var first = await Task.WhenAny(readDuringWrite, mutate);
@@ -257,7 +257,7 @@ public sealed class JsonStoreTests : IDisposable
         var before = store.Read().Tasks;
         Assert.Empty(before);
 
-        await store.MutateAsync(view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "New")]]), CancellationToken.None);
+        await store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "New")])]), CancellationToken.None);
 
         Assert.Empty(before);
         Assert.Single(store.Read().Tasks);
@@ -270,7 +270,7 @@ public sealed class JsonStoreTests : IDisposable
         var store = new JsonStore(_dataDir);
         var callersList = new List<TaskItem> { NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "New") };
 
-        await store.MutateAsync(_ => new StoreMutation([(IReadOnlyList<TaskItem>)callersList]), CancellationToken.None);
+        await store.MutateAsync(_ => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)callersList)]), CancellationToken.None);
         Assert.Single(store.Read().Tasks);
 
         // The caller keeps its own reference and mutates it after handing it to the store.
@@ -321,7 +321,7 @@ public sealed class JsonStoreTests : IDisposable
         var store = new JsonStore(_dataDir);
 
         // A no-op mutation: write the exact Tasks list back out unchanged.
-        await store.MutateAsync(view => new StoreMutation([view.Tasks]), CancellationToken.None);
+        await store.MutateAsync(view => new StoreMutation([new TasksWrite(view.Tasks)]), CancellationToken.None);
 
         var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")))!.AsArray();
         Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());

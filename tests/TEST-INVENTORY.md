@@ -361,6 +361,9 @@ Against `fixtures/data`, the golden store.
 - an Event-plus-Override write puts the **Event first**
 - a crash between the two leaves the state the overlap check detects, and the next read re-offers
   the prompt
+- a mutation writes every affected file before the request returns, not only the first
+- a partially-failed multi-file write leaves `LastWriteSucceeded` false and does not swap the view
+- a write of one collection leaves every other collection in the swapped-in view unchanged
 - an Override's copy **preserves each Window's id**
 - a date materialised mid-day does not re-fire an already-fired Window
 - an Override carries its `used` record with the template **name as it was**

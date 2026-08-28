@@ -55,7 +55,7 @@ public static class TaskEndpoints
             try
             {
                 await store.MutateAsync(
-                    view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, task]]),
+                    view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, task])]),
                     ct);
             }
             catch (Exception ex)

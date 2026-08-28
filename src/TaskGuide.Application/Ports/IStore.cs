@@ -30,6 +30,15 @@ public interface IStore
     /// condition the overlap check looks for, so the next read re-offers the prompt and the store
     /// heals itself.
     /// </summary>
+    /// <remarks>
+    /// <see cref="StoreMutation.OrderedWrites"/> carries one payload per file kind — <see
+    /// cref="TasksWrite"/>, <see cref="DayTemplatesWrite"/>, <see cref="PatternsWrite"/>, <see
+    /// cref="OverridesWrite"/>, <see cref="EventsWrite"/>, <see cref="EventExceptionsWrite"/>,
+    /// <see cref="CompletionLogWrite"/>, <see cref="DerivedCompletionsWrite"/>, and <see
+    /// cref="FiresWrite"/> — applied in list order, each atomic on its own. A write that throws
+    /// part-way leaves the earlier files written; <see cref="LastWriteSucceeded"/> goes false and
+    /// the read view is not swapped.
+    /// </remarks>
     Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken);
 
     /// <summary>
