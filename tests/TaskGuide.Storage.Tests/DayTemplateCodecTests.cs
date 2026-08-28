@@ -74,8 +74,7 @@ public sealed class DayTemplateCodecTests
         var karate = Assert.Single(volleyballTuesday.EventPrototypes);
         Assert.Equal(new LastWeekdayBefore(DayOfWeek.Sunday), karate.AbsenceNotice);
 
-        // Add a second template with a prototype carrying a null AbsenceNotice, and confirm it
-        // stays null through a round trip.
+        // Add a second template with a prototype carrying a null AbsenceNotice.
         var noNotice = new EventPrototype(
             new EventPrototypeId("ep_01ARZ3NDEKTSV4RRFFQ69G5J01"),
             "Untitled",
@@ -87,8 +86,13 @@ public sealed class DayTemplateCodecTests
             .Append(new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G03"), "Extra", [], [noNotice]))
             .ToList();
 
+        // Push both the non-null and the null AbsenceNotice through Write and back.
         var written = RoundTrip(withExtra, extras);
         var (roundTripped, _) = DayTemplateCodec.Read(written);
+
+        var roundTrippedVolleyballTuesday = Assert.Single(roundTripped, t => t.Id == new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G01"));
+        var roundTrippedKarate = Assert.Single(roundTrippedVolleyballTuesday.EventPrototypes);
+        Assert.Equal(new LastWeekdayBefore(DayOfWeek.Sunday), roundTrippedKarate.AbsenceNotice);
 
         var extraTemplate = Assert.Single(roundTripped, t => t.Id == new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G03"));
         var roundTrippedPrototype = Assert.Single(extraTemplate.EventPrototypes);

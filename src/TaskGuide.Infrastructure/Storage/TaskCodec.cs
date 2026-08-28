@@ -115,7 +115,7 @@ public static class TaskCodec
         {
             case AbsoluteDefer absolute:
                 writer.WriteString("kind", "absolute");
-                writer.WriteString("date", absolute.Date.ToString(DateFormat));
+                CodecPrimitives.WriteDateOrNull(writer, "date", absolute.Date);
                 break;
             case OffsetDefer offset:
                 writer.WriteString("kind", "offset");
