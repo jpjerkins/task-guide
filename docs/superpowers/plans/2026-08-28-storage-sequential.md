@@ -441,6 +441,14 @@ that is `deleted: false` with all three null is meaningless — **reject it at r
       `true`; the two-row round-trip test must go red. Commit:
       `git commit -m "Read and write events.json and event-exceptions.json"`
 
+> **Tasks 5 and 6 are NOT executed by this plan's session.** The owner delegated them to another
+> system working in a separate git worktree; they will be merged back, with expected conflicts in
+> `tests/TEST-INVENTORY.md` (every lane appends to it, which is what makes the conflict — resolve
+> by keeping both sides' appended lines). Their **Interfaces blocks below remain the binding
+> contract**: Task 7 consumes `CompletionCodec` and `FireCodec` by those exact names, and Task 9
+> consumes `FireCodec.DateFromFileName` specifically. If the delegated work lands a different
+> surface, Tasks 7 and 9 need a reconciliation pass before they can compile.
+
 ## Task 5: The completion-log codecs
 
 **Files:**
