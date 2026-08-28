@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using TaskGuide.Infrastructure.Storage;
 using Xunit;
@@ -62,8 +63,12 @@ public sealed class SnapshotWriterTests : IDisposable
             await writer.TakeAsync(["manifest.json"], start.AddSeconds(i), CancellationToken.None);
         }
 
-        var remaining = Directory.GetDirectories(snapshotsDir);
-        Assert.Equal(5, remaining.Length);
+        // Not just a count: the *oldest* of the six (i = 0) must be the one pruned, and the five
+        // that survive must be exactly i = 1..5 — pins the chronological-ordering property, not
+        // merely that five directories happen to remain.
+        var remaining = Directory.GetDirectories(snapshotsDir).Select(Path.GetFileName).OrderBy(name => name, StringComparer.Ordinal);
+        var expectedRetained = Enumerable.Range(1, 5).Select(i => ExpectedLeafName(start.AddSeconds(i))).OrderBy(name => name, StringComparer.Ordinal);
+        Assert.Equal(expectedRetained, remaining);
     }
 
     [Fact]
@@ -92,6 +97,16 @@ public sealed class SnapshotWriterTests : IDisposable
             ["completions/t_01ARZ3NDEKTSV4RRFFQ69G5FAV.json"], now, CancellationToken.None);
 
         Assert.Equal(Path.Combine(_dataDir, "snapshots"), Path.GetDirectoryName(snapshotDir));
+        // Not just "some directory got created": the leaf must be derived from `now`, not a
+        // constant — a hardcoded leaf would still land under snapshots/ but wouldn't match this.
+        Assert.Equal(ExpectedLeafName(now), Path.GetFileName(snapshotDir));
         Assert.True(File.Exists(Path.Combine(snapshotDir, "completions", "t_01ARZ3NDEKTSV4RRFFQ69G5FAV.json")));
     }
+
+    /// <summary>
+    /// The directory-name format `SnapshotWriter` chose: sorts chronologically as a string, legal
+    /// on a POSIX filesystem. Duplicated here deliberately — this pins the observable format as a
+    /// behaviour, the same way other codec tests assert against literal formatted strings.
+    /// </summary>
+    private static string ExpectedLeafName(DateTimeOffset instant) => instant.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
 }
