@@ -683,6 +683,23 @@ N→N+1 walk testable without lying in `src/`.
 - a registry collision signals outbound before exiting, and no snapshot is taken
 - `manifest.json` is written only after every migration step succeeds
 
+**Added after Task 7, by Phil's ruling — a fresh `/data` must not crash the app.**
+`JsonStore.Load` builds `new PatternBook(default, [])` when `patterns.json` is absent, and
+`PatternBook.Active` calls `Patterns.Single(...)`, which throws on an empty list. Task 8 owns what a
+first-run store contains, so it owns this. **Do both halves:**
+
+- **Ship a vanilla default weekly Pattern at first start** — seven days of one plain Day template,
+  nothing opinionated. Written to disk as a real stored fact by the startup sequence, not conjured on
+  every read (Constraint 6 forbids a derived value reaching disk, and equally forbids pretending a
+  fact exists that no file holds).
+- **An automated test that an empty `/data` starts and serves without throwing** — the regression net.
+  Append its inventory line. This is the half that must survive: the default Pattern is a choice, but
+  "an empty store does not crash" is the guarantee.
+
+**Also route here from #52 (final triage):** `FireRetention.Sweep` propagates an `IOException` from
+`File.Delete`, so on a lock or permissions failure Liveness gets no write-health count rather than a
+degraded one. Task 8 owns the caller and is the right place to decide the failure's shape.
+
 - [ ] **Run the standard lane cycle.** Mutation checks: (a) take the snapshot unconditionally; the
       only-when-it-will-write test must go red. (b) keep 6 snapshots; the last-5 test must go red.
       (c) run migrations newest-first; the ordered-walk test must go red. Revert each.
@@ -820,6 +837,12 @@ implementer, and the reviewer should judge it on its merits.
 - [ ] **Commit:** `git commit -m "Read a day's shape from the store without writing one"`
 
 ## Task 12: The mutation-level rules, and the restore failure mode
+
+**Routed here from #52 (final triage):** `Task 10`'s
+`Deleting_an_Unused_template_corrupts_no_record` has an `Assert.DoesNotContain` half that cannot
+fail. The honest repair needs a delete operation to assert against, which is exactly what this task
+builds — fix it here.
+
 
 **Files:**
 - Create: `tests/TaskGuide.Storage.Tests/StoreMutationRulesTests.cs`
