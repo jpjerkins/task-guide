@@ -7,7 +7,82 @@ namespace TaskGuide.Domain.Tasks;
 /// computed on demand; nothing dated is ever reified. Recurrence generates the Deadline, so a
 /// recurring Task never carries a hand-set one.
 /// </summary>
-public sealed record Recurrence(RecurrenceAnchor Anchor, RecurrenceRule Rule, DateOnly? FirstDue);
+/// <remarks>
+/// <b>A Recurrence the generator cannot execute is rejected here, not discovered there.</b>
+/// <see cref="RecurrenceRules.LiveInstanceDeadline"/> walks forward one instance at a time, so a
+/// rule whose successor is the instance itself never terminates — on the ~30 s tick loop that is a
+/// hung engine, not a bad value. The anchor/rule pairing is checked in the same place, because
+/// either mismatch is otherwise found by an exception thrown from inside the walk.
+/// <para>
+/// <c>Anchor</c> and <c>Rule</c> are get-only for the same reason: the pair is the invariant, so it
+/// is not something a <c>with</c> expression may edit one half of.
+/// </para>
+/// </remarks>
+public sealed record Recurrence(RecurrenceAnchor Anchor, RecurrenceRule Rule, DateOnly? FirstDue)
+{
+    public RecurrenceAnchor Anchor { get; } = Anchor;
+
+    public RecurrenceRule Rule { get; } = Validated(Anchor, Rule);
+
+    private static RecurrenceRule Validated(RecurrenceAnchor anchor, RecurrenceRule rule)
+    {
+        var isIntervalSinceCompletion = rule is IntervalSinceCompletion;
+
+        if (anchor is RecurrenceAnchor.Completion && !isIntervalSinceCompletion)
+        {
+            throw new ArgumentException(
+                "A completion-anchored Recurrence restarts its clock from the last completion, so its "
+                + $"rule must be an {nameof(IntervalSinceCompletion)} — {rule.GetType().Name} is imposed "
+                + "by the calendar.",
+                nameof(rule));
+        }
+
+        if (anchor is RecurrenceAnchor.Calendar && isIntervalSinceCompletion)
+        {
+            throw new ArgumentException(
+                $"A calendar-anchored Recurrence has no completion to count from, so an "
+                + $"{nameof(IntervalSinceCompletion)} rule can never produce its next instance.",
+                nameof(rule));
+        }
+
+        switch (rule)
+        {
+            case EveryNDays(var n) when n < 1:
+                throw Interval(n);
+
+            case EveryNWeeksOn(var n, _) when n < 1:
+                throw Interval(n);
+
+            case IntervalSinceCompletion(var n, _) when n < 1:
+                throw Interval(n);
+
+            case EveryNWeeksOn(_, var weekdays) when weekdays.Count == 0:
+                throw new ArgumentException("A weekly rule must name at least one weekday.", nameof(rule));
+
+            // Day-of-month clamps down to a short month, so the 31st is meaningful; the 0th and
+            // the 32nd fall on no month at all.
+            case MonthlyOnDayOfMonth(var day) when day is < 1 or > 31:
+                throw new ArgumentException(
+                    $"A monthly rule's day of month must be between 1 and 31, not {day}.", nameof(rule));
+
+            case YearlyOn(var month, _) when month is < 1 or > 12:
+                throw new ArgumentException(
+                    $"A yearly rule's month must be between 1 and 12, not {month}.", nameof(rule));
+
+            // February 30th could only ever mean the 29th, so it is an authoring mistake rather
+            // than a date to clamp. A leap year is the yardstick: the 29th itself is legitimate.
+            case YearlyOn(var month, var day) when day < 1 || day > DateTime.DaysInMonth(2024, month):
+                throw new ArgumentException(
+                    $"A yearly rule's day must be a day month {month} can have, not {day}.", nameof(rule));
+
+            default:
+                return rule;
+        }
+
+        static ArgumentException Interval(int n) => new(
+            $"A recurrence interval must be at least 1: {n} never reaches a next instance.", nameof(rule));
+    }
+}
 
 /// <summary>
 /// The test: does doing the thing restart the clock, or does the world impose the date?

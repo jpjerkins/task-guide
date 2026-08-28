@@ -86,13 +86,25 @@ internal static class DerivedTask
             entry.RuleId == rule && entry.TriggerId == triggerId && entry.Due == due);
 }
 
+/// <remarks>
+/// <b>The boundary is supplied, never reached for.</b> Constructing a <see cref="TimeZoneInfo"/>
+/// inside the domain is the hidden ambient dependency the model forbids, and it would fail at
+/// context construction on a host without the IANA database rather than at a named edge.
+/// </remarks>
 public sealed record DerivedObligationContext(
-    DateOnly Today,
+    DateTimeOffset Now,
     IReadOnlyList<Event> DatedEvents,
     IReadOnlyList<DateOverride> Overrides,
     IDayShapeReader Shapes,
-    IReadOnlyList<DerivedCompletionEntry> Completions)
+    IReadOnlyList<DerivedCompletionEntry> Completions,
+    DayBoundary Boundary)
 {
+    /// <summary>
+    /// Derived, never supplied: <c>Now</c> and the boundary are the only inputs, so there is no
+    /// second answer to what day it is for a caller to disagree with.
+    /// </summary>
+    public DateOnly Today => Boundary.DateOf(Now);
+
     /// <summary>
     /// The assumption side of the absence rule. A Pattern is never reified, so "does the active
     /// Pattern assume Event E on this date" is answered from the book and the templates it
@@ -107,9 +119,6 @@ public sealed record DerivedObligationContext(
     /// Overrides beside it.
     /// </summary>
     public IReadOnlyList<EventException> EventExceptions { get; init; } = Array.Empty<EventException>();
-
-    /// <summary>Nothing in the model may disagree about what day it is.</summary>
-    public DayBoundary Boundary { get; init; } = new(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId));
 }
 
 /// <summary>
@@ -155,13 +164,14 @@ public sealed class AbsenceRule : IDerivedObligationRule
             }
         }
 
-        foreach (var run in Coalesce(context, absences))
+        foreach (var (commitment, first, last) in Coalesce(context, absences))
         {
-            var (commitment, first) = (run.Commitment, run.First);
-
             // Past the trigger's date it simply stops being derived: an obligation you can no
-            // longer act on is not an obligation.
-            if (first < context.Today)
+            // longer act on is not an obligation. The run's *last* absence is what says that,
+            // not its first — a trip spanning three Sundays still has two Sundays left when the
+            // first passes, and you can still tell them you will be out. The Deadline stays
+            // anchored to the first, so a run you are already inside reads as overdue.
+            if (last < context.Today)
             {
                 continue;
             }
@@ -227,7 +237,7 @@ public sealed class AbsenceRule : IDerivedObligationRule
     /// assumes no further instance of the same commitment between them. No proximity threshold,
     /// therefore no knob.
     /// </summary>
-    private static IEnumerable<(EventPrototype Commitment, DateOnly First)> Coalesce(
+    private static IEnumerable<(EventPrototype Commitment, DateOnly First, DateOnly Last)> Coalesce(
         DerivedObligationContext context,
         IReadOnlyList<(EventPrototype Commitment, DateOnly Date)> absences)
     {
@@ -236,14 +246,18 @@ public sealed class AbsenceRule : IDerivedObligationRule
             var commitment = group.First().Commitment;
             var dates = group.Select(absence => absence.Date).Order().ToList();
 
-            for (var i = 0; i < dates.Count; i++)
+            var first = 0;
+
+            for (var i = 1; i <= dates.Count; i++)
             {
-                if (i > 0 && NothingAssumedBetween(context, commitment, dates[i - 1], dates[i]))
+                if (i < dates.Count && NothingAssumedBetween(context, commitment, dates[i - 1], dates[i]))
                 {
                     continue;   // still inside the run that started earlier
                 }
 
-                yield return (commitment, dates[i]);
+                // The run is [first, i): due before its first absence, alive until its last.
+                yield return (commitment, dates[first], dates[i - 1]);
+                first = i;
             }
         }
     }

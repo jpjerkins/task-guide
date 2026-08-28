@@ -62,6 +62,12 @@ walking skeleton (#51).
 - a missed instance is silently superseded — no second live item, no `Stale`
 - monthly-on-the-5th stays on the 5th across a year
 - a one-off Task's log holds at most one entry, and that entry is what makes it `Done`
+- **a rule that never advances is rejected at construction** — an interval below 1 makes the
+  live-instance walk non-terminating on the tick thread, so it is refused, not survived
+- a weekly rule naming no weekday, and a calendar date the rule can never fall on, are rejected
+  at construction
+- an anchor paired with a rule it cannot run is rejected at construction, named rather than
+  discovered as a cast failure inside the generator
 
 ### Matching — the two algebras
 
@@ -208,6 +214,11 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a moved instance on an **Overridden** date still does not derive — the moved case driven through
   the absence check rather than around it
 - a renamed instance the shape still carries derives nothing
+- **a coalesced run whose first absence has passed survives while a later one remains** — the
+  run's last date is what says the obligation has expired; the Deadline stays anchored to the first
+- a run wholly in the past still stops being derived, as does a lone absence the day after it
+- the context takes an instant and derives today from its own boundary — supplied, never reached
+  for, so nothing in it can disagree about what day it is
 
 ---
 

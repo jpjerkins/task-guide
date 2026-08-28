@@ -249,4 +249,77 @@ public sealed class RecurrenceTests
         Assert.False(undeadlined.Covers(null));
         Assert.True(undeadlined.WithOnlyCompletion(new CompletionEntry(null, again)).Covers(null));
     }
+
+    // ---- rules the generator cannot execute -------------------------------
+
+    [Fact]
+    public void A_rule_that_never_advances_is_rejected_at_construction()
+    {
+        // `LiveInstanceDeadline` walks forward one instance at a time until it passes today. A
+        // rule whose successor is the instance itself never passes anything: the walk is a
+        // non-terminating loop on the tick thread, which is why this is a construction-time
+        // rejection rather than something the generator is asked to survive.
+        foreach (var rule in new RecurrenceRule[]
+                 {
+                     new EveryNDays(0),
+                     new EveryNDays(-1),
+                     new EveryNWeeksOn(0, [DayOfWeek.Monday]),
+                     new EveryNWeeksOn(-2, [DayOfWeek.Monday]),
+                 })
+        {
+            var thrown = Assert.Throws<ArgumentException>(
+                () => new Recurrence(RecurrenceAnchor.Calendar, rule, null));
+
+            Assert.Contains("at least 1", thrown.Message);
+        }
+
+        Assert.Throws<ArgumentException>(
+            () => new Recurrence(RecurrenceAnchor.Completion, new IntervalSinceCompletion(0, OffsetUnit.Days), null));
+    }
+
+    [Fact]
+    public void A_weekly_rule_naming_no_weekday_is_rejected_at_construction()
+    {
+        var thrown = Assert.Throws<ArgumentException>(() => new Recurrence(
+            RecurrenceAnchor.Calendar, new EveryNWeeksOn(1, Array.Empty<DayOfWeek>()), null));
+
+        Assert.Contains("at least one weekday", thrown.Message);
+    }
+
+    [Fact]
+    public void A_calendar_date_the_rule_can_never_fall_on_is_rejected_at_construction()
+    {
+        // Day-of-month clamps down to a short month, so the 31st is meaningful; the 0th and the
+        // 32nd are not, and neither is a February 30th that could only ever mean the 29th.
+        Assert.Throws<ArgumentException>(
+            () => new Recurrence(RecurrenceAnchor.Calendar, new MonthlyOnDayOfMonth(0), null));
+        Assert.Throws<ArgumentException>(
+            () => new Recurrence(RecurrenceAnchor.Calendar, new MonthlyOnDayOfMonth(32), null));
+        Assert.Throws<ArgumentException>(
+            () => new Recurrence(RecurrenceAnchor.Calendar, new YearlyOn(13, 1), null));
+        Assert.Throws<ArgumentException>(
+            () => new Recurrence(RecurrenceAnchor.Calendar, new YearlyOn(2, 30), null));
+
+        // The ones that do fall somewhere are left alone.
+        _ = new Recurrence(RecurrenceAnchor.Calendar, new MonthlyOnDayOfMonth(31), null);
+        _ = new Recurrence(RecurrenceAnchor.Calendar, new YearlyOn(2, 29), null);
+    }
+
+    [Fact]
+    public void An_anchor_paired_with_a_rule_it_cannot_run_is_rejected_at_construction()
+    {
+        // Completion-anchored with a calendar rule used to be an unmessaged `InvalidCastException`
+        // from inside the generator; calendar-anchored with an interval rule, an
+        // `InvalidOperationException` one call deeper. Both are authoring mistakes, so both are
+        // named here instead.
+        var completionWithCalendarRule = Assert.Throws<ArgumentException>(() => new Recurrence(
+            RecurrenceAnchor.Completion, new EveryNDays(3), null));
+
+        Assert.Contains("completion-anchored", completionWithCalendarRule.Message);
+
+        var calendarWithIntervalRule = Assert.Throws<ArgumentException>(() => new Recurrence(
+            RecurrenceAnchor.Calendar, new IntervalSinceCompletion(30, OffsetUnit.Days), null));
+
+        Assert.Contains("calendar-anchored", calendarWithIntervalRule.Message);
+    }
 }

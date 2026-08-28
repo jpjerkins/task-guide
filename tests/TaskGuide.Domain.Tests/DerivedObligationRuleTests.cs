@@ -119,23 +119,46 @@ public sealed class DerivedObligationRuleTests
 
     private static DerivedObligationContext Context(
         DateOnly? today = null,
+        DateTimeOffset? now = null,
+        DayBoundary? boundary = null,
         IReadOnlyList<Event>? datedEvents = null,
         IReadOnlyList<DateOverride>? overrides = null,
         IDayShapeReader? shapes = null,
         IReadOnlyList<DerivedCompletionEntry>? completions = null,
         IReadOnlyList<EventException>? exceptions = null) =>
         new(
-            today ?? Today,
+            now ?? Resolution.Resolve(today ?? Today, new TimeOnly(9, 0)),
             datedEvents ?? Array.Empty<Event>(),
             overrides ?? Array.Empty<DateOverride>(),
             shapes ?? NoEvents(),
-            completions ?? Array.Empty<DerivedCompletionEntry>())
+            completions ?? Array.Empty<DerivedCompletionEntry>(),
+            boundary ?? Boundary)
         {
             Patterns = Patterns,
             DayTemplates = Templates,
             EventExceptions = exceptions ?? Array.Empty<EventException>(),
-            Boundary = Boundary,
         };
+
+    // ---- the context ------------------------------------------------------
+
+    [Fact]
+    public void The_context_takes_an_instant_and_derives_today_from_its_own_boundary()
+    {
+        // Nothing in the model may disagree about what day it is, so `Today` is not an
+        // independent input a caller can set at odds with the boundary — it is read off the one
+        // the context was handed. 00:30 UTC on the 2nd is still the 1st in Chicago.
+        var lateOnTheFirst = new DateTimeOffset(2026, 9, 2, 0, 30, 0, TimeSpan.Zero);
+        var chicago = Context(now: lateOnTheFirst, datedEvents: [Tournament()]);
+
+        Assert.Equal(new DateOnly(2026, 9, 1), chicago.Today);
+        Assert.Equal(chicago.Boundary.DateOf(lateOnTheFirst), chicago.Today);
+
+        // And the boundary is genuinely the one supplied, not one the domain reached for: the
+        // same instant is already the 2nd in UTC.
+        var utc = Context(now: lateOnTheFirst, boundary: new DayBoundary(TimeZoneInfo.Utc));
+
+        Assert.Equal(new DateOnly(2026, 9, 2), utc.Today);
+    }
 
     // ---- the tag-declared family -----------------------------------------
 
@@ -353,6 +376,36 @@ public sealed class DerivedObligationRuleTests
 
         // You tell them once, a week before the first.
         Assert.Equal(new DateOnly(2026, 8, 30), derived.Deadline);
+    }
+
+    [Fact]
+    public void A_run_whose_first_absence_has_passed_survives_while_a_later_one_remains()
+    {
+        // The trip is the trigger, not its first Sunday: two Sundays are still ahead, and you can
+        // still tell them you will be out. Dropping the run here would delete a live obligation at
+        // the moment it is most overdue.
+        var derived = Assert.Single(Absence.Derive(Context(
+            today: SecondSunday.AddDays(-1),
+            overrides: [TravelDay(FirstSunday), TravelDay(SecondSunday), TravelDay(ThirdSunday)],
+            shapes: MinistryEverySunday(FirstSunday, SecondSunday, ThirdSunday))));
+
+        // Still due before the *first* absence — a passed Deadline, at maximum urgency.
+        Assert.Equal(new DateOnly(2026, 8, 30), derived.Deadline);
+    }
+
+    [Fact]
+    public void A_run_that_is_wholly_in_the_past_still_stops_being_derived()
+    {
+        Assert.Empty(Absence.Derive(Context(
+            today: ThirdSunday.AddDays(1),
+            overrides: [TravelDay(FirstSunday), TravelDay(SecondSunday), TravelDay(ThirdSunday)],
+            shapes: MinistryEverySunday(FirstSunday, SecondSunday, ThirdSunday))));
+
+        // And a lone absence, whose run is one date long, drops the day after it.
+        Assert.Empty(Absence.Derive(Context(
+            today: FirstSunday.AddDays(1),
+            overrides: [TravelDay(FirstSunday)],
+            shapes: MinistryEverySunday(FirstSunday))));
     }
 
     // ---- what a derived Task is ------------------------------------------
