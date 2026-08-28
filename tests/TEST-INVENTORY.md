@@ -375,6 +375,9 @@ Against `fixtures/data`, the golden store.
 - an Override span of one date yields exactly that date
 - an Override span yields every date inclusive of both ends, in ascending order
 - fires older than 30 days are unlinked as whole files
+- a fire file exactly 30 days old is kept (the boundary must not drift)
+- a file in `fires/` whose name is not a date is left untouched
+- the sweep on an absent `fires/` directory is a no-op, not an error
 - a fire row carries the Window's name and span **as they were**
 - `(date, null, "fallback")` is unique per day
 - a completion log is not rewritten when its Task's title changes
