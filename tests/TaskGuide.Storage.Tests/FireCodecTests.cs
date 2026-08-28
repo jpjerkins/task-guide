@@ -28,18 +28,16 @@ public sealed class FireCodecTests
 
     private static string RoundTrip(DateOnly date, string json)
     {
-        var fires = FireCodec.Read(date, json);
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) FireCodec.Write(writer, fires);
-        buffer.Position = 0;
-        using var reader = new StreamReader(buffer);
-        return reader.ReadToEnd();
+        var (fires, extras) = FireCodec.Read(date, json);
+        return RoundTrip(fires, extras);
     }
 
-    private static string RoundTrip(DayFires fires)
+    private static string RoundTrip(
+        DayFires fires,
+        IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) FireCodec.Write(writer, fires);
+        using (var writer = new Utf8JsonWriter(buffer)) FireCodec.Write(writer, fires, extras);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -48,7 +46,7 @@ public sealed class FireCodecTests
     [Fact]
     public void A_fire_row_carries_the_Window_s_name_and_span_as_they_were()
     {
-        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), FixtureJson("2026-08-15.json"));
+        var (fires, _) = FireCodec.Read(new DateOnly(2026, 8, 15), FixtureJson("2026-08-15.json"));
 
         var row = Assert.Single(fires.Rows, r => r.WindowId == new WindowId("w_01ARZ3NDEKTSV4RRFFQ69G5H02") && r.Kind.ToString() == "Window");
 
@@ -93,7 +91,7 @@ public sealed class FireCodecTests
             ]
             """;
 
-        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+        var (fires, _) = FireCodec.Read(new DateOnly(2026, 8, 15), json);
 
         Assert.Equal(2, fires.Rows.Count);
         Assert.Single(fires.Rows, r => r.WindowId == new WindowId("w_01ARZ3NDEKTSV4RRFFQ69G5H02"));
@@ -135,10 +133,10 @@ public sealed class FireCodecTests
             ]
             """;
 
-        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), json);
         Assert.Equal(expected, Assert.Single(fires.Rows).Kind);
 
-        var written = RoundTrip(fires);
+        var written = RoundTrip(fires, extras);
         using var document = JsonDocument.Parse(written);
         Assert.Equal(kind, document.RootElement[0].GetProperty("kind").GetString());
     }
@@ -148,10 +146,10 @@ public sealed class FireCodecTests
     {
         var original = FixtureJson("2026-08-15.json");
 
-        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), original);
+        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), original);
         Assert.Equal(new DateOnly(2026, 8, 15), fires.Date);
 
-        var written = RoundTrip(fires);
+        var written = RoundTrip(fires, extras);
 
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
     }
@@ -175,13 +173,13 @@ public sealed class FireCodecTests
     public void A_pending_Snooze_row_round_trips_with_a_null_firedAt_and_reads_IsPendingSnooze()
     {
         var original = FixtureJson("2026-08-15.json");
-        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), original);
+        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), original);
 
         var snooze = Assert.Single(fires.Rows, r => r.Kind == FireKind.Snooze);
         Assert.True(snooze.IsPendingSnooze);
         Assert.Null(snooze.FiredAt);
 
-        var written = RoundTrip(fires);
+        var written = RoundTrip(fires, extras);
         using var document = JsonDocument.Parse(written);
         Assert.Equal(JsonValueKind.Null, document.RootElement[1].GetProperty("firedAt").ValueKind);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
@@ -217,6 +215,32 @@ public sealed class FireCodecTests
     public void A_fire_file_name_whose_date_is_not_exactly_yyyy_MM_dd_is_not_a_fire_file(string fileName)
     {
         Assert.Null(FireCodec.DateFromFileName(fileName));
+    }
+
+    [Fact]
+    public void An_unknown_field_on_a_fire_row_survives_a_load_and_save_round_trip()
+    {
+        // Two rows differing only in kind: the extras channel is keyed on (windowId, kind), the
+        // same pair the duplicate guard enforces, so the field must land back on its own row.
+        const string json = """
+            [
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "window",
+                "windowName": "Evening prep", "windowStart": "17:30", "windowEnd": "18:00",
+                "dueAt": null, "firedAt": "2026-08-15T22:45:03Z", "matched": 4, "carried": null },
+              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "snooze",
+                "windowName": null, "windowStart": null, "windowEnd": null,
+                "dueAt": "2026-08-15T23:07:00Z", "firedAt": null, "matched": null, "carried": null,
+                "futureField": "keep me" }
+            ]
+            """;
+
+        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+        var written = RoundTrip(fires, extras);
+
+        using var document = JsonDocument.Parse(written);
+        Assert.False(document.RootElement[0].TryGetProperty("futureField", out _),
+            "The unknown field belongs to the snooze row, not the window row.");
+        Assert.Equal("keep me", document.RootElement[1].GetProperty("futureField").GetString());
     }
 
     [Fact]

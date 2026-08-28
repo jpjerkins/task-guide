@@ -4,30 +4,64 @@ using TaskGuide.Domain.Firing;
 
 namespace TaskGuide.Infrastructure.Storage;
 
+/// <summary>
+/// A Fire row's identity within its day: (windowId, kind). The `fires/&lt;date&gt;.json` row carries
+/// no id of its own, and this pair is already the uniqueness key `FireCodec` enforces at read.
+/// </summary>
+public readonly record struct FireKey(WindowId? WindowId, FireKind Kind);
+
 public static class FireCodec
 {
     private const string FileDateFormat = "yyyy-MM-dd";
 
+    private static readonly string[] KnownFireFields =
+        ["windowId", "kind", "windowName", "windowStart", "windowEnd", "dueAt", "firedAt", "matched", "carried"];
+
     /// <summary>`fires/&lt;date&gt;.json` - the date comes from the filename.</summary>
-    public static DayFires Read(DateOnly date, string json)
+    public static (DayFires Fires, IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> Extras)
+        Read(DateOnly date, string json)
     {
         using var document = JsonDocument.Parse(json);
 
-        var rows = document.RootElement.EnumerateArray()
-            .Select(ReadRow)
-            .ToList();
+        var rows = new List<FireRow>();
+        var extras = new Dictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
+
+        foreach (var element in document.RootElement.EnumerateArray())
+        {
+            var row = ReadRow(element);
+            rows.Add(row);
+
+            var extra = CodecPrimitives.UnknownFields(element, KnownFireFields);
+            if (extra.Count > 0) extras[KeyOf(row)] = extra;
+        }
 
         RejectDuplicateKeys(date, rows);
 
-        return new DayFires(date, rows);
+        return (new DayFires(date, rows), extras);
     }
 
-    public static void Write(Utf8JsonWriter writer, DayFires fires)
+    public static void Write(
+        Utf8JsonWriter writer,
+        DayFires fires,
+        IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
     {
         writer.WriteStartArray();
-        foreach (var row in fires.Rows) WriteRow(writer, row);
+        foreach (var row in fires.Rows)
+        {
+            writer.WriteStartObject();
+            WriteRowBody(writer, row);
+            if (extras.TryGetValue(KeyOf(row), out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
+            writer.WriteEndObject();
+        }
+
         writer.WriteEndArray();
     }
+
+    /// <summary>
+    /// The key a Fire row's unknown fields are stored against: exactly the key
+    /// <see cref="RejectDuplicateKeys"/> enforces uniqueness on, so the two cannot drift apart.
+    /// </summary>
+    private static FireKey KeyOf(FireRow row) => new(row.WindowId, row.Kind);
 
     public static string FileNameFor(DateOnly date) => $"{date:yyyy-MM-dd}.json";
 
@@ -51,9 +85,8 @@ public static class FireCodec
             ReadIntOrNull(element, "matched"),
             ReadEventIdOrNull(element, "carried"));
 
-    private static void WriteRow(Utf8JsonWriter writer, FireRow row)
+    private static void WriteRowBody(Utf8JsonWriter writer, FireRow row)
     {
-        writer.WriteStartObject();
         WriteWindowIdOrNull(writer, "windowId", row.WindowId);
         writer.WriteString("kind", WriteKind(row.Kind));
         WriteStringOrNull(writer, "windowName", row.WindowName);
@@ -63,13 +96,12 @@ public static class FireCodec
         CodecPrimitives.WriteInstantOrNull(writer, "firedAt", row.FiredAt);
         WriteIntOrNull(writer, "matched", row.Matched);
         WriteEventIdOrNull(writer, "carried", row.Carried);
-        writer.WriteEndObject();
     }
 
     private static void RejectDuplicateKeys(DateOnly date, IReadOnlyList<FireRow> rows)
     {
         var duplicate = rows
-            .GroupBy(row => (row.WindowId, row.Kind))
+            .GroupBy(KeyOf)
             .FirstOrDefault(group => group.Count() > 1);
 
         if (duplicate is null) return;

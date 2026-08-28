@@ -400,6 +400,16 @@ Against `fixtures/data`, the golden store.
 - ids minted in sequence sort lexicographically in mint order
 - two ids minted in the same millisecond still differ
 - a minted id is accepted by its own `IPrefixedId` record struct round-trip
+- an unknown field on a fire row survives a load-and-save round trip, keyed on the same
+  `(windowId, kind)` pair the duplicate guard enforces — a second row sharing the `windowId` but
+  not the kind does not receive it
+- an unknown field on a Pattern survives a load-and-save round trip
+- an unknown field on the `patterns.json` envelope survives a load-and-save round trip, in a
+  channel of its own — it is not copied onto a Pattern
+- an unknown field on a completion log entry survives a load-and-save round trip, keyed on the
+  entry's index because the entry has no id and `due` is null for a one-off Task
+- an unknown field on a derived completion entry survives a load-and-save round trip, keyed on
+  `ruleId` + `triggerId` + `due` — a second entry sharing the `ruleId` and `due` does not receive it
 
 ---
 

@@ -28,18 +28,16 @@ public sealed class CompletionCodecTests
 
     private static string RoundTrip(TaskId taskId, string json)
     {
-        var log = CompletionCodec.Read(taskId, json);
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.Write(writer, log);
-        buffer.Position = 0;
-        using var reader = new StreamReader(buffer);
-        return reader.ReadToEnd();
+        var (log, extras) = CompletionCodec.Read(taskId, json);
+        return RoundTrip(log, extras);
     }
 
-    private static string RoundTrip(CompletionLog log)
+    private static string RoundTrip(
+        CompletionLog log,
+        IReadOnlyDictionary<int, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.Write(writer, log);
+        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.Write(writer, log, extras);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -47,9 +45,9 @@ public sealed class CompletionCodecTests
 
     private static string RoundTripDerived(string json)
     {
-        var entries = CompletionCodec.ReadDerived(json);
+        var (entries, extras) = CompletionCodec.ReadDerived(json);
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.WriteDerived(writer, entries);
+        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.WriteDerived(writer, entries, extras);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -88,12 +86,12 @@ public sealed class CompletionCodecTests
     public void A_one_off_Task_s_entry_round_trips_a_null_due()
     {
         var original = FixtureJson("t_01ARZ3NDEKTSV4RRFFQ69G5FB3.json");
-        var log = CompletionCodec.Read(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB3"), original);
+        var (log, extras) = CompletionCodec.Read(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB3"), original);
 
         var entry = Assert.Single(log.Entries);
         Assert.Null(entry.Due);
 
-        var written = RoundTrip(log);
+        var written = RoundTrip(log, extras);
         using var document = JsonDocument.Parse(written);
         Assert.Equal(JsonValueKind.Null, document.RootElement[0].GetProperty("due").ValueKind);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
@@ -109,7 +107,7 @@ public sealed class CompletionCodecTests
     {
         var original = FixtureJson("derived.json");
 
-        var entries = CompletionCodec.ReadDerived(original);
+        var (entries, _) = CompletionCodec.ReadDerived(original);
         var entry = Assert.Single(entries);
         Assert.Equal(new RuleId("absence"), entry.RuleId);
         Assert.Equal("evt_01ARZ3NDEKTSV4RRFFQ69G5M01", entry.TriggerId);
@@ -123,17 +121,61 @@ public sealed class CompletionCodecTests
     public void The_Task_id_comes_from_the_filename_so_a_log_file_carries_no_id_of_its_own()
     {
         var taskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0");
-        var log = CompletionCodec.Read(taskId, FixtureJson(CompletionCodec.FileNameFor(taskId)));
+        var (log, extras) = CompletionCodec.Read(taskId, FixtureJson(CompletionCodec.FileNameFor(taskId)));
 
         Assert.Equal(taskId, log.TaskId);
 
-        var written = RoundTrip(log);
+        var written = RoundTrip(log, extras);
         using var document = JsonDocument.Parse(written);
         foreach (var entry in document.RootElement.EnumerateArray())
         {
             Assert.False(entry.TryGetProperty("id", out _), "Completion log entries must not repeat the Task id.");
             Assert.False(entry.TryGetProperty("taskId", out _), "Completion log entries must not repeat the Task id.");
         }
+    }
+
+    [Fact]
+    public void An_unknown_field_on_a_completion_log_entry_survives_a_load_and_save_round_trip()
+    {
+        // A log entry has no id and `due` is null for a one-off Task, so the extras channel is
+        // keyed on the entry's index. Only the second entry carries the field, which pins that
+        // the index is respected rather than every entry being handed the same extras.
+        const string json = """
+            [
+              { "due": "2026-08-11", "done": "2026-08-11T22:45:03Z" },
+              { "due": null, "done": "2026-08-12T22:45:03Z", "futureField": "keep me" }
+            ]
+            """;
+
+        var (log, extras) = CompletionCodec.Read(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB3"), json);
+        var written = RoundTrip(log, extras);
+
+        using var document = JsonDocument.Parse(written);
+        Assert.False(document.RootElement[0].TryGetProperty("futureField", out _),
+            "The unknown field belongs to the second entry, not the first.");
+        Assert.Equal("keep me", document.RootElement[1].GetProperty("futureField").GetString());
+    }
+
+    [Fact]
+    public void An_unknown_field_on_a_derived_completion_entry_survives_a_load_and_save_round_trip()
+    {
+        // Keyed on (ruleId, triggerId, due) — the two rows below share a ruleId and differ only
+        // in triggerId, so the field must follow its own row.
+        const string json = """
+            [
+              { "ruleId": "absence", "triggerId": "evt_01ARZ3NDEKTSV4RRFFQ69G5M00",
+                "due": "2026-09-27", "done": "2026-09-20T14:02:00Z" },
+              { "ruleId": "absence", "triggerId": "evt_01ARZ3NDEKTSV4RRFFQ69G5M01",
+                "due": "2026-09-27", "done": "2026-09-21T14:02:00Z", "futureField": "keep me" }
+            ]
+            """;
+
+        var written = RoundTripDerived(json);
+
+        using var document = JsonDocument.Parse(written);
+        Assert.False(document.RootElement[0].TryGetProperty("futureField", out _),
+            "The unknown field belongs to the second derived entry, not the first.");
+        Assert.Equal("keep me", document.RootElement[1].GetProperty("futureField").GetString());
     }
 
     [Fact]

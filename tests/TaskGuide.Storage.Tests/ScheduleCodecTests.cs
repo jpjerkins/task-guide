@@ -28,10 +28,13 @@ public sealed class ScheduleCodecTests
         return directory?.FullName ?? throw new InvalidOperationException("Could not find repo root (task-guide.slnx) above " + AppContext.BaseDirectory);
     }
 
-    private static string RoundTripPatterns(PatternBook book)
+    private static string RoundTripPatterns(
+        PatternBook book,
+        IReadOnlyDictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras,
+        IReadOnlyList<KeyValuePair<string, JsonElement>> envelopeExtras)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) PatternCodec.Write(writer, book);
+        using (var writer = new Utf8JsonWriter(buffer)) PatternCodec.Write(writer, book, extras, envelopeExtras);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -55,8 +58,8 @@ public sealed class ScheduleCodecTests
     {
         var original = FixtureJson("patterns.json");
 
-        var book = PatternCodec.Read(original);
-        var written = RoundTripPatterns(book);
+        var (book, extras, envelopeExtras) = PatternCodec.Read(original);
+        var written = RoundTripPatterns(book, extras, envelopeExtras);
 
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
     }
@@ -64,7 +67,7 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void A_pattern_s_seven_days_are_indexed_by_weekday_with_sunday_first()
     {
-        var book = PatternCodec.Read(FixtureJson("patterns.json"));
+        var (book, _, _) = PatternCodec.Read(FixtureJson("patterns.json"));
         var schoolYear = Assert.Single(book.Patterns, p => p.Name == "School year");
 
         // Fixture order: Sun, Mon, Tue, Wed, Thu, Fri, Sat — Tuesday is the odd one out (G01).
@@ -92,8 +95,8 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void No_codec_writes_a_status_property_whatever_type_it_would_carry_PatternCodec()
     {
-        var book = PatternCodec.Read(FixtureJson("patterns.json"));
-        var written = RoundTripPatterns(book);
+        var (book, extras, envelopeExtras) = PatternCodec.Read(FixtureJson("patterns.json"));
+        var written = RoundTripPatterns(book, extras, envelopeExtras);
 
         using var document = JsonDocument.Parse(written);
         CodecAssertions.NoStatusProperty(document.RootElement);
@@ -101,6 +104,52 @@ public sealed class ScheduleCodecTests
         {
             CodecAssertions.NoStatusProperty(pattern);
         }
+    }
+
+    [Fact]
+    public void An_unknown_field_on_a_pattern_survives_a_load_and_save_round_trip()
+    {
+        const string json = """
+            { "activePatternId": "p_01ARZ3NDEKTSV4RRFFQ69G5K00",
+              "patterns": [
+                { "id": "p_01ARZ3NDEKTSV4RRFFQ69G5K00", "name": "School year",
+                  "days": ["dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00",
+                           "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00",
+                           "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00",
+                           "dt_01ARZ3NDEKTSV4RRFFQ69G5G00"],
+                  "futureField": "keep me" }] }
+            """;
+
+        var (book, extras, envelopeExtras) = PatternCodec.Read(json);
+        var written = RoundTripPatterns(book, extras, envelopeExtras);
+
+        using var document = JsonDocument.Parse(written);
+        Assert.Equal("keep me", document.RootElement.GetProperty("patterns")[0].GetProperty("futureField").GetString());
+    }
+
+    [Fact]
+    public void An_unknown_field_on_the_patterns_envelope_survives_a_load_and_save_round_trip()
+    {
+        // patterns.json is an object, so a newer version can add a second singleton fact beside
+        // `activePatternId`. That level has its own channel, separate from the per-Pattern one.
+        const string json = """
+            { "activePatternId": "p_01ARZ3NDEKTSV4RRFFQ69G5K00",
+              "futureEnvelopeField": "keep me too",
+              "patterns": [
+                { "id": "p_01ARZ3NDEKTSV4RRFFQ69G5K00", "name": "School year",
+                  "days": ["dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00",
+                           "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00",
+                           "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00",
+                           "dt_01ARZ3NDEKTSV4RRFFQ69G5G00"] }] }
+            """;
+
+        var (book, extras, envelopeExtras) = PatternCodec.Read(json);
+        var written = RoundTripPatterns(book, extras, envelopeExtras);
+
+        using var document = JsonDocument.Parse(written);
+        Assert.Equal("keep me too", document.RootElement.GetProperty("futureEnvelopeField").GetString());
+        Assert.False(document.RootElement.GetProperty("patterns")[0].TryGetProperty("futureEnvelopeField", out _),
+            "An envelope-level unknown field must not be copied onto a Pattern.");
     }
 
     // ---- overrides.json ----
