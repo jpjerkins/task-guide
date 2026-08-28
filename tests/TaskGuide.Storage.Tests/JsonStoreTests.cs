@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Firing;
+using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
 using TaskGuide.Infrastructure.Storage;
@@ -42,13 +44,36 @@ public sealed class JsonStoreTests : IDisposable
         return path;
     }
 
+    /// <summary>Copies the whole golden fixture directory (recursively) into the temp `_dataDir`.</summary>
+    private void SeedWholeFixture()
+    {
+        var fixtureDir = Path.Combine(FindRepoRoot(), "tests", "TaskGuide.Storage.Tests", "fixtures", "data");
+        CopyDirectory(fixtureDir, _dataDir);
+    }
+
+    private static void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        Directory.CreateDirectory(destinationDir);
+
+        foreach (var filePath in Directory.EnumerateFiles(sourceDir))
+        {
+            File.Copy(filePath, Path.Combine(destinationDir, Path.GetFileName(filePath)), overwrite: true);
+        }
+
+        foreach (var subDir in Directory.EnumerateDirectories(sourceDir))
+        {
+            CopyDirectory(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
+        }
+    }
+
     [Fact]
     public void The_whole_store_loads_into_typed_objects_at_startup()
     {
-        SeedTasksJson(FixtureTasksJson);
+        SeedWholeFixture();
 
         var store = new JsonStore(_dataDir);
-        var tasks = store.Read().Tasks;
+        var view = store.Read();
+        var tasks = view.Tasks;
 
         Assert.Equal(5, tasks.Count);
 
@@ -79,6 +104,39 @@ public sealed class JsonStoreTests : IDisposable
         var watch = Assert.Single(tasks, t => t.Id == new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB2"));
         Assert.Equal(new DateOnly(2026, 9, 10), watch.Postpone);
         Assert.Empty(watch.Tags.Dimensions);
+
+        Assert.Equal(3, view.DayTemplates.Count);
+        var volleyballTuesday = Assert.Single(view.DayTemplates, t => t.Id == new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G01"));
+        Assert.Equal("Volleyball Tuesday", volleyballTuesday.Name);
+        var karate = Assert.Single(volleyballTuesday.EventPrototypes);
+        Assert.Equal("Karate", karate.Name);
+
+        Assert.Equal(new PatternId("p_01ARZ3NDEKTSV4RRFFQ69G5K00"), view.Patterns.ActivePatternId);
+        Assert.Equal(2, view.Patterns.Patterns.Count);
+
+        Assert.Equal(3, view.Overrides.Count);
+        var volleyballOverride = Assert.Single(view.Overrides, o => o.Date == new DateOnly(2026, 8, 15));
+        Assert.Equal("Volleyball Tuesday", volleyballOverride.Used!.TemplateName);
+
+        Assert.Equal(2, view.Events.Count);
+        var bandConcert = Assert.Single(view.Events, e => e.Id == new EventId("evt_01ARZ3NDEKTSV4RRFFQ69G5M00"));
+        Assert.Equal("Band concert", bandConcert.Name);
+
+        Assert.Equal(2, view.EventExceptions.Count);
+        var karateException = Assert.Single(view.EventExceptions, e => e.Date == new DateOnly(2026, 8, 25));
+        Assert.Equal("Karate (late)", karateException.Name);
+
+        var derived = Assert.Single(view.DerivedCompletions);
+        Assert.Equal(new RuleId("absence"), derived.RuleId);
+        Assert.Equal(new DateOnly(2026, 9, 27), derived.Due);
+
+        var completions = view.CompletionsFor(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0"));
+        Assert.Equal(2, completions.Entries.Count);
+        Assert.Equal(new DateOnly(2026, 8, 11), completions.Entries[0].Due);
+
+        var fires = view.FiresOn(new DateOnly(2026, 8, 15));
+        Assert.Equal(3, fires.Rows.Count);
+        Assert.Contains(fires.Rows, r => r.Kind == FireKind.Fallback);
     }
 
     [Fact]
@@ -276,6 +334,35 @@ public sealed class JsonStoreTests : IDisposable
         // The whole store loads at startup per IStore's memory-authoritative contract — a bad
         // tasks.json must refuse to start (assert → snapshot → migrate → sweep → serve), not
         // surface as a failure on the first request that happens to touch the store.
+        Assert.ThrowsAny<JsonException>(() => services.AddJsonStore(_dataDir));
+    }
+
+    [Fact]
+    public void A_missing_collection_file_loads_as_empty_rather_than_throwing_a_fresh_data_is_valid()
+    {
+        // No files seeded at all — a brand-new /data, before anything has ever been written.
+        var store = new JsonStore(_dataDir);
+        var view = store.Read();
+
+        Assert.Empty(view.Tasks);
+        Assert.Empty(view.DayTemplates);
+        Assert.Empty(view.Patterns.Patterns);
+        Assert.Empty(view.Overrides);
+        Assert.Empty(view.Events);
+        Assert.Empty(view.EventExceptions);
+        Assert.Empty(view.DerivedCompletions);
+        Assert.Equal(CompletionLog.Empty(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV")), view.CompletionsFor(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV")));
+        Assert.Equal(new DayFires(new DateOnly(2026, 8, 15), []), view.FiresOn(new DateOnly(2026, 8, 15)));
+    }
+
+    [Fact]
+    public void AddJsonStore_loads_eagerly_a_corrupt_day_templates_json_fails_at_registration_not_first_use()
+    {
+        File.WriteAllText(Path.Combine(_dataDir, "day-templates.json"), "{ not valid json");
+        var services = new ServiceCollection();
+
+        // Extends the tasks.json-only rule above to every collection: a bad day-templates.json
+        // must refuse to start too, not surface on the first request that happens to touch it.
         Assert.ThrowsAny<JsonException>(() => services.AddJsonStore(_dataDir));
     }
 

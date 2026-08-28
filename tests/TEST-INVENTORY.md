@@ -413,6 +413,9 @@ Against `fixtures/data`, the golden store.
   entry's index because the entry has no id and `due` is null for a one-off Task
 - an unknown field on a derived completion entry survives a load-and-save round trip, keyed on
   `ruleId` + `triggerId` + `due` — a second entry sharing the `ruleId` and `due` does not receive it
+- a missing collection file loads as empty rather than throwing — a fresh `/data` is valid
+- a corrupt collection file fails at registration, not first use, for a collection other than
+  `tasks.json`
 
 ---
 
