@@ -341,6 +341,14 @@ Against `fixtures/data`, the golden store.
 - an unknown field on a Day template survives a load-and-save round trip
 - no codec writes a `status` property, whatever type it would carry — `TaskCodec`
 - no codec writes a `status` property, whatever type it would carry — `DayTemplateCodec`
+- `patterns.json` round-trips the golden store unchanged
+- a Pattern's seven days are indexed by weekday with Sunday first
+- a Pattern book whose `days` array is not seven long is rejected at read, naming the Pattern
+- no codec writes a `status` property, whatever type it would carry — `PatternCodec`
+- `overrides.json` round-trips the golden store unchanged
+- a one-off day round-trips with a null `used`
+- an unknown field on an override survives a load-and-save round trip
+- no codec writes a `status` property, whatever type it would carry — `OverrideCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
