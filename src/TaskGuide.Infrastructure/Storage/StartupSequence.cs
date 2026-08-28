@@ -1,5 +1,6 @@
 using System.Text.Json;
 using TaskGuide.Application.Ports;
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
@@ -8,9 +9,10 @@ using TaskGuide.Domain.Tasks;
 namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
-/// <b>assert → snapshot → migrate → sweep.</b> Composes 8a's <see cref="ManifestCodec"/> and
-/// <see cref="SnapshotWriter"/> with the Dimension registry (#21) and <see cref="RegistrySweep"/>
-/// into the one orchestrated startup phase ADR-0001 says memory-authoritative depends on.
+/// <b>assert → seed → snapshot → migrate → sweep.</b> Composes 8a's <see cref="ManifestCodec"/> and
+/// <see cref="SnapshotWriter"/> with the Dimension registry (#21), the default-Pattern seed (#52),
+/// and <see cref="RegistrySweep"/> into the one orchestrated startup phase ADR-0001 says
+/// memory-authoritative depends on.
 /// </summary>
 /// <remarks>
 /// The four <see cref="IStartupSequence"/> members are independently callable and each does
@@ -25,7 +27,8 @@ public sealed class StartupSequence(
     SnapshotWriter snapshotWriter,
     IReadOnlyList<StoreMigration> migrations,
     Func<DateTimeOffset> now,
-    Func<string, CancellationToken, Task> signalRegistryCollision)
+    Func<string, CancellationToken, Task> signalRegistryCollision,
+    IIdMinter idMinter)
     : IStartupSequence
 {
     /// <summary>
@@ -45,6 +48,42 @@ public sealed class StartupSequence(
         "events.json",
         "event-exceptions.json",
     ];
+
+    /// <summary>
+    /// The vanilla default weekly Pattern: seven days of one plain Day template, carrying no
+    /// Availability Windows and no Event prototypes — any authored Window or prototype would
+    /// assert a schedule opinion a brand-new store has no basis for. Runs only when the loaded
+    /// <see cref="PatternBook"/> has <em>no Patterns</em>, not merely when `patterns.json` is
+    /// absent: a present-but-empty `patterns.json` crashes <see cref="PatternBook.Active"/> exactly
+    /// the same way an absent file does, and this is the condition that actually distinguishes
+    /// "nothing to make <c>.Active</c> safe" from "already seeded". The golden store and any store
+    /// that already has a Pattern is untouched by this check.
+    /// </summary>
+    /// <remarks>
+    /// Goes through <see cref="IStore.MutateAsync"/>, not a direct file write (ruled): that is what
+    /// swaps the already-loaded in-memory view in the same act as the disk write — a raw file write
+    /// would leave <see cref="_current"/>'s already-loaded, empty <see cref="PatternBook"/> in
+    /// memory, still crashing <c>.Active</c> on the very next read. Builds the Day templates write
+    /// from the freshly-read view rather than an empty list: a store whose Pattern collection is
+    /// empty but whose Day template collection already has entries (a hand-edited or partially
+    /// corrupted store) must not have those entries silently erased by this seed.
+    /// </remarks>
+    private async Task SeedDefaultPatternAsync(CancellationToken cancellationToken)
+    {
+        var view = store.Read();
+        if (view.Patterns.Patterns.Count > 0) return;
+
+        var template = new DayTemplate(idMinter.NextDayTemplateId(), "Ordinary day", [], []);
+        var days = Enumerable.Repeat(template.Id, 7).ToArray();
+        var pattern = new Pattern(idMinter.NextPatternId(), "Default", days);
+        var book = new PatternBook(pattern.Id, [pattern]);
+
+        await store.MutateAsync(_ => new StoreMutation(
+        [
+            new DayTemplatesWrite([.. view.DayTemplates, template]),
+            new PatternsWrite(book),
+        ]), cancellationToken);
+    }
 
     public void AssertRegistry() => registry.AssertNoDuplicateValues();
 
@@ -167,6 +206,11 @@ public sealed class StartupSequence(
             await signalRegistryCollision(ex.Message, cancellationToken);
             throw;
         }
+
+        // Runs before the snapshot decision and is never folded into `willWrite` below: the
+        // default-Pattern seed takes no snapshot (ruled — an empty store has nothing for a
+        // snapshot to protect, same reasoning as the fresh-manifest bootstrap in MigrateAsync).
+        await SeedDefaultPatternAsync(cancellationToken);
 
         // Reading version-ahead here, before any snapshot decision, is what makes that refusal
         // write nothing: PlanMigration throws before SnapshotAsync is ever considered.

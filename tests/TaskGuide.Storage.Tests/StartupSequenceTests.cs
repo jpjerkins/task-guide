@@ -42,7 +42,8 @@ public sealed class StartupSequenceTests : IDisposable
         DimensionRegistry? registry = null,
         IReadOnlyList<StoreMigration>? migrations = null,
         Func<string, CancellationToken, Task>? signal = null,
-        JsonStore? store = null) =>
+        JsonStore? store = null,
+        IIdMinter? idMinter = null) =>
         new(
             store ?? new JsonStore(_dataDir),
             _dataDir,
@@ -50,7 +51,50 @@ public sealed class StartupSequenceTests : IDisposable
             new SnapshotWriter(_dataDir),
             migrations ?? [],
             () => FixedNow,
-            signal ?? ((_, _) => Task.CompletedTask));
+            signal ?? ((_, _) => Task.CompletedTask),
+            idMinter ?? new FakeIdMinter());
+
+    /// <summary>Deterministic, collision-free within one test: a counter per id kind, not
+    /// randomness — a seed test that asserted on a specific id would be pinning ULID randomness,
+    /// which is not what any seed test here checks.</summary>
+    private sealed class FakeIdMinter : IIdMinter
+    {
+        private int _dayTemplates;
+        private int _patterns;
+
+        public TaskId NextTaskId() => throw new NotSupportedException();
+        public WindowId NextWindowId() => throw new NotSupportedException();
+        public DayTemplateId NextDayTemplateId() => new($"dt_fake{++_dayTemplates:D20}");
+        public PatternId NextPatternId() => new($"p_fake{++_patterns:D23}");
+        public EventId NextEventId() => throw new NotSupportedException();
+        public EventPrototypeId NextEventPrototypeId() => throw new NotSupportedException();
+    }
+
+    /// <summary>Writes `patterns.json` directly, bypassing <see cref="JsonStore.MutateAsync"/> —
+    /// mirrors <see cref="SeedTasksFileRaw"/>: a <see cref="JsonStore"/> constructed over this
+    /// starts with a non-empty <see cref="PatternBook"/> already on disk, as if from a prior
+    /// startup, uncontaminated by the seed under test.</summary>
+    private void SeedPatternsFileRaw(PatternBook book)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            PatternCodec.Write(writer, book, new Dictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>>(), []);
+        }
+
+        File.WriteAllBytes(Path.Combine(_dataDir, "patterns.json"), buffer.ToArray());
+    }
+
+    private void SeedDayTemplatesFileRaw(IReadOnlyList<DayTemplate> templates)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            DayTemplateCodec.Write(writer, templates, new Dictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+        }
+
+        File.WriteAllBytes(Path.Combine(_dataDir, "day-templates.json"), buffer.ToArray());
+    }
 
     /// <summary>Writes `tasks.json` directly, bypassing <see cref="JsonStore.MutateAsync"/> — so a
     /// <see cref="JsonStore"/> constructed over it starts with <see cref="IStore.LastWriteSucceeded"/>
@@ -336,5 +380,108 @@ public sealed class StartupSequenceTests : IDisposable
         var sweptWindow = Assert.Single(sweptTemplate.Windows);
         Assert.Empty(sweptWindow.Tags.LooseTags);
         Assert.Equal(new TagValue("garage"), Assert.Single(sweptWindow.Tags.On(new DimensionId("loc"))));
+    }
+
+    /// <summary>
+    /// Task 8c, Part 1's regression net. <see cref="PatternBook.Active"/> calls
+    /// <c>Patterns.Single(...)</c>, which throws on an empty list — a genuinely fresh `/data`,
+    /// before this seed exists, crashes here on the first day-shape read. Deliberately does not
+    /// assert anything about what the default Pattern's Day template contains (name, Windows) —
+    /// only that <c>Active</c> does not throw and that every weekday's reference actually resolves
+    /// to a Day template that exists — so this test still holds if the default Pattern's content
+    /// changes later. The mutation that must kill it: make the seed a no-op.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_data_dir_starts_and_the_active_Pattern_resolves_without_throwing()
+    {
+        var sut = NewSequence();
+
+        await sut.RunAsync(CancellationToken.None);
+
+        // A fresh reload, not the original in-process store: the guarantee is that a *later*
+        // startup against this now-non-empty `/data` also serves without throwing, which only a
+        // reload proves — an in-memory view could look fine while the file on disk stayed empty.
+        var view = new JsonStore(_dataDir).Read();
+        var active = view.Patterns.Active; // throws here if the seed never landed
+
+        foreach (var day in Enum.GetValues<DayOfWeek>())
+        {
+            var templateId = active[day];
+            Assert.Contains(view.DayTemplates, t => t.Id == templateId);
+        }
+    }
+
+    /// <summary>
+    /// Task 8c, Part 1's actual seed content — a choice, not the guarantee (see the test above for
+    /// that). "Vanilla"/"plain": no Availability Windows and no Event prototypes at all, since any
+    /// authored Window or prototype would assert a specific schedule opinion a brand-new store has
+    /// no basis for; the seven-days-of-one-template shape is the brief's own description of
+    /// "nothing opinionated". The seed goes through <c>IStore.MutateAsync</c> (ruled — a direct
+    /// file write would leave the already-loaded, empty <see cref="PatternBook"/> in memory,
+    /// still crashing <c>.Active</c>), so a fresh reload is what proves it reached disk.
+    /// </summary>
+    [Fact]
+    public async Task A_fresh_data_dir_seeds_one_vanilla_weekly_Pattern_of_a_single_plain_Day_template()
+    {
+        var sut = NewSequence();
+
+        await sut.RunAsync(CancellationToken.None);
+
+        var reloaded = new JsonStore(_dataDir).Read();
+        var pattern = Assert.Single(reloaded.Patterns.Patterns);
+        Assert.Equal(pattern.Id, reloaded.Patterns.ActivePatternId);
+        Assert.Equal(7, pattern.Days.Count);
+        Assert.Single(pattern.Days.Distinct()); // one plain template, referenced seven times
+
+        var template = Assert.Single(reloaded.DayTemplates);
+        Assert.Equal(pattern.Days[0], template.Id);
+        Assert.Empty(template.Windows);
+        Assert.Empty(template.EventPrototypes);
+    }
+
+    /// <summary>
+    /// Ruled: an empty store has nothing for a snapshot to protect, matching the reasoning already
+    /// accepted for 8b's fresh-store `manifest.json` bootstrap.
+    /// </summary>
+    [Fact]
+    public async Task The_default_Pattern_seed_takes_no_snapshot()
+    {
+        var sut = NewSequence();
+
+        await sut.RunAsync(CancellationToken.None);
+
+        Assert.False(Directory.Exists(SnapshotsDir));
+    }
+
+    /// <summary>
+    /// The golden store (and any store that already has a Pattern) must not be reseeded — a second
+    /// Pattern materializing out of nowhere would itself be a correctness bug, independent of the
+    /// golden-store fixture rule. Also pins that the seed issues no <c>MutateAsync</c> call at all
+    /// when there is nothing to seed: <see cref="IStore.LastWriteSucceeded"/> stays <c>null</c>
+    /// (mirrors <see cref="The_registry_sweep_makes_no_MutateAsync_call_when_nothing_moved"/>'s
+    /// discipline — "no write attempted" is a different, stronger claim than "no visible change").
+    /// </summary>
+    [Fact]
+    public async Task A_store_that_already_has_a_Pattern_is_never_reseeded()
+    {
+        var existingTemplate = new DayTemplate(new DayTemplateId("dt_existing00000000000001"), "Weekday", [], []);
+        SeedDayTemplatesFileRaw([existingTemplate]);
+        var existingPatternId = new PatternId("p_existing000000000000000001");
+        var existingPattern = new Pattern(existingPatternId, "Only pattern", Enumerable.Repeat(existingTemplate.Id, 7).ToArray());
+        SeedPatternsFileRaw(new PatternBook(existingPatternId, [existingPattern]));
+
+        var store = new JsonStore(_dataDir);
+        Assert.Null(store.LastWriteSucceeded);
+
+        var sut = NewSequence(store: store);
+        await sut.RunAsync(CancellationToken.None);
+
+        Assert.Null(store.LastWriteSucceeded);
+
+        var reloaded = new JsonStore(_dataDir).Read();
+        var onlyPattern = Assert.Single(reloaded.Patterns.Patterns);
+        Assert.Equal(existingPatternId, onlyPattern.Id);
+        Assert.Equal(existingPatternId, reloaded.Patterns.ActivePatternId);
+        Assert.Single(reloaded.DayTemplates);
     }
 }

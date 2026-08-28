@@ -366,6 +366,10 @@ Against `fixtures/data`, the golden store.
 - the registry sweep makes no `MutateAsync` call when nothing moved
 - the registry sweep promotes a loose Tag the registry now claims, and writes the change
 - the registry sweep promotes a loose Tag on a Day template Window
+- an empty `/data` starts and the active Pattern resolves without throwing
+- a fresh `/data` seeds one vanilla weekly Pattern of a single plain Day template
+- the default Pattern seed takes no snapshot
+- a store that already has a Pattern is never reseeded
 - `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
@@ -397,6 +401,7 @@ Against `fixtures/data`, the golden store.
 - a fire file exactly 30 days old is kept (the boundary must not drift)
 - a file in `fires/` whose name is not a date is left untouched
 - the sweep on an absent `fires/` directory is a no-op, not an error
+- a per-file delete failure is recorded and the sweep keeps going
 - a fire row carries the Window's name and span **as they were**
 - `(date, null, "fallback")` is unique per day
 - a completion log is not rewritten when its Task's title changes

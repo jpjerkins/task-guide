@@ -1,4 +1,5 @@
 using TaskGuide.Application.Ports;
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Infrastructure.Storage;
 
@@ -52,7 +53,8 @@ public static class JsonStoreServiceCollectionExtensions
             new SnapshotWriter(dataDir),
             StoreMigrations.Ordered,
             () => DateTimeOffset.UtcNow,
-            signalRegistryCollision));
+            signalRegistryCollision,
+            sp.GetRequiredService<IIdMinter>()));
         return services;
     }
 }
