@@ -38,7 +38,7 @@ public sealed class OpportunityCounter(
         var horizonEnd = HorizonEnd(task.Deadline, now);
 
         return WindowsOn(DatesFrom(_boundary.DateOf(now), _boundary.DateOf(horizonEnd)), _shapes)
-            .Count(slot => StartsWithin(slot, now, horizonEnd) && Admits(task, slot, NoFetchedValues));
+            .Count(slot => FallsWithin(slot, now, horizonEnd) && Admits(task, slot, NoFetchedValues));
     }
 
     /// <summary>
@@ -73,14 +73,20 @@ public sealed class OpportunityCounter(
     }
 
     /// <summary>
-    /// Ahead of now, and inside the horizon — half-open at both ends, which is what makes a
-    /// once-a-week opportunity count exactly once whatever hour it is asked.
+    /// Not yet over, and starting inside the horizon. The two edges deliberately read different
+    /// ends of the Window: a Window you are <em>standing in</em> is a chance you can still take —
+    /// <c>SnoozePolicy.CeilingFor</c> already says as much in code, re-deriving the Duration
+    /// ceiling from the time <em>actually remaining</em> — and the landing page a notification
+    /// opens is read inside a running Window by construction, so "3 chances before it is due" was
+    /// off by one exactly when it is read most. The far edge stays on the start and stays
+    /// half-open, which is what makes a once-a-week opportunity count exactly once.
     /// </summary>
-    private bool StartsWithin((DateOnly Date, AvailabilityWindow Window) slot, DateTimeOffset now, DateTimeOffset horizonEnd)
+    private bool FallsWithin((DateOnly Date, AvailabilityWindow Window) slot, DateTimeOffset now, DateTimeOffset horizonEnd)
     {
         var start = _resolution.Resolve(slot.Date, slot.Window.Start);
+        var end = _resolution.Resolve(slot.Date, slot.Window.End);
 
-        return start >= now && start < horizonEnd;
+        return end > now && start < horizonEnd;
     }
 
     /// <summary>

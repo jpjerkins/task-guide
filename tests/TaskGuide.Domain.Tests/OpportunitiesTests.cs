@@ -131,14 +131,28 @@ public sealed class OpportunitiesTests
     }
 
     [Fact]
-    public void A_Window_already_begun_is_not_an_Opportunity_ahead_of_now()
+    public void A_Window_you_are_standing_in_still_counts_as_an_Opportunity()
     {
         var shapes = OnWeekday(DayOfWeek.Wednesday, Window("w_evening", 18, 19));
         var halfwayThrough = Resolution.Resolve(Wednesday, new TimeOnly(18, 30));
 
-        // A Window firing *is* the reminder, and it fired half an hour ago — this Task has already
-        // had its chance to surface there. Only next week's counts.
-        Assert.Equal(1, CounterOver(shapes).CountAhead(HalfHourTask(), halfwayThrough));
+        // Half an hour in, with half an hour left — a chance you can still take, which is what
+        // `SnoozePolicy.CeilingFor` already asserts in code by re-deriving the ceiling from the
+        // time *actually remaining*. And a notification's landing page is read *inside* a running
+        // Window by construction, so a count that excluded it was off by one exactly when read.
+        Assert.Equal(2, CounterOver(shapes).CountAhead(HalfHourTask(), halfwayThrough));
+    }
+
+    [Fact]
+    public void The_far_edge_of_the_horizon_is_unchanged_a_Window_starting_at_the_horizon_end_never_counts()
+    {
+        var shapes = EveryDay(Window("w_midday", 12, 13));
+        var now = At(Tuesday, 12);
+
+        // Only the near edge moved. Today's Window counts (it is running, and it also starts
+        // exactly at now); the one a rolling seven days later starts exactly *at* the horizon end
+        // and so does not — half-open there still, or a once-a-week chance would count twice.
+        Assert.Equal(7, CounterOver(shapes).CountAhead(HalfHourTask(), now));
     }
 
     [Fact]
