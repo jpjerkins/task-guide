@@ -290,8 +290,10 @@ do not re-derive it.
   assembly*, so a codec emitting `"status": "active"` as a plain **string** would slip through
   every existing test. Assert it at the codec level: round-trip a `TaskItem` through
   `TaskCodec.Write` and assert the emitted object has no `status` property at all — not that it
-  is null, that it is absent. Do the same for every codec this plan adds, as a shared helper in
-  `CodecPrimitives`-adjacent test code, and say in the report which codecs it covers.
+  is null, that it is absent. **This lane covers `TaskCodec` and `DayTemplateCodec` only** — put
+  the check in a `public static` test helper (`CodecAssertions.NoStatusProperty`, in its own file
+  under `tests/TaskGuide.Storage.Tests/`) so Tasks 3–6 can each apply it to their own codec. Say
+  in the report which codecs it covers today.
 
 - [ ] **Step 1: Write the round-trip test first**
 
@@ -382,9 +384,10 @@ six-element array would silently make `pattern[Saturday]` throw an index error f
 - **an Override carries its `used` record with the template name as it was** *(inventory line)*
 - a one-off day round-trips with a null `used`
 
-The two verbatim inventory lines are asserted here at the **codec** level (the id and the name
-survive the round trip). Task 12 asserts them again at the **store mutation** level, where the copy
-is actually made. Both are wanted; neither replaces the other.
+**These two verbatim inventory lines are owned by this lane**, at the codec level: the id and the
+name survive the round trip. Task 12's "a date materialised mid-day does not re-fire an
+already-fired Window" is the store-level consequence of the same rule, but it is its own inventory
+line and its own test — do not write either of these two here *and* there.
 
 - [ ] **Run the standard lane cycle.** Mutation checks: (a) mint a fresh `WindowId` inside
       `OverrideCodec.Read`, confirm the preserves-id test goes red; (b) resolve `used.templateName`
@@ -475,9 +478,9 @@ the one that proves the null is real rather than a missing field.
 
 **Tests — one inventory line, verbatim, plus four to append:**
 
-- **a completion log is not rewritten when its Task's title changes** *(inventory line — assert it
-  at the codec level here: the log file's bytes carry no title and no reference to one, so a title
-  edit has nothing to rewrite. Task 12 asserts the store-level version.)*
+- **a completion log is not rewritten when its Task's title changes** *(inventory line, owned by
+  this lane and asserted here only: the log file's bytes carry no title and no reference to one,
+  so a title edit has nothing to rewrite.)*
 - each completion log round-trips the golden store unchanged
 - a one-off Task's entry round-trips a null `due`
 - `completions/derived.json` round-trips, keyed on `ruleId` + `triggerId` + `due`
@@ -822,7 +825,7 @@ This lane writes **no new production abstraction**. It asserts, against the real
 the earlier lanes made possible. If a test cannot be written without new production code, that is a
 finding to report, not a licence to design.
 
-**Six inventory lines, verbatim, and every one of them stays exactly as written:**
+**Five inventory lines, verbatim, and every one of them stays exactly as written:**
 
 - **a date materialised mid-day does not re-fire an already-fired Window** — stamp an Override onto
   today after a Window has fired, then assert the fire row for `(date, windowId)` still matches,
@@ -833,8 +836,6 @@ finding to report, not a licence to design.
 - **promoting a one-off day writes the source date's use record and does not re-link** — after
   promotion the source date still holds its own copied Windows, and a later edit to the new
   template does not reach them
-- **a completion log is not rewritten when its Task's title changes** — mutate the title, assert
-  the completion file's mtime and bytes are unchanged
 - **a restore under a running service is invisible, and the next mutation destroys it** — the one
   test that documents a failure mode rather than preventing it. Overwrite `tasks.json` on disk
   under a live `JsonStore`, assert `Read()` still shows the old state, then mutate and assert the
