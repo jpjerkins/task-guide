@@ -67,6 +67,20 @@ public sealed class StartupSequence(
     /// from the freshly-read view rather than an empty list: a store whose Pattern collection is
     /// empty but whose Day template collection already has entries (a hand-edited or partially
     /// corrupted store) must not have those entries silently erased by this seed.
+    /// <para>
+    /// <b>Caveat, unreachable today (fix round 1, review's Minor finding):</b> this write runs in
+    /// <see cref="RunAsync"/> <em>before</em> the snapshot decision, and is never folded into that
+    /// decision's `willWrite` check — by design, since the seed itself takes no snapshot. But if a
+    /// store is <em>not</em> fresh (`manifest.json` present, migrations pending) and <em>also</em>
+    /// has an empty Pattern collection, this write still lands first, so a snapshot taken
+    /// afterward for the migration would protect a `patterns.json`/`day-templates.json` this seed
+    /// already rewrote, not what was on disk at boot. Not a live bug: <see cref="StoreMigrations.Ordered"/>
+    /// is empty today, so "fresh Patterns + pending migration" cannot co-occur, and this seed only
+    /// ever adds records (see above) — the pre-seed `patterns.json` in that scenario is the broken,
+    /// crashing state this seed exists to replace, so there is no recoverable prior state a snapshot
+    /// one step earlier would have protected that this one doesn't. Worth revisiting before a real
+    /// migration step touching `patterns.json` ships.
+    /// </para>
     /// </remarks>
     private async Task SeedDefaultPatternAsync(CancellationToken cancellationToken)
     {

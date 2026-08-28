@@ -75,78 +75,72 @@ public sealed class FireRetentionTests : IDisposable
     /// A per-file delete failure must not abort the sweep, and must surface in the result rather
     /// than propagate — Liveness reads write health off this outcome (`IHealth.cs`), so a silent
     /// exception here would mean no write-health signal at all on a lock or permissions failure,
-    /// exactly when something is wrong.
+    /// exactly when something is wrong. Two files are seeded eligible for removal, both under one
+    /// write-denied directory, so the assertion that matters — the sweep keeps going past the
+    /// <em>first</em> failure rather than aborting — is actually exercised; a single failing file
+    /// would leave that untested.
     /// </summary>
     /// <remarks>
-    /// <b>Why not the directory-occupation trick Task 7 uses (`WholeStoreTests.MakeUnwritable`):</b>
-    /// that works for <c>WriteAtomicAsync</c>'s rename-over-destination, but <c>Sweep</c> calls
-    /// <c>Directory.EnumerateFiles</c>, which — confirmed empirically — never yields a path that is
-    /// itself a directory; occupying a fire file's path with a directory would make the sweep skip
-    /// it entirely rather than fail to delete it. A `chmod` on the file, or on `fires/` itself, was
-    /// tried next and also rejected: POSIX `unlink()` checks the <em>containing directory's</em>
-    /// write permission, not the target file's own bits, so a single file inside a shared directory
-    /// cannot be isolated that way, and denying the directory would block every file in it, not
-    /// just one.
-    /// <para>
-    /// What isolates exactly one file: <c>chflags uchg</c> (macOS) / <c>chattr +i</c> (Linux) — the
-    /// BSD/Linux <em>immutable</em> flag lives on the file's own inode, not on the directory, so it
-    /// blocks only that file's own delete/rename/write. Verified directly (see the report) before
-    /// writing this test: with one file flagged immutable and a sibling plain in the same
-    /// directory, `File.Delete` threw <see cref="UnauthorizedAccessException"/> on the flagged file
-    /// and succeeded on the sibling. POSIX-only (skipped on Windows, which has no equivalent flag);
-    /// the flag is cleared in a <c>finally</c> so <see cref="Dispose"/>'s recursive delete of
-    /// <see cref="_dataDir"/> still succeeds even if an assertion above throws.
-    /// </para>
+    /// <b>Fix round 1 (spec FAIL — Linux):</b> the first version of this test isolated a single
+    /// file's delete failure with the BSD/Linux <em>immutable</em> flag (`chflags uchg` /
+    /// `chattr +i`), shelled out to via `Process.Start`. That crashed with an unhandled
+    /// `InvalidOperationException` on an unprivileged Linux user — `chattr +i` needs
+    /// `CAP_LINUX_IMMUTABLE`, which pi5's `philj` account (this project's actual Linux dev
+    /// target) does not have — breaking "whole suite green," the one bar that mechanism exists
+    /// for. Replaced with denying write on the <em>containing</em> `fires/` directory itself, via
+    /// the portable <see cref="File.SetUnixFileMode"/> (no shell-out, no elevated capability:
+    /// any owner can `chmod` their own directory). This can no longer isolate one specific file —
+    /// every delete in the directory fails — so the test seeds <b>two</b> expired files instead of
+    /// one, which is what actually proves "keeps going" (a single-file version couldn't
+    /// distinguish "kept going" from "aborted after the only failure"). Verified directly with a
+    /// throwaway probe before writing this: two files in a write-denied directory,
+    /// `Directory.EnumerateFiles` still lists both (only the directory's <em>write</em> bit is
+    /// gone, not read/execute), and `File.Delete` on each threw
+    /// <see cref="UnauthorizedAccessException"/> while the directory listing and file contents
+    /// survived untouched. Same POSIX-only constraint as the codebase's existing `chmod`-based
+    /// tests (<c>WholeStoreTests.MakeUnwritable</c>, <c>TaskEndpointsTests.Chmod</c>) — including
+    /// their accepted vacuous-pass-as-root tradeoff, which is strictly preferable to this test's
+    /// old failure mode (crashing outright as a non-root user).
     /// </remarks>
     [Fact]
     public void A_per_file_delete_failure_is_recorded_and_the_sweep_keeps_going()
     {
-        if (OperatingSystem.IsWindows()) return; // no immutable-file equivalent to isolate one delete.
+        if (OperatingSystem.IsWindows()) return; // chmod-based directory denial is POSIX-specific.
 
-        var old = new DateOnly(2026, 7, 28);
-        var alsoOld = new DateOnly(2026, 7, 1);
+        var firesDir = Path.Combine(_dataDir, "fires");
+        var oldA = SeedFireFile(new DateOnly(2026, 7, 28));
+        var oldB = SeedFireFile(new DateOnly(2026, 7, 1));
         var retained = SeedFireFile(new DateOnly(2026, 7, 29));
-        var alsoOldPath = SeedFireFile(alsoOld);
-        var undeletablePath = SeedFireFile(old);
 
-        SetImmutable(undeletablePath, true);
+        DenyDirectoryWrite(firesDir);
         try
         {
             var result = FireRetention.Sweep(_dataDir, new DateOnly(2026, 8, 28));
 
-            Assert.Equal([alsoOld], result.Removed);
-            Assert.Equal([old], result.Failed);
-            Assert.True(File.Exists(undeletablePath), "the flagged file itself must survive the failed delete");
-            Assert.False(File.Exists(alsoOldPath));
+            Assert.Empty(result.Removed);
+            Assert.Equal(
+                new[] { new DateOnly(2026, 7, 28), new DateOnly(2026, 7, 1) }.OrderBy(d => d.DayNumber),
+                result.Failed.OrderBy(d => d.DayNumber));
+            Assert.True(File.Exists(oldA), "a failed delete must leave the file exactly as it was");
+            Assert.True(File.Exists(oldB));
             Assert.True(File.Exists(retained));
         }
         finally
         {
-            SetImmutable(undeletablePath, false);
+            AllowDirectoryWrite(firesDir);
         }
     }
 
-    /// <summary>Sets or clears the BSD/Linux immutable flag via the platform's own CLI — .NET has
-    /// no portable API for `chflags`/`chattr`. `chattr` needs `CAP_LINUX_IMMUTABLE`, which root has
-    /// by default; running this test suite as root is already a known vacuous-pass case elsewhere
-    /// (see the class doc on the sibling health tests referenced in the brief).</summary>
-    private static void SetImmutable(string path, bool immutable)
-    {
-        var (fileName, arguments) = OperatingSystem.IsMacOS()
-            ? ("chflags", $"{(immutable ? "uchg" : "nouchg")} {path}")
-            : ("chattr", $"{(immutable ? "+i" : "-i")} {path}");
+    /// <summary>POSIX-only: r-x for the owner, no write — even the owner cannot delete or create
+    /// entries in the directory (root is the sole exception, the same vacuous-pass tradeoff the
+    /// codebase already accepts for its other `chmod`-based tests). Restored in a `finally` so
+    /// <see cref="Dispose"/>'s recursive delete of <see cref="_dataDir"/> still succeeds even if
+    /// an assertion above throws.</summary>
+#pragma warning disable CA1416 // SetUnixFileMode is POSIX-only; this whole test returns early on Windows.
+    private static void DenyDirectoryWrite(string path) =>
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
-        var psi = new System.Diagnostics.ProcessStartInfo(fileName, arguments)
-        {
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        using var process = System.Diagnostics.Process.Start(psi)!;
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"{fileName} {arguments} exited {process.ExitCode}: {process.StandardError.ReadToEnd()}");
-        }
-    }
+    private static void AllowDirectoryWrite(string path) =>
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+#pragma warning restore CA1416
 }
