@@ -13,7 +13,31 @@ public sealed record RankKey(
     int DurationRankDescending,
     DateTimeOffset CreatedAt) : IComparable<RankKey>
 {
-    public int CompareTo(RankKey? other) => throw new NotImplementedException();
+    /// <summary>
+    /// Four keys, each read in its own natural ascending direction — the inversions the rules
+    /// call for are already baked into the fields, so nothing here negates anything. Band 1
+    /// (Deadline passed) is numerically lowest and therefore first; fewest Opportunities is
+    /// <em>spend the rarest opportunity</em>; <see cref="DurationRankDescending"/> is named for
+    /// the direction it encodes, so ascending on it puts the longest Duration first; oldest
+    /// <see cref="CreatedAt"/> is the backstop.
+    /// <para>
+    /// Deliberately no weighted score of band and Scarcity (ADR-0004): the weights would have no
+    /// principled value and <em>"why did this rank first"</em> would become unanswerable.
+    /// </para>
+    /// </summary>
+    public int CompareTo(RankKey? other)
+    {
+        if (other is null) return -1;
+
+        if (Band != other.Band) return Band.CompareTo(other.Band);
+        if (Opportunities != other.Opportunities) return Opportunities.CompareTo(other.Opportunities);
+        if (DurationRankDescending != other.DurationRankDescending)
+        {
+            return DurationRankDescending.CompareTo(other.DurationRankDescending);
+        }
+
+        return CreatedAt.CompareTo(other.CreatedAt);
+    }
 }
 
 /// <summary>
@@ -40,5 +64,6 @@ public static class Ranker
     /// only on an exact three-way tie.
     /// </summary>
     public static IReadOnlyList<TaskItem> Rank(
-        IReadOnlyList<(TaskItem Task, RankKey Key)> eligible) => throw new NotImplementedException();
+        IReadOnlyList<(TaskItem Task, RankKey Key)> eligible) =>
+        eligible.OrderBy(entry => entry.Key).Select(entry => entry.Task).ToList();
 }

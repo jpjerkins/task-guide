@@ -1,5 +1,7 @@
 using TaskGuide.Domain.Common;
+using TaskGuide.Domain.Matching;
 using TaskGuide.Domain.Tags;
+using TaskGuide.Domain.Time;
 
 namespace TaskGuide.Domain.Schedule;
 
@@ -19,4 +21,13 @@ public sealed record AvailabilityWindow(
     string Name,
     TimeOnly Start,
     TimeOnly End,
-    TagSet Tags);
+    TagSet Tags)
+{
+    /// <summary>
+    /// Duration's window-side ceiling, derived from this Window's resolved length on the given
+    /// date — never read from <see cref="Tags"/>. There is no window-side Duration Tag to
+    /// author and no way to set one; the ceiling cannot disagree with the clock.
+    /// </summary>
+    public TagValue DurationCeiling(DateOnly date, ClockTimeResolution resolution, IReadOnlyList<TagValue> orderedBuckets) =>
+        Matching.DurationCeiling.WindowCeiling(resolution.LengthOf(date, Start, End), orderedBuckets);
+}

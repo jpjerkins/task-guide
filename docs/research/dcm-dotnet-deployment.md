@@ -12,7 +12,7 @@ Research resolving [issue #5](https://github.com/jpjerkins/task-guide/issues/5).
 - **DCM skill:** a skill *file* exists at `~/dev/dcm/skills/dcm.skill.md`, but it is **not installed** anywhere Claude Code loads skills from. Effectively: **no, there is no usable "deploy via DCM" skill today.** There *is* a working `pi5-devops` agent and a full `mcp__dcm__*` MCP toolset.
 - **Headroom:** fine. ~4.8 GiB available RAM, load average 0.36. Comparable .NET app images on this box are ~262–265 MB and idle near-zero CPU.
 - **Tailnet-only:** already the default. Cloudflare ingress is configured remotely in the Cloudflare dashboard (token-based tunnel), so a new service is public only if someone explicitly adds a hostname. Publishing a host port gets you LAN + tailnet and nothing else.
-- **⚠️ Backup is broken.** The `/mnt/data` → `/mnt/backup` routine has not run since **2026-01-30**, is a manual script not in cron, uses `--ignore-existing` (so it never updates changed files even when run), and `/mnt/backup` is **93.6% full**. Dropping data in `/mnt/data/task-guide` does **not** get it backed up. See [Backups](#6-volume-mounts-and-backups).
+- **⚠️ Backup is broken (as of 2026-08-01).** The `/mnt/data` → `/mnt/backup` routine has not run since **2026-01-30**, is a manual script not in cron, uses `--ignore-existing` (so it never updates changed files even when run), and `/mnt/backup` is **93.6% full**. Dropping data in `/mnt/data/task-guide` does **not** get it backed up. **Corrected 2026-08-27 (user-reported, not device-verified):** the user reports daily backups to an external drive have been working since 2026-08-26 — re-verify on the device before relying on this. See [Backups](#6-volume-mounts-and-backups).
 
 ---
 
@@ -111,6 +111,8 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
   }' http://localhost:8765/deploy
 ```
 
+**Corrected 2026-08-27:** `target: 8080` was this research's guess, made before any app code existed, by analogy to `tto-web-api`'s Dockerfile. The actual `Program.cs` written for the walking skeleton (#51) hardcodes `builder.WebHost.UseUrls("http://0.0.0.0:8007")` — the app listens on **8007** inside the container, not 8080. The port mapping must be `{"target": 8007, "published": 8007, "protocol": "tcp", "mode": "host"}`, and the `environment`/stack YAML below inherits the same fix. This was caught while authoring the Dockerfile for #51 step 6, before any deploy was attempted.
+
 `data_dir: true` makes DCM create `/mnt/data/task-guide` and bind it to `/data`. If you want the mount spelled out explicitly (as `tto-web-api` does), pass `mounts: [{type: bind, target: /data, source: /mnt/data/task-guide, read_only: false, purpose: data}]`.
 
 ### Resulting stack artifact (what DCM will render)
@@ -124,7 +126,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       TZ: America/Chicago
     ports:
-    - {target: 8080, published: 8007, protocol: tcp, mode: host}
+    - {target: 8080, published: 8007, protocol: tcp, mode: host}  # corrected 2026-08-27: target must be 8007, see above
     volumes:
     - {type: bind, target: /data, source: /mnt/data/task-guide}
     networks:
@@ -163,6 +165,8 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENTRYPOINT ["dotnet", "<App>.dll"]
 ```
+
+**Corrected 2026-08-27:** as above, `task-guide`'s actual `Program.cs` hardcodes port **8007**, not 8080 — this sketch is the `tto-web-api` pattern copied verbatim, before `task-guide`'s own app code existed to check against. The real `Dockerfile` authored for #51 step 6 (repo root) uses `EXPOSE 8007` and sets no `ASPNETCORE_URLS` override (the port is fixed in code via `UseUrls`).
 
 The Pi builds this natively (`platform: linux/arm64`), no cross-build or emulation involved.
 
@@ -221,9 +225,11 @@ Every DCM app service binds `/mnt/data/<service-name>` to `/data` inside the con
 
 One thing to plan for: the container's UID must be able to write `/mnt/data/task-guide`. Existing dirs show inconsistent ownership (`tto-web-api` is `philj:philj`, `gmail-mcp` is `50010:50010`, `searxng` is `977:977`). The ASP.NET base image runs as `root` by default unless `USER` is set, which is why nobody has hit this — but it's the first thing to check if writes fail.
 
-### ⚠️ Backups — the routine does not currently work
+### ⚠️ Backups — the routine does not currently work (as observed 2026-08-01)
 
 This is the biggest finding, and the honest answer to "how does `/mnt/data/task-guide` join the existing backup routine" is: **it doesn't, because there is no working routine to join.**
+
+**Corrected 2026-08-27 — reported by the user, not device-verified:** the user reports that daily backups to an always-connected external drive have been working since **2026-08-26**. This session did not check pi5 itself to confirm it — everything below in this subsection is the 2026-08-01 device-verified finding and is now superseded. Before relying on this for the [Restore drill](https://github.com/jpjerkins/task-guide/issues/49), re-verify on the device: what's backed up, on what schedule, and whether `/mnt/data/task-guide` specifically is included.
 
 Evidence:
 
@@ -317,7 +323,7 @@ Concretely: a `BackgroundService` (or Quartz.NET / `PeriodicTimer`) hosted in th
 | `~/apps/` is the staging tier, build contexts always point there | Newer services build directly from `~/dev/`. `~/apps/` holds 4 stale dirs. The agent-spec explicitly relaxed this rule. |
 | Service table lists 13 services | Registry now has 16, including `tto-web-api`, `youtube-mcp`, `volleyball-scorekeeper`, `searxng`. |
 | Everything is Docker Compose | Most services are now Docker **Swarm** (`runtime: swarm`); `artifact_format` defaults to `swarm`. |
-| `/mnt/data` "backed up periodically" | Not since 2026-01-30. See [§6](#6-volume-mounts-and-backups). |
+| `/mnt/data` "backed up periodically" | Not since 2026-01-30 (as of 2026-08-01). **Corrected 2026-08-27, user-reported, not device-verified:** daily backups to an external drive reportedly working since 2026-08-26. See [§6](#6-volume-mounts-and-backups). |
 
 Also stale: `agent-spec.md:44` gives the Tailscale address as `100.127.253.68`; `tailscale ip -4` reports **`100.96.47.126`**.
 
@@ -354,9 +360,9 @@ Two problems if it were installed as-is:
 Things I could not determine and that need the user:
 
 1. **Build context: `~/dev/task-guide` or promote to `~/apps/task-guide`?** Both are supported. `tto-web-api` builds from `~/dev`. No stated preference found.
-2. **Backup strategy** — fix the global `/mnt/data` sweep, or write a `task-guide`-specific cron script? Probably its own ticket.
+2. **Backup strategy** — fix the global `/mnt/data` sweep, or write a `task-guide`-specific cron script? Probably its own ticket. **Corrected 2026-08-27, user-reported, not device-verified:** the user reports this may now be moot — daily backups to an external drive since 2026-08-26 — but that needs device verification before treating this question as closed.
 3. **Re-enable memory cgroups?** Requires a boot-config change and reboot. Without it there is no per-container memory visibility or limiting.
 4. **Tailscale ACLs** — not inspected. Assumed all the user's devices can reach pi5 on arbitrary ports.
 5. **Internet-unreachability of `:8007`** — reasoned, not empirically tested from off-net.
-6. **`/mnt/backup` at 93.6%** — needs attention regardless of what `task-guide` does.
+6. **`/mnt/backup` at 93.6%** — needs attention regardless of what `task-guide` does. Not re-checked 2026-08-27; the user's reported fix (daily backups to an external drive since 2026-08-26) may target a different destination than `/mnt/backup` specifically — device verification would need to confirm which disk and whether it's still this full.
 7. **.NET version** — `10.0` is what the other two .NET services use, so `10.0` unless there's a reason otherwise.

@@ -12,10 +12,23 @@ namespace TaskGuide.Domain.Dimensions;
 /// </remarks>
 public sealed record DimensionRegistry(IReadOnlyList<Dimension> Dimensions)
 {
-    public Dimension? Claiming(Tags.TagValue value) => throw new NotImplementedException();
+    public Dimension? Claiming(Tags.TagValue value) =>
+        Dimensions.FirstOrDefault(d => d.Values.Contains(value));
 
     /// <summary>Throws <see cref="DuplicateDimensionValueException"/>; never returns false.</summary>
-    public void AssertNoDuplicateValues() => throw new NotImplementedException();
+    public void AssertNoDuplicateValues()
+    {
+        var claimants = Dimensions
+            .SelectMany(d => d.Values.Select(v => (Value: v, Dimension: d.Id)))
+            .GroupBy(x => x.Value)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (claimants is not null)
+        {
+            var claimedBy = claimants.Select(x => x.Dimension).ToArray();
+            throw new DuplicateDimensionValueException(claimants.Key.Value, claimedBy);
+        }
+    }
 }
 
 public sealed class DuplicateDimensionValueException(string value, IReadOnlyList<DimensionId> claimedBy)

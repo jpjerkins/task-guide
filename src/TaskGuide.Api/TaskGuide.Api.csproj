@@ -2,5 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="../TaskGuide.Infrastructure/TaskGuide.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+  </ItemGroup>
   <!-- The React SPA builds into wwwroot/ and is served from this same container (#6). -->
 </Project>

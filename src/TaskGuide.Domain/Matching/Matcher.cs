@@ -19,19 +19,55 @@ public static class Matcher
     /// </summary>
     public static bool CategoricalFits(
         IReadOnlyList<TagValue> taskValues,
-        IReadOnlyList<TagValue> windowValues) => throw new NotImplementedException();
+        IReadOnlyList<TagValue> windowValues) =>
+        taskValues.All(windowValues.Contains);
 
     /// <summary>Task value ≤ Window value → fits. Each side's default applies when it is silent.</summary>
     public static bool OrdinalFits(
         OrdinalDimension dimension,
         TagValue? taskValue,
-        TagValue? windowValue) => throw new NotImplementedException();
+        TagValue? windowValue)
+    {
+        var task = taskValue ?? dimension.TaskDefault;
+        var window = windowValue ?? dimension.WindowDefault;
+
+        return dimension.RankOf(task!.Value) <= dimension.RankOf(window!.Value);
+    }
 
     /// <summary>A conjunction across axes, with loose Tags ignored: inert means inert to matching.</summary>
     public static bool Fits(
         TaskItem task,
         MatchContext window,
-        DimensionRegistry registry) => throw new NotImplementedException();
+        DimensionRegistry registry) =>
+        registry.Dimensions.All(dimension => dimension switch
+        {
+            CategoricalDimension categorical => CategoricalFits(
+                task.Tags.On(categorical.Id),
+                WindowCategoricalValues(categorical, window)),
+            OrdinalDimension ordinal => OrdinalFits(
+                ordinal,
+                task.Tags.SingleOn(ordinal.Id),
+                WindowOrdinalValue(ordinal, window)),
+            _ => throw new NotSupportedException($"Unknown Dimension algebra: {dimension.GetType()}"),
+        });
+
+    /// <summary>
+    /// A categorical axis reads its Window-side set from wherever that axis's values live:
+    /// fetched live (Weather) or authored on the Window's own Tags.
+    /// </summary>
+    private static IReadOnlyList<TagValue> WindowCategoricalValues(CategoricalDimension dimension, MatchContext window) =>
+        dimension.WindowSource == WindowValueSource.Fetched
+            ? window.Fetched.TryGetValue(dimension.Id, out var fetched) ? fetched : Array.Empty<TagValue>()
+            : window.Window.Tags.On(dimension.Id);
+
+    /// <summary>
+    /// An ordinal axis reads its Window-side value from wherever that axis's ceiling comes
+    /// from: derived from the Window's length (Duration) or authored on the Window's own Tags.
+    /// </summary>
+    private static TagValue? WindowOrdinalValue(OrdinalDimension dimension, MatchContext window) =>
+        dimension.WindowSource == WindowValueSource.Derived
+            ? window.DurationCeiling
+            : window.Window.Tags.SingleOn(dimension.Id);
 }
 
 /// <summary>

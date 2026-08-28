@@ -9,5 +9,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/TaskGuide.Application/TaskGuide.Application.csproj" />
+    <!-- TickLoop, HealthReporter and PushoverClient are Infrastructure concerns, but
+         TEST-INVENTORY.md places their behaviour under this project ("The tick loop",
+         "Delivery", "Liveness"), so this test project reaches one layer deeper than its
+         production counterpart does. -->
+    <ProjectReference Include="../../src/TaskGuide.Infrastructure/TaskGuide.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

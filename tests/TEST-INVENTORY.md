@@ -26,6 +26,10 @@ walking skeleton (#51).
 - a recurring Task with N-1 consecutive misses and one completion between them reads `Active`
 - a Task past its Deadline reads `Active` — overdue is not a state
 - nothing in the model can write a Status; the type exposes no setter and storage carries no field
+- a Task with non-null `Provenance` is never `Unprocessed` and never `Stale` — a derived Task was
+  neither captured nor neglected
+- a Task with non-null `Provenance` cannot be postponed; `CanPostpone` is a pure query, so the
+  rule is readable without reaching into the Task's lifecycle
 
 ### Eligibility and the two clocks
 
@@ -58,6 +62,12 @@ walking skeleton (#51).
 - a missed instance is silently superseded — no second live item, no `Stale`
 - monthly-on-the-5th stays on the 5th across a year
 - a one-off Task's log holds at most one entry, and that entry is what makes it `Done`
+- **a rule that never advances is rejected at construction** — an interval below 1 makes the
+  live-instance walk non-terminating on the tick thread, so it is refused, not survived
+- a weekly rule naming no weekday, and a calendar date the rule can never fall on, are rejected
+  at construction
+- an anchor paired with a rule it cannot run is rejected at construction, named rather than
+  discovered as a cast failure inside the generator
 
 ### Matching — the two algebras
 
@@ -72,7 +82,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 | `{Sam, Ana}` | `{Sam}` | **no** |
 | `{Sam, Ana}` | `{Sam, Ana, the kids}` | yes |
 
-- ordinal: task value ≤ window value fits; above it does not
+- ordinal: task value ≤ window value fits
+- ordinal: a task value above the window's ceiling does not fit
 - an ordinal axis silent on the Task side takes the task-side default
 - an ordinal axis silent on the Window side takes the window-side default
 - **a categorical axis has no default on either side** — absence is ∅, and a Window declaring
@@ -81,13 +92,25 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a rule reads only its own axis
 - **loose Tags are ignored by matching** on both sides
 - a mistyped Tag (`#garge`) admits the Task to *more* Windows, not fewer
+- a fetched axis (Weather) reads its Window-side set from the fetched values, not the Window's
+  own authored Tags; unfetched/unknown resolves to ∅ and fails closed, the same as absence
+  anywhere else on a categorical axis
 
 ### Duration as a derived ceiling
 
 - a 45-minute Window admits the 30 bucket and below, and not 60
 - a Window's ceiling is derived from its length and cannot be authored
+- a 60-minute Window admits the 60 bucket exactly (boundary)
+- 60 minutes snaps to the 60 bucket, not `longer` (boundary)
+- both directions derive their bucket minutes from `KnownDimensions.DurationBuckets`, not a
+  private copy — one test per declared sized bucket (2/10/30/60)
 - raw minutes from a capture path snap **up** to the next bucket (45 → 60)
 - 61 minutes snaps to `Longer`
+- a Window **longer** than the largest sized bucket derives the unsized bucket — 90 minutes and
+  four hours both derive `longer`, and so does one minute past the boundary on both directions
+- a Window exactly at the largest sized bucket still derives that bucket, not the unsized one
+  (the boundary must not drift)
+- a `longer` Task fits a long Window and still fails one at the largest sized bucket
 
 ### Dimension registry
 
@@ -121,13 +144,22 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 ### Opportunities and the horizon
 
 - without a Deadline the horizon is a true rolling 7 × 24h
-- a once-a-week opportunity counts **exactly once** whatever hour it is asked
+- **a once-a-week opportunity counts exactly once at any hour outside it** — and twice while you
+  are standing in it, when the one you are in and next week's both count
 - with a Deadline ahead the horizon runs to the end of that day
 - **with a Deadline passed the bound is dropped** and the horizon reverts to a rolling 7 days
 - an overdue Task therefore never misreports as an Orphan
 - the count walks real dates, so an Override removing the only admitting Window drops it
 - a dated Event displacing a Window drops it
 - switching the active Pattern moves the count
+- the Pattern-week count ignores Overrides and Events
+- the Pattern-week count is defined for a Task that is not currently eligible
+- **a Window you are standing in still counts as an Opportunity** — the near edge reads the
+  Window's end, not its start
+- the far edge of the horizon is unchanged: a Window starting at the horizon end never counts
+- a fetched axis constrains nothing in the Pattern-week count, so a weather-tagged Task is not an
+  Orphan
+- `CountAhead` still fails closed on a fetched axis it cannot know for a future Window
 
 ### Orphan detection
 
@@ -141,6 +173,7 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - an Event is never subject to it
 - Orphan is never counted in the process/stale footer counts — the three are disjoint
 - `Opportunities = 1` gets no badge
+- a fetched axis never makes a zero read as an Orphan — the Pattern-week count is counterfactual
 
 ### Day boundary and clock-time resolution
 
@@ -148,6 +181,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - an ambiguous start on the fall-back day resolves to the **first** occurrence
 - a nonexistent start in the spring gap **clamps to the gap's end**
 - a span crossing a transition is honestly an hour shorter or longer
+- a span crossing the spring transition is honestly an hour shorter
+- a span crossing the fall-back transition is honestly an hour longer
 - **a Window lying entirely inside the spring gap has zero length and does not fire**
 - Deadline, Defer and Postpone resolve at the day boundary
 
@@ -184,6 +219,14 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - three contiguous absences derive **one** obligation, due before the first
 - a derived Task is never `Unprocessed` and never `Stale`
 - a derived Task cannot be postponed
+- a moved instance on an **Overridden** date still does not derive — the moved case driven through
+  the absence check rather than around it
+- a renamed instance the shape still carries derives nothing
+- **a coalesced run whose first absence has passed survives while a later one remains** — the
+  run's last date is what says the obligation has expired; the Deadline stays anchored to the first
+- a run wholly in the past still stops being derived, as does a lone absence the day after it
+- the context takes an instant and derives today from its own boundary — supplied, never reached
+  for, so nothing in it can disagree about what day it is
 
 ---
 
@@ -319,6 +362,11 @@ Against `fixtures/data`, the golden store.
 ## `TaskGuide.Api.Tests`
 
 - every endpoint in `Endpoints/` appears in the OpenAPI document
+- the OpenAPI document carries a `TaskResponse` schema with its four members — the SPA's
+  `Task` type is generated from it, so a bare `200: OK` is a broken contract, not a cosmetic gap
+- `GET /api/tasks` documents its 200 as an **array of** `TaskResponse`
+- `POST /api/tasks` documents 201 (with a `TaskResponse` body), 400 and 503
+- `TaskResponse.duration` is documented as a **nullable** integer
 - `POST /api/reminders/{date}/{windowId}/snooze` **rejects** a re-fire crossing the day boundary,
   with the same line the disabled control shows
 - `PUT /api/right-now/matching-on` writes through to that date's Override and does not stack
@@ -332,6 +380,19 @@ Against `fixtures/data`, the golden store.
 - `DELETE /api/patterns/{id}` is refused for the active Pattern
 - `GET /api/patterns/active/switch-impact` returns the orphan count **before** the switch
 - `/health` is reachable without traversing `/api`
+
+## `TaskGuide.Web` (vitest)
+
+The SPA's `Task` type is generated from the OpenAPI document (`npm run gen:api`); nothing about
+a Task's shape is written by hand. `src/api/client.ts` is the normalisation boundary.
+
+- a string `duration` off the wire is coerced to a **number** — the generator describes an int32
+  as `integer | string`, and only a value assertion catches this: `${x}m` renders `30` and `'30'`
+  identically, so no component test can tell them apart
+- a null `duration` stays null rather than becoming `0`
+- a Task with a null `duration` renders its title and **no duration pill**
+- a non-OK GET and a rejected fetch both land on the error state
+- the quick-add duration chip IS the submit, and is inert while the title is empty
 
 ## `TaskGuide.E2E`
 

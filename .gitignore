@@ -1,0 +1,8 @@
+bin/
+obj/
+node_modules/
+dist/
+src/TaskGuide.Api/wwwroot/
+*.user
+.DS_Store
+.superpowers/

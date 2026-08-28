@@ -1,3 +1,5 @@
+using TaskGuide.Application.Ports;
+
 namespace TaskGuide.Api.Endpoints;
 
 /// <summary>
@@ -13,7 +15,7 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/health", () => Results.NoContent()).WithTags("Health");
+        app.MapGet("/health", (IHealthReporter health) => Results.Ok(health.Current())).WithTags("Health");
         return app;
     }
 }
