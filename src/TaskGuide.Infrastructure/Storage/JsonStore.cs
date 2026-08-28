@@ -221,6 +221,12 @@ public sealed class JsonStore : IStore
             var fires = view.Fires;
             var fireExtras = view.FireExtras;
 
+            // Whether any file was actually opened for writing this call. LastWriteSucceeded
+            // documents the outcome of the most recent *actual disk write* — an unrecognised
+            // payload that throws before anything is attempted is a caller bug, not a disk
+            // failure, and must not be reported as one (see the `default:` case below).
+            var attemptedWrite = false;
+
             try
             {
                 foreach (var write in result.OrderedWrites)
@@ -228,6 +234,7 @@ public sealed class JsonStore : IStore
                     switch (write)
                     {
                         case TasksWrite w:
+                            attemptedWrite = true;
                             // A defensive copy: the store must own its storage. `w.Tasks` came
                             // straight out of the caller's StoreMutation and IReadOnlyList<T> is
                             // not a promise of immutability — a caller that keeps its own
@@ -239,6 +246,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case DayTemplatesWrite w:
+                            attemptedWrite = true;
                             dayTemplates = w.Templates.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "day-templates.json"),
@@ -247,6 +255,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case PatternsWrite w:
+                            attemptedWrite = true;
                             patterns = w.Book with { Patterns = w.Book.Patterns.ToArray() };
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "patterns.json"),
@@ -255,6 +264,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case OverridesWrite w:
+                            attemptedWrite = true;
                             overrides = w.Overrides.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "overrides.json"),
@@ -263,6 +273,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case EventsWrite w:
+                            attemptedWrite = true;
                             events = w.Events.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "events.json"),
@@ -271,6 +282,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case EventExceptionsWrite w:
+                            attemptedWrite = true;
                             eventExceptions = w.Exceptions.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "event-exceptions.json"),
@@ -279,6 +291,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case CompletionLogWrite w:
+                            attemptedWrite = true;
                             {
                                 var log = w.Log with { Entries = w.Log.Entries.ToArray() };
                                 var updatedLogs = new Dictionary<TaskId, CompletionLog>(completionLogs) { [log.TaskId] = log };
@@ -295,6 +308,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case DerivedCompletionsWrite w:
+                            attemptedWrite = true;
                             derivedCompletions = w.Entries.ToArray();
                             {
                                 var completionsDir = Path.Combine(_dataDir, "completions");
@@ -307,6 +321,7 @@ public sealed class JsonStore : IStore
                             break;
 
                         case FiresWrite w:
+                            attemptedWrite = true;
                             {
                                 var dayFires = w.Fires with { Rows = w.Fires.Rows.ToArray() };
                                 var updatedFires = new Dictionary<DateOnly, DayFires>(fires) { [dayFires.Date] = dayFires };
@@ -323,17 +338,25 @@ public sealed class JsonStore : IStore
                             break;
 
                         default:
-                            // An unrecognised payload is a caller/programming bug. It is thrown
-                            // like any other failure in this loop: if an earlier write in the
-                            // same list already landed on disk, LastWriteSucceeded must still
-                            // report that truthfully rather than staying silent about it.
+                            // An unrecognised payload is a caller/programming bug, not (yet) a
+                            // disk failure — `attemptedWrite` is what decides how the catch below
+                            // reports it: untouched if this is the first thing in the list (no
+                            // real write was ever attempted this call), WriteFailed if an earlier
+                            // write in the same list already landed on disk.
                             throw new NotImplementedException($"JsonStore does not know how to write a {write.GetType().Name}.");
                     }
                 }
             }
             catch
             {
-                Interlocked.Exchange(ref _lastWriteOutcome, WriteFailed);
+                // LastWriteSucceeded documents the outcome of an *actual disk write* (see
+                // IStore.LastWriteSucceeded's doc comment) — a caller bug that never reached a
+                // real write (an unrecognised payload as the very first item) must leave it
+                // exactly as an unwritten store leaves it: untouched, not a false "failed".
+                if (attemptedWrite)
+                {
+                    Interlocked.Exchange(ref _lastWriteOutcome, WriteFailed);
+                }
                 throw;
             }
 

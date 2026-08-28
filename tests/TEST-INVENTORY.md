@@ -364,6 +364,9 @@ Against `fixtures/data`, the golden store.
 - a mutation writes every affected file before the request returns, not only the first
 - a partially-failed multi-file write leaves `LastWriteSucceeded` false and does not swap the view
 - a write of one collection leaves every other collection in the swapped-in view unchanged
+- an unrecognised write payload before any write leaves `LastWriteSucceeded` untouched
+- an unrecognised write payload after a successful write sets `LastWriteSucceeded` false
+- an unknown field on a non-Tasks collection survives a load, mutate and save round trip
 - an Override's copy **preserves each Window's id**
 - a date materialised mid-day does not re-fire an already-fired Window
 - an Override carries its `used` record with the template **name as it was**

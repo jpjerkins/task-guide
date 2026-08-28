@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Schedule;
@@ -222,5 +223,70 @@ public sealed class WholeStoreTests : IDisposable
         Assert.NotEmpty(after.CompletionsFor(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0")).Entries);
         Assert.Equal(beforeFires.Rows.Count, after.FiresOn(new DateOnly(2026, 8, 15)).Rows.Count);
         Assert.NotEmpty(after.FiresOn(new DateOnly(2026, 8, 15)).Rows);
+    }
+
+    /// <summary>A payload type no case in <c>JsonStore.MutateAsync</c>'s switch recognises.</summary>
+    private sealed record UnrecognisedWrite;
+
+    [Fact]
+    public async Task An_unrecognised_write_payload_before_any_write_leaves_LastWriteSucceeded_untouched()
+    {
+        var store = new JsonStore(_dataDir);
+        Assert.Null(store.LastWriteSucceeded); // nothing attempted yet — the baseline this test guards
+
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+            _ => new StoreMutation([new UnrecognisedWrite()]),
+            CancellationToken.None));
+
+        // A caller/programming bug that never reached a real disk write must not be reported as
+        // a failed write — LastWriteSucceeded documents an *actual disk write*'s outcome, and an
+        // unwritten store is not evidence of anything wrong (IStore.LastWriteSucceeded's doc).
+        Assert.Null(store.LastWriteSucceeded);
+    }
+
+    [Fact]
+    public async Task An_unrecognised_write_payload_after_a_successful_write_sets_LastWriteSucceeded_false()
+    {
+        SeedWholeFixture();
+        var store = new JsonStore(_dataDir);
+        var newTask = new TaskGuide.Domain.Tasks.TaskItem(
+            new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5P02"), "Landed before the bug", null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+            view => new StoreMutation([
+                new TasksWrite((IReadOnlyList<TaskGuide.Domain.Tasks.TaskItem>)[.. view.Tasks, newTask]),
+                new UnrecognisedWrite()]),
+            CancellationToken.None));
+
+        // The Tasks write genuinely landed on disk before the unrecognised payload was reached —
+        // this is the case the pre-existing "not recorded" carve-out did not cover, and where
+        // staying silent would itself be the lie IStore.LastWriteSucceeded's doc rules out.
+        var (onDiskTasks, _) = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
+        Assert.Contains(onDiskTasks, t => t.Id == newTask.Id);
+        Assert.False(store.LastWriteSucceeded);
+    }
+
+    [Fact]
+    public async Task An_unknown_field_on_a_non_Tasks_collection_survives_a_load_mutate_and_save_round_trip()
+    {
+        // overrides.json, not tasks.json — Global Constraint 11 ("extras carry through every
+        // write") has a net for Tasks (JsonStoreTests) but nothing was pinning it for any other
+        // collection until this test.
+        File.WriteAllText(Path.Combine(_dataDir, "overrides.json"), """
+            [
+              { "date": "2026-08-15",
+                "used": null,
+                "windows": [],
+                "priority": "urgent" }
+            ]
+            """);
+
+        var store = new JsonStore(_dataDir);
+
+        // A no-op mutation: write the exact Overrides list back out unchanged.
+        await store.MutateAsync(view => new StoreMutation([new OverridesWrite(view.Overrides)]), CancellationToken.None);
+
+        var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
+        Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
     }
 }

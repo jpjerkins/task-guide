@@ -119,7 +119,7 @@ public sealed class HealthReporterTests : IDisposable
         Chmod(_dataDir, 0b101_000_000); // 500: r-x for the owner, no write — even for the owner, not root
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            store.MutateAsync(view => new StoreMutation([(IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("should fail")]]), CancellationToken.None));
+            store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("should fail")])]), CancellationToken.None));
 
         var report = reporter.Current();
 
