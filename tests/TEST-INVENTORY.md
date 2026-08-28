@@ -360,7 +360,12 @@ Against `fixtures/data`, the golden store.
 - a version ahead of this binary refuses to start, named — a rollback must not silently
   down-migrate
 - `manifest.json` is written only after every migration step succeeds
+- a migration cycle refuses to start instead of hanging
+- a migration walk that would overshoot `CurrentVersion` refuses to start
+- startup against a fresh `/data` creates `manifest.json` without snapshotting
+- the registry sweep makes no `MutateAsync` call when nothing moved
 - the registry sweep promotes a loose Tag the registry now claims, and writes the change
+- the registry sweep promotes a loose Tag on a Day template Window
 - `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5

@@ -103,20 +103,37 @@ public sealed class StartupSequence(
     /// Applies <see cref="RegistrySweep.Sweep"/> to every Tag-bearing collection — Tasks, Day
     /// template Windows and Event prototypes, Override Windows, and Events — and writes back only
     /// the collections that actually changed. A store where nothing promoted or demoted writes
-    /// nothing at all.
+    /// nothing at all: no <see cref="IStore.MutateAsync"/> call is made, not merely an empty one —
+    /// <see cref="IStore.LastWriteSucceeded"/> documents the outcome of an actual disk write, and
+    /// an empty <see cref="StoreMutation"/> would still (wrongly) report one.
     /// </summary>
+    /// <remarks>
+    /// The pre-check below is only a gate against calling <see cref="IStore.MutateAsync"/> for
+    /// nothing. What actually gets written is computed <em>again</em>, inside the callback, from
+    /// the view the callback itself supplies rather than reused from the pre-check — that is the
+    /// atomic read-modify-write <see cref="JsonStore.MutateAsync"/>'s write lock exists to
+    /// provide (see its remarks), and reusing a plan computed outside the lock would be the
+    /// lost-update shape even though nothing races at today's single-threaded startup. It is also
+    /// what makes this correct the day a migration step goes through the store instead of writing
+    /// <c>dataDir</c> raw — see <see cref="RunAsync"/>'s remarks on the residual gap that is not
+    /// fixed here.
+    /// </remarks>
     public async Task SweepRegistryAsync(CancellationToken cancellationToken)
     {
-        var plan = ComputeSweepPlan(store.Read());
-        if (!plan.HasChanges) return;
+        if (!ComputeSweepPlan(store.Read()).HasChanges) return;
 
-        var writes = new List<object>();
-        if (plan.TasksChanged) writes.Add(new TasksWrite(plan.Tasks));
-        if (plan.DayTemplatesChanged) writes.Add(new DayTemplatesWrite(plan.DayTemplates));
-        if (plan.OverridesChanged) writes.Add(new OverridesWrite(plan.Overrides));
-        if (plan.EventsChanged) writes.Add(new EventsWrite(plan.Events));
+        await store.MutateAsync(view =>
+        {
+            var plan = ComputeSweepPlan(view);
 
-        await store.MutateAsync(_ => new StoreMutation(writes), cancellationToken);
+            var writes = new List<object>();
+            if (plan.TasksChanged) writes.Add(new TasksWrite(plan.Tasks));
+            if (plan.DayTemplatesChanged) writes.Add(new DayTemplatesWrite(plan.DayTemplates));
+            if (plan.OverridesChanged) writes.Add(new OverridesWrite(plan.Overrides));
+            if (plan.EventsChanged) writes.Add(new EventsWrite(plan.Events));
+
+            return new StoreMutation(writes);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -125,6 +142,20 @@ public sealed class StartupSequence(
     /// runs. Otherwise the snapshot runs at most once, and only when a migration or a registry
     /// sweep is actually about to write.
     /// </summary>
+    /// <remarks>
+    /// <b>Known residual, not fixed here (I1 in the review):</b> <see cref="MigrateAsync"/>'s
+    /// steps write raw files under <paramref name="dataDir"/>; <see cref="JsonStore"/>'s
+    /// in-memory view is loaded once at construction (Task 7 is frozen) and cannot observe those
+    /// writes. So the <c>store.Read()</c> calls below — the pre-check that decides whether to
+    /// snapshot, and <see cref="SweepRegistryAsync"/>'s own re-read after migrating — both still
+    /// see pre-migration data even though they run after <see cref="MigrateAsync"/> textually.
+    /// The fix that <em>is</em> mine is sequencing and atomicity: the sweep's actual write-plan is
+    /// computed strictly after the migration call, and strictly inside <see
+    /// cref="IStore.MutateAsync"/>'s callback rather than from a separate, non-atomic
+    /// <c>store.Read()</c> — see <see cref="SweepRegistryAsync"/>'s remarks. Closing the residual
+    /// needs either a store-reload API or migrations that go through the store, both out of this
+    /// unit's lane; recorded against the branch's final triage.
+    /// </remarks>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         try
@@ -140,9 +171,12 @@ public sealed class StartupSequence(
         // Reading version-ahead here, before any snapshot decision, is what makes that refusal
         // write nothing: PlanMigration throws before SnapshotAsync is ever considered.
         var (storedVersion, pendingMigrations) = PlanMigration();
-        var sweepPlan = ComputeSweepPlan(store.Read());
 
-        var willWrite = pendingMigrations.Count > 0 || sweepPlan.HasChanges;
+        // Only a gate for "should this startup snapshot at all" — it has to run before anything
+        // else does, so it can only see what is on disk right now. It is deliberately not reused
+        // for the sweep's actual write below (see this method's remarks and
+        // SweepRegistryAsync's).
+        var willWrite = pendingMigrations.Count > 0 || ComputeSweepPlan(store.Read()).HasChanges;
         if (willWrite)
         {
             await SnapshotAsync(cancellationToken);
@@ -153,10 +187,11 @@ public sealed class StartupSequence(
             await MigrateAsync(cancellationToken);
         }
 
-        if (sweepPlan.HasChanges)
-        {
-            await SweepRegistryAsync(cancellationToken);
-        }
+        // Unconditional: SweepRegistryAsync owns its own "nothing changed, nothing written"
+        // guard. A second guard here would only be pinned in conjunction with that one (the
+        // review's M-a/M19 finding), never individually — so there is exactly one guard, in
+        // exactly one place, and it is the one the write actually goes through.
+        await SweepRegistryAsync(cancellationToken);
     }
 
     /// <summary>
@@ -164,13 +199,32 @@ public sealed class StartupSequence(
     /// <paramref name="migrations"/> forward from its version, one N→N+1 step at a time, for as
     /// long as a step starting at the current cursor exists. Throws
     /// <see cref="StoreVersionAheadException"/> immediately — no steps attempted — when the
-    /// stored version is ahead of this binary's <see cref="ManifestCodec.CurrentVersion"/>: a
-    /// rollback must not silently down-migrate. The walk itself is not bounded by
-    /// <see cref="ManifestCodec.CurrentVersion"/> — it stops when <paramref name="migrations"/>
-    /// has nothing left to offer, which is what lets a test supply its own short list and land
-    /// wherever that list says, without needing to fake the constant (see
-    /// <see cref="StoreMigrations.Ordered"/>, empty today, for why production never notices).
+    /// stored version already on disk is ahead of this binary's
+    /// <see cref="ManifestCodec.CurrentVersion"/>: a rollback must not silently down-migrate.
     /// </summary>
+    /// <remarks>
+    /// The walk's own endpoint is not bounded by <see cref="ManifestCodec.CurrentVersion"/> while
+    /// it runs — it stops when <paramref name="migrations"/> has nothing left to offer for the
+    /// current cursor, which is what lets a test supply its own short list and land wherever that
+    /// list says, without needing to fake the constant (see <see cref="StoreMigrations.Ordered"/>,
+    /// empty today, for why production never notices). Two guardrails still apply to whatever the
+    /// walk finds, both cheap because a well-formed N→N+1 list already satisfies them and neither
+    /// reintroduces the "can't fake the constant" problem:
+    /// <list type="bullet">
+    /// <item>Each step must move the cursor <em>strictly forward</em> (<c>step.To &gt; cursor</c>).
+    /// Without this, a cycle in <paramref name="migrations"/> (or the constructor's fake list)
+    /// spins this loop forever — an infinite hang at startup, not an exception.</item>
+    /// <item>The walk's landing version must not exceed <see cref="ManifestCodec.CurrentVersion"/>.
+    /// Without this, a walk that outruns what this binary can run writes a `manifest.json` this
+    /// very binary would refuse to start on next boot with <see cref="StoreVersionAheadException"/>
+    /// — the overshoot is silent today because nothing checks the walk's own endpoint, only the
+    /// version already on disk at the top of this method.</item>
+    /// </list>
+    /// A gap the walk cannot cross (no step registered for some cursor it reaches, short of
+    /// <see cref="ManifestCodec.CurrentVersion"/>) is not treated as an error — the walk simply
+    /// stops there, silently, which only matters once a real gap can exist; today's empty
+    /// <see cref="StoreMigrations.Ordered"/> never produces one.
+    /// </remarks>
     private (int? StoredVersion, IReadOnlyList<StoreMigration> Pending) PlanMigration()
     {
         var manifestPath = Path.Combine(dataDir, "manifest.json");
@@ -187,8 +241,20 @@ public sealed class StartupSequence(
         var cursor = version;
         while (migrations.FirstOrDefault(m => m.From == cursor) is { } step)
         {
+            if (step.To <= cursor)
+            {
+                throw new InvalidOperationException(
+                    $"Migration step {step.From}→{step.To} does not move the version strictly forward; " +
+                    "a non-monotonic step would let the walk cycle and hang startup.");
+            }
+
             pending.Add(step);
             cursor = step.To;
+        }
+
+        if (pending.Count > 0 && cursor > ManifestCodec.CurrentVersion)
+        {
+            throw new StoreVersionAheadException(cursor, ManifestCodec.CurrentVersion);
         }
 
         return (version, pending);
