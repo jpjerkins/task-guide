@@ -6,9 +6,7 @@ namespace TaskGuide.Infrastructure.Ids;
 /// <summary>
 /// Mints type-prefixed ULIDs (#23): a 48-bit millisecond timestamp plus 80 bits of randomness,
 /// Crockford Base32-encoded to 26 characters, matching the fixture format exactly
-/// (<c>t_01ARZ3NDEKTSV4RRFFQ69G5FAV</c>). Only Tasks are minted in the walking skeleton (#51) —
-/// every other <see cref="IIdMinter"/> member throws <see cref="NotImplementedException"/> rather
-/// than pretending, same as <c>StoreView</c> does for the other storage files.
+/// (<c>t_01ARZ3NDEKTSV4RRFFQ69G5FAV</c>).
 /// </summary>
 public sealed class UlidIdMinter : IIdMinter
 {
@@ -16,11 +14,11 @@ public sealed class UlidIdMinter : IIdMinter
 
     public TaskId NextTaskId() => new(TaskId.Prefix + NewUlid());
 
-    public WindowId NextWindowId() => throw new NotImplementedException();
-    public DayTemplateId NextDayTemplateId() => throw new NotImplementedException();
-    public PatternId NextPatternId() => throw new NotImplementedException();
-    public EventId NextEventId() => throw new NotImplementedException();
-    public EventPrototypeId NextEventPrototypeId() => throw new NotImplementedException();
+    public WindowId NextWindowId() => new(WindowId.Prefix + NewUlid());
+    public DayTemplateId NextDayTemplateId() => new(DayTemplateId.Prefix + NewUlid());
+    public PatternId NextPatternId() => new(PatternId.Prefix + NewUlid());
+    public EventId NextEventId() => new(EventId.Prefix + NewUlid());
+    public EventPrototypeId NextEventPrototypeId() => new(EventPrototypeId.Prefix + NewUlid());
 
     /// <summary>
     /// 26 Crockford Base32 characters: 10 for the 48-bit timestamp (an implicit 50-bit field —

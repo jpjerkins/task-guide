@@ -356,6 +356,10 @@ Against `fixtures/data`, the golden store.
 - a completion log is not rewritten when its Task's title changes
 - a restore under a running service is invisible, and the next mutation destroys it *(the one test
   that documents a failure mode rather than preventing it — see #49's restore drill)*
+- every minted id carries its type's prefix and 26 Crockford Base32 characters
+- ids minted in sequence sort lexicographically in mint order
+- two ids minted in the same millisecond still differ
+- a minted id is accepted by its own `IPrefixedId` record struct round-trip
 
 ---
 
