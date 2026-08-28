@@ -335,6 +335,12 @@ Against `fixtures/data`, the golden store.
 - **a read never blocks on a write**
 - `tasks.json` round-trips with no `status` field
 - an unknown field written by a newer binary **survives a load-and-save round trip**
+- `day-templates.json` round-trips the golden store unchanged
+- a Window's start and end round-trip as authored clock times, never as instants
+- an Event prototype's `absenceNotice` Offset round-trips, and a null one stays null
+- an unknown field on a Day template survives a load-and-save round trip
+- no codec writes a `status` property, whatever type it would carry — `TaskCodec`
+- no codec writes a `status` property, whatever type it would carry — `DayTemplateCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5

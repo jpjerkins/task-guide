@@ -1,7 +1,5 @@
 using System.Text.Json;
 using TaskGuide.Domain.Common;
-using TaskGuide.Domain.Dimensions;
-using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
 
 namespace TaskGuide.Infrastructure.Storage;
@@ -19,7 +17,6 @@ namespace TaskGuide.Infrastructure.Storage;
 public static class TaskCodec
 {
     private const string DateFormat = "yyyy-MM-dd";
-    private const string InstantFormat = "yyyy-MM-ddTHH:mm:ssZ";
 
     private static readonly string[] KnownFields =
         ["id", "title", "notes", "dimensions", "looseTags", "deadline", "defer", "postpone", "recurrence", "createdAt"];
@@ -39,19 +36,16 @@ public static class TaskCodec
                 id,
                 element.GetProperty("title").GetString()!,
                 ReadNullableString(element, "notes"),
-                ReadTagSet(element),
-                ReadDateOnly(element, "deadline"),
+                CodecPrimitives.ReadTagSet(element),
+                CodecPrimitives.ReadDateOrNull(element, "deadline"),
                 ReadDefer(element, "defer"),
-                ReadDateOnly(element, "postpone"),
+                CodecPrimitives.ReadDateOrNull(element, "postpone"),
                 ReadRecurrence(element, "recurrence"),
-                ReadInstant(element.GetProperty("createdAt")));
+                CodecPrimitives.ReadInstant(element.GetProperty("createdAt")));
 
             tasks.Add(task);
 
-            var extra = element.EnumerateObject()
-                .Where(p => !KnownFields.Contains(p.Name))
-                .Select(p => KeyValuePair.Create(p.Name, p.Value.Clone()))
-                .ToList();
+            var extra = CodecPrimitives.UnknownFields(element, KnownFields);
 
             if (extra.Count > 0) extras[id] = extra;
         }
@@ -74,29 +68,16 @@ public static class TaskCodec
             writer.WriteString("title", task.Title);
             if (task.Notes is null) writer.WriteNull("notes"); else writer.WriteString("notes", task.Notes);
 
-            writer.WritePropertyName("dimensions");
-            WriteDimensions(writer, task.Tags);
+            CodecPrimitives.WriteTagSet(writer, task.Tags);
 
-            writer.WritePropertyName("looseTags");
-            writer.WriteStartArray();
-            foreach (var looseTag in task.Tags.LooseTags) writer.WriteStringValue(looseTag.Value);
-            writer.WriteEndArray();
-
-            WriteDateOnlyOrNull(writer, "deadline", task.Deadline);
+            CodecPrimitives.WriteDateOrNull(writer, "deadline", task.Deadline);
             WriteDeferOrNull(writer, "defer", task.Defer);
-            WriteDateOnlyOrNull(writer, "postpone", task.Postpone);
+            CodecPrimitives.WriteDateOrNull(writer, "postpone", task.Postpone);
             WriteRecurrenceOrNull(writer, "recurrence", task.Recurrence);
 
-            writer.WriteString("createdAt", task.CreatedAt.ToUniversalTime().ToString(InstantFormat));
+            CodecPrimitives.WriteInstant(writer, "createdAt", task.CreatedAt);
 
-            if (extras.TryGetValue(task.Id, out var extra))
-            {
-                foreach (var (name, value) in extra)
-                {
-                    writer.WritePropertyName(name);
-                    value.WriteTo(writer);
-                }
-            }
+            if (extras.TryGetValue(task.Id, out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
 
             writer.WriteEndObject();
         }
@@ -110,63 +91,6 @@ public static class TaskCodec
         return value.ValueKind == JsonValueKind.Null ? null : value.GetString();
     }
 
-    private static DateOnly? ReadDateOnly(JsonElement element, string property)
-    {
-        var value = element.GetProperty(property);
-        return value.ValueKind == JsonValueKind.Null ? null : DateOnly.ParseExact(value.GetString()!, DateFormat);
-    }
-
-    private static void WriteDateOnlyOrNull(Utf8JsonWriter writer, string property, DateOnly? value)
-    {
-        if (value is { } date) writer.WriteString(property, date.ToString(DateFormat));
-        else writer.WriteNull(property);
-    }
-
-    private static DateTimeOffset ReadInstant(JsonElement element) =>
-        DateTimeOffset.Parse(element.GetString()!, null, System.Globalization.DateTimeStyles.AssumeUniversal);
-
-    private static TagSet ReadTagSet(JsonElement element)
-    {
-        var dimensions = new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
-        foreach (var property in element.GetProperty("dimensions").EnumerateObject())
-        {
-            var dimensionId = new DimensionId(property.Name);
-            dimensions[dimensionId] = property.Value.ValueKind == JsonValueKind.Array
-                ? property.Value.EnumerateArray().Select(v => new TagValue(v.GetString()!)).ToArray()
-                : [new TagValue(property.Value.GetString()!)];
-        }
-
-        var looseTags = element.GetProperty("looseTags").EnumerateArray()
-            .Select(v => new LooseTag(v.GetString()!))
-            .ToArray();
-
-        return new TagSet(dimensions, looseTags);
-    }
-
-    private static void WriteDimensions(Utf8JsonWriter writer, TagSet tags)
-    {
-        writer.WriteStartObject();
-        foreach (var (dimensionId, values) in tags.Dimensions)
-        {
-            writer.WritePropertyName(dimensionId.Value);
-            if (IsOrdinal(dimensionId) && values.Count == 1)
-            {
-                writer.WriteStringValue(values[0].Value);
-            }
-            else
-            {
-                writer.WriteStartArray();
-                foreach (var value in values) writer.WriteStringValue(value.Value);
-                writer.WriteEndArray();
-            }
-        }
-
-        writer.WriteEndObject();
-    }
-
-    private static bool IsOrdinal(DimensionId dimensionId) =>
-        KnownDimensions.Default.Dimensions.FirstOrDefault(d => d.Id == dimensionId) is OrdinalDimension;
-
     private static Defer? ReadDefer(JsonElement element, string property)
     {
         var value = element.GetProperty(property);
@@ -175,8 +99,8 @@ public static class TaskCodec
         var kind = value.GetProperty("kind").GetString();
         return kind switch
         {
-            "absolute" => new AbsoluteDefer(DateOnly.ParseExact(value.GetProperty("date").GetString()!, DateFormat)),
-            "offset" => new OffsetDefer(ReadOffset(value.GetProperty("offset"))),
+            "absolute" => new AbsoluteDefer(CodecPrimitives.ReadDate(value.GetProperty("date"))),
+            "offset" => new OffsetDefer(CodecPrimitives.ReadOffsetOrNull(value, "offset")!),
             _ => throw new JsonException($"Unknown Defer kind '{kind}'"),
         };
     }
@@ -195,8 +119,7 @@ public static class TaskCodec
                 break;
             case OffsetDefer offset:
                 writer.WriteString("kind", "offset");
-                writer.WritePropertyName("offset");
-                WriteOffset(writer, offset.Offset);
+                CodecPrimitives.WriteOffsetOrNull(writer, "offset", offset.Offset);
                 break;
             default:
                 throw new JsonException($"Unknown Defer type '{defer.GetType()}'");
@@ -204,57 +127,6 @@ public static class TaskCodec
 
         writer.WriteEndObject();
     }
-
-    private static Offset ReadOffset(JsonElement element)
-    {
-        var kind = element.GetProperty("kind").GetString();
-        return kind switch
-        {
-            "before" => new BeforeOffset(element.GetProperty("n").GetInt32(), ReadUnit(element.GetProperty("unit"))),
-            "lastWeekdayBefore" => new LastWeekdayBefore(ReadWeekday(element.GetProperty("weekday"))),
-            _ => throw new JsonException($"Unknown Offset kind '{kind}'"),
-        };
-    }
-
-    private static void WriteOffset(Utf8JsonWriter writer, Offset offset)
-    {
-        writer.WriteStartObject();
-        switch (offset)
-        {
-            case BeforeOffset before:
-                writer.WriteString("kind", "before");
-                writer.WriteNumber("n", before.N);
-                writer.WriteString("unit", WriteUnit(before.Unit));
-                break;
-            case LastWeekdayBefore lastWeekdayBefore:
-                writer.WriteString("kind", "lastWeekdayBefore");
-                writer.WriteString("weekday", lastWeekdayBefore.Weekday.ToString().ToLowerInvariant());
-                break;
-            default:
-                throw new JsonException($"Unknown Offset type '{offset.GetType()}'");
-        }
-
-        writer.WriteEndObject();
-    }
-
-    private static OffsetUnit ReadUnit(JsonElement element) => element.GetString() switch
-    {
-        "days" => OffsetUnit.Days,
-        "weeks" => OffsetUnit.Weeks,
-        "months" => OffsetUnit.Months,
-        var unit => throw new JsonException($"Unknown OffsetUnit '{unit}'"),
-    };
-
-    private static string WriteUnit(OffsetUnit unit) => unit switch
-    {
-        OffsetUnit.Days => "days",
-        OffsetUnit.Weeks => "weeks",
-        OffsetUnit.Months => "months",
-        _ => throw new JsonException($"Unknown OffsetUnit '{unit}'"),
-    };
-
-    private static DayOfWeek ReadWeekday(JsonElement element) =>
-        Enum.Parse<DayOfWeek>(element.GetString()!, ignoreCase: true);
 
     private static Recurrence? ReadRecurrence(JsonElement element, string property)
     {
@@ -272,7 +144,7 @@ public static class TaskCodec
 
         DateOnly? firstDue = value.TryGetProperty("firstDue", out var firstDueElement)
             && firstDueElement.ValueKind != JsonValueKind.Null
-                ? DateOnly.ParseExact(firstDueElement.GetString()!, DateFormat)
+                ? CodecPrimitives.ReadDate(firstDueElement)
                 : null;
 
         return new Recurrence(anchor, rule, firstDue);
@@ -286,11 +158,11 @@ public static class TaskCodec
             "daily" => new EveryNDays(element.GetProperty("n").GetInt32()),
             "weekly" => new EveryNWeeksOn(
                 element.GetProperty("n").GetInt32(),
-                element.GetProperty("weekdays").EnumerateArray().Select(ReadWeekday).ToArray()),
+                element.GetProperty("weekdays").EnumerateArray().Select(CodecPrimitives.ReadWeekday).ToArray()),
             "monthly" => new MonthlyOnDayOfMonth(element.GetProperty("dayOfMonth").GetInt32()),
             "yearly" => new YearlyOn(element.GetProperty("month").GetInt32(), element.GetProperty("day").GetInt32()),
             "interval" => new IntervalSinceCompletion(
-                element.GetProperty("n").GetInt32(), ReadUnit(element.GetProperty("unit"))),
+                element.GetProperty("n").GetInt32(), CodecPrimitives.ReadOffsetUnit(element.GetProperty("unit"))),
             _ => throw new JsonException($"Unknown RecurrenceRule kind '{kind}'"),
         };
     }
@@ -346,7 +218,7 @@ public static class TaskCodec
             case IntervalSinceCompletion intervalSinceCompletion:
                 writer.WriteString("kind", "interval");
                 writer.WriteNumber("n", intervalSinceCompletion.N);
-                writer.WriteString("unit", WriteUnit(intervalSinceCompletion.Unit));
+                writer.WriteString("unit", CodecPrimitives.WriteOffsetUnit(intervalSinceCompletion.Unit));
                 break;
             default:
                 throw new JsonException($"Unknown RecurrenceRule type '{rule.GetType()}'");
