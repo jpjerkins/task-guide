@@ -187,4 +187,16 @@ public static class OrphanDetection
     /// </summary>
     public static bool IsOrphan(TaskItem task, Status status, int patternWeekCount) =>
         status == Status.Active && patternWeekCount == 0;
+
+    /// <summary>
+    /// Which of the two zeroes this one is, told apart by the Pattern-week count — or
+    /// <c>null</c> where there is no zero to read. Two cases return null and they are not the
+    /// same case: <b>Opportunities of 1 or more is not a zero</b> (a near-orphan gets no badge;
+    /// Ranking already surfaces it), and a Task the Status gate excludes has <b>no
+    /// Opportunities value at all</b> — an absence, not a zero.
+    /// </summary>
+    public static ZeroKind? KindOfZero(TaskItem task, Status status, int opportunities, int patternWeekCount) =>
+        status != Status.Active || opportunities != 0
+            ? null
+            : IsOrphan(task, status, patternWeekCount) ? ZeroKind.Orphan : ZeroKind.NoneInThisStretch;
 }

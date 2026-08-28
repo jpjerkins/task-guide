@@ -159,6 +159,7 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - an Event is never subject to it
 - Orphan is never counted in the process/stale footer counts — the three are disjoint
 - `Opportunities = 1` gets no badge
+- a fetched axis never makes a zero read as an Orphan — the Pattern-week count is counterfactual
 
 ### Day boundary and clock-time resolution
 
