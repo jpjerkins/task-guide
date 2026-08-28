@@ -379,6 +379,11 @@ Against `fixtures/data`, the golden store.
 - `completions/derived.json` round-trips, keyed on `ruleId` + `triggerId` + `due`
 - the Task id comes from the filename, so a log file carries no id of its own
 - no codec writes a `status` property, whatever type it would carry — `CompletionCodec`
+- `fires/2026-08-15.json` round-trips the golden store unchanged
+- `dueAt` and `firedAt` round-trip as instants while `windowStart` and `windowEnd` round-trip as clock times, in the same file
+- a pending Snooze row round-trips with a null `firedAt` and reads `IsPendingSnooze`
+- Fire dates are read from fire file names without parsing contents
+- no codec writes a `status` property, whatever type it would carry — `FireCodec`
 - a restore under a running service is invisible, and the next mutation destroys it *(the one test
   that documents a failure mode rather than preventing it — see #49's restore drill)*
 - every minted id carries its type's prefix and 26 Crockford Base32 characters
