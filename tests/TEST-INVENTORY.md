@@ -349,6 +349,12 @@ Against `fixtures/data`, the golden store.
 - a one-off day round-trips with a null `used`
 - an unknown field on an override survives a load-and-save round trip
 - no codec writes a `status` property, whatever type it would carry — `OverrideCodec`
+- `events.json` round-trips the golden store unchanged
+- an Event's loose Tags survive the round trip, and are what a derived-obligation rule reads
+- `event-exceptions.json` round-trips both the delete row and the edit row
+- an Event exception that is neither a delete nor an edit is rejected at read, naming its date
+- an Event's `absenceNotice` round-trips, and a null one stays null
+- no codec writes a `status` property, whatever type it would carry — `EventCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
