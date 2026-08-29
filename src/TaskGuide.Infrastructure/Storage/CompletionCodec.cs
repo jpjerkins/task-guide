@@ -80,7 +80,21 @@ public static class CompletionCodec
             if (extra.Count > 0) extras[KeyOf(entry)] = extra;
         }
 
+        RejectDuplicateKeys(entries);
+
         return (entries, extras);
+    }
+
+    private static void RejectDuplicateKeys(IReadOnlyList<DerivedCompletionEntry> entries)
+    {
+        var duplicate = entries
+            .GroupBy(KeyOf)
+            .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicate is null) return;
+
+        throw new JsonException(
+            $"Derived completion has duplicate key (ruleId, triggerId, due)=({duplicate.Key.RuleId.Value}, {duplicate.Key.TriggerId}, {duplicate.Key.Due:yyyy-MM-dd}).");
     }
 
     public static void WriteDerived(

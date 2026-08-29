@@ -118,6 +118,24 @@ public sealed class CompletionCodecTests
     }
 
     [Fact]
+    public void Two_derived_completions_sharing_ruleId_triggerId_and_due_are_rejected_at_read_naming_all_three()
+    {
+        const string json = """
+            [
+              { "ruleId": "absence", "triggerId": "evt_01ARZ3NDEKTSV4RRFFQ69G5M01",
+                "due": "2026-09-27", "done": "2026-09-25T09:14:00Z" },
+              { "ruleId": "absence", "triggerId": "evt_01ARZ3NDEKTSV4RRFFQ69G5M01",
+                "due": "2026-09-27", "done": "2026-09-26T10:00:00Z" }
+            ]
+            """;
+
+        var ex = Assert.Throws<JsonException>(() => CompletionCodec.ReadDerived(json));
+        Assert.Contains("absence", ex.Message);
+        Assert.Contains("evt_01ARZ3NDEKTSV4RRFFQ69G5M01", ex.Message);
+        Assert.Contains("2026-09-27", ex.Message);
+    }
+
+    [Fact]
     public void The_Task_id_comes_from_the_filename_so_a_log_file_carries_no_id_of_its_own()
     {
         var taskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0");
