@@ -28,16 +28,14 @@ public sealed class FireCodecTests
 
     private static string RoundTrip(DateOnly date, string json)
     {
-        var (fires, extras) = FireCodec.Read(date, json);
-        return RoundTrip(fires, extras);
+        var fires = FireCodec.Read(date, json);
+        return RoundTrip(fires);
     }
 
-    private static string RoundTrip(
-        DayFires fires,
-        IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    private static string RoundTrip(DayFires fires)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) FireCodec.Write(writer, fires, extras);
+        using (var writer = new Utf8JsonWriter(buffer)) FireCodec.Write(writer, fires);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -46,7 +44,7 @@ public sealed class FireCodecTests
     [Fact]
     public void A_fire_row_carries_the_Window_s_name_and_span_as_they_were()
     {
-        var (fires, _) = FireCodec.Read(new DateOnly(2026, 8, 15), FixtureJson("2026-08-15.json"));
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), FixtureJson("2026-08-15.json"));
 
         var row = Assert.Single(fires.Rows, r => r.WindowId == new WindowId("w_01ARZ3NDEKTSV4RRFFQ69G5H02") && r.Kind.ToString() == "Window");
 
@@ -91,7 +89,7 @@ public sealed class FireCodecTests
             ]
             """;
 
-        var (fires, _) = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), json);
 
         Assert.Equal(2, fires.Rows.Count);
         Assert.Single(fires.Rows, r => r.WindowId == new WindowId("w_01ARZ3NDEKTSV4RRFFQ69G5H02"));
@@ -133,10 +131,10 @@ public sealed class FireCodecTests
             ]
             """;
 
-        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), json);
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), json);
         Assert.Equal(expected, Assert.Single(fires.Rows).Kind);
 
-        var written = RoundTrip(fires, extras);
+        var written = RoundTrip(fires);
         using var document = JsonDocument.Parse(written);
         Assert.Equal(kind, document.RootElement[0].GetProperty("kind").GetString());
     }
@@ -146,10 +144,10 @@ public sealed class FireCodecTests
     {
         var original = FixtureJson("2026-08-15.json");
 
-        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), original);
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), original);
         Assert.Equal(new DateOnly(2026, 8, 15), fires.Date);
 
-        var written = RoundTrip(fires, extras);
+        var written = RoundTrip(fires);
 
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
     }
@@ -173,13 +171,13 @@ public sealed class FireCodecTests
     public void A_pending_Snooze_row_round_trips_with_a_null_firedAt_and_reads_IsPendingSnooze()
     {
         var original = FixtureJson("2026-08-15.json");
-        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), original);
+        var fires = FireCodec.Read(new DateOnly(2026, 8, 15), original);
 
         var snooze = Assert.Single(fires.Rows, r => r.Kind == FireKind.Snooze);
         Assert.True(snooze.IsPendingSnooze);
         Assert.Null(snooze.FiredAt);
 
-        var written = RoundTrip(fires, extras);
+        var written = RoundTrip(fires);
         using var document = JsonDocument.Parse(written);
         Assert.Equal(JsonValueKind.Null, document.RootElement[1].GetProperty("firedAt").ValueKind);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));

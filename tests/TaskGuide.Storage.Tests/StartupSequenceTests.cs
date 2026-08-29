@@ -88,7 +88,7 @@ public sealed class StartupSequenceTests : IDisposable
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            PatternCodec.Write(writer, book, new Dictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>>(), []);
+            PatternCodec.Write(writer, book);
         }
 
         File.WriteAllBytes(Path.Combine(_dataDir, "patterns.json"), buffer.ToArray());
@@ -99,7 +99,7 @@ public sealed class StartupSequenceTests : IDisposable
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            DayTemplateCodec.Write(writer, templates, new Dictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+            DayTemplateCodec.Write(writer, templates);
         }
 
         File.WriteAllBytes(Path.Combine(_dataDir, "day-templates.json"), buffer.ToArray());
@@ -114,7 +114,7 @@ public sealed class StartupSequenceTests : IDisposable
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            TaskCodec.Write(writer, tasks, new Dictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+            TaskCodec.Write(writer, tasks);
         }
 
         File.WriteAllBytes(Path.Combine(_dataDir, "tasks.json"), buffer.ToArray());

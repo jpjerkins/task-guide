@@ -124,7 +124,7 @@ public sealed class StoreMutationRulesTests : IDisposable
         Assert.Equal(used, overrideAfterEdit.Used);
         Assert.Equal(new TimeOnly(21, 0), Assert.Single(overrideAfterEdit.Windows).End);
 
-        var onDisk = OverrideCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "overrides.json"))).Overrides.Single(o => o.Date == date);
+        var onDisk = OverrideCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "overrides.json"))).Single(o => o.Date == date);
         Assert.Equal(used, onDisk.Used);
     }
 
@@ -155,7 +155,7 @@ public sealed class StoreMutationRulesTests : IDisposable
         Assert.Equal(templateB, only.Used);
         Assert.Equal(windowB, Assert.Single(only.Windows));
 
-        var onDiskForDate = OverrideCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "overrides.json"))).Overrides.Where(o => o.Date == date);
+        var onDiskForDate = OverrideCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "overrides.json"))).Where(o => o.Date == date);
         Assert.Single(onDiskForDate);
     }
 

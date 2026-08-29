@@ -162,7 +162,7 @@ public sealed class JsonStoreTests : IDisposable
 
         await store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, newTask])]), CancellationToken.None);
 
-        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json"))).Tasks;
+        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
         Assert.Single(onDisk);
         Assert.Equal("Water the plants", onDisk[0].Title);
         Assert.Single(store.Read().Tasks);
@@ -216,7 +216,7 @@ public sealed class JsonStoreTests : IDisposable
         await Task.WhenAll(mutations);
 
         Assert.Equal(20, store.Read().Tasks.Count);
-        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json"))).Tasks;
+        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
         Assert.Equal(20, onDisk.Count);
         Assert.Equal(20, onDisk.Select(t => t.Id).Distinct().Count());
     }
@@ -286,11 +286,11 @@ public sealed class JsonStoreTests : IDisposable
         // TaskItem exposes no Status setter at all (#47) — there is no field to round-trip.
         Assert.DoesNotContain("\"status\"", FixtureTasksJson);
 
-        var (tasks, extras) = TaskCodec.Read(FixtureTasksJson);
+        var tasks = TaskCodec.Read(FixtureTasksJson);
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            TaskCodec.Write(writer, tasks, extras);
+            TaskCodec.Write(writer, tasks);
         }
 
         buffer.Position = 0;

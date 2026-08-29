@@ -28,16 +28,14 @@ public sealed class CompletionCodecTests
 
     private static string RoundTrip(TaskId taskId, string json)
     {
-        var (log, extras) = CompletionCodec.Read(taskId, json);
-        return RoundTrip(log, extras);
+        var log = CompletionCodec.Read(taskId, json);
+        return RoundTrip(log);
     }
 
-    private static string RoundTrip(
-        CompletionLog log,
-        IReadOnlyDictionary<int, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    private static string RoundTrip(CompletionLog log)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.Write(writer, log, extras);
+        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.Write(writer, log);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -45,9 +43,9 @@ public sealed class CompletionCodecTests
 
     private static string RoundTripDerived(string json)
     {
-        var (entries, extras) = CompletionCodec.ReadDerived(json);
+        var entries = CompletionCodec.ReadDerived(json);
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.WriteDerived(writer, entries, extras);
+        using (var writer = new Utf8JsonWriter(buffer)) CompletionCodec.WriteDerived(writer, entries);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -86,12 +84,12 @@ public sealed class CompletionCodecTests
     public void A_one_off_Task_s_entry_round_trips_a_null_due()
     {
         var original = FixtureJson("t_01ARZ3NDEKTSV4RRFFQ69G5FB3.json");
-        var (log, extras) = CompletionCodec.Read(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB3"), original);
+        var log = CompletionCodec.Read(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB3"), original);
 
         var entry = Assert.Single(log.Entries);
         Assert.Null(entry.Due);
 
-        var written = RoundTrip(log, extras);
+        var written = RoundTrip(log);
         using var document = JsonDocument.Parse(written);
         Assert.Equal(JsonValueKind.Null, document.RootElement[0].GetProperty("due").ValueKind);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
@@ -107,7 +105,7 @@ public sealed class CompletionCodecTests
     {
         var original = FixtureJson("derived.json");
 
-        var (entries, _) = CompletionCodec.ReadDerived(original);
+        var entries = CompletionCodec.ReadDerived(original);
         var entry = Assert.Single(entries);
         Assert.Equal(new RuleId("absence"), entry.RuleId);
         Assert.Equal("evt_01ARZ3NDEKTSV4RRFFQ69G5M01", entry.TriggerId);
@@ -139,11 +137,11 @@ public sealed class CompletionCodecTests
     public void The_Task_id_comes_from_the_filename_so_a_log_file_carries_no_id_of_its_own()
     {
         var taskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0");
-        var (log, extras) = CompletionCodec.Read(taskId, FixtureJson(CompletionCodec.FileNameFor(taskId)));
+        var log = CompletionCodec.Read(taskId, FixtureJson(CompletionCodec.FileNameFor(taskId)));
 
         Assert.Equal(taskId, log.TaskId);
 
-        var written = RoundTrip(log, extras);
+        var written = RoundTrip(log);
         using var document = JsonDocument.Parse(written);
         foreach (var entry in document.RootElement.EnumerateArray())
         {

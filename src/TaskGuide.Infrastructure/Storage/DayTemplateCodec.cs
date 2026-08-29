@@ -10,22 +10,13 @@ namespace TaskGuide.Infrastructure.Storage;
 /// Windows and, optionally, Event prototypes — both dateless, becoming per-day instances only on
 /// application (`CONTEXT.md`, "Day template").
 /// </summary>
-/// <remarks>
-/// A property this binary does not know about is preserved verbatim on every field it did not
-/// touch, keyed per Day template — the same convention `TaskCodec` uses per Task.
-/// </remarks>
 public static class DayTemplateCodec
 {
-    private static readonly string[] KnownFields = ["id", "name", "windows", "eventPrototypes"];
-
-    public static (IReadOnlyList<DayTemplate> Templates,
-        IReadOnlyDictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>> Extras)
-        Read(string json)
+    public static IReadOnlyList<DayTemplate> Read(string json)
     {
         using var document = JsonDocument.Parse(json);
 
         var templates = new List<DayTemplate>();
-        var extras = new Dictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
@@ -40,18 +31,12 @@ public static class DayTemplateCodec
                 .ToList();
 
             templates.Add(new DayTemplate(id, element.GetProperty("name").GetString()!, windows, eventPrototypes));
-
-            var extra = CodecPrimitives.UnknownFields(element, KnownFields);
-            if (extra.Count > 0) extras[id] = extra;
         }
 
-        return (templates, extras);
+        return templates;
     }
 
-    public static void Write(
-        Utf8JsonWriter writer,
-        IReadOnlyList<DayTemplate> templates,
-        IReadOnlyDictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    public static void Write(Utf8JsonWriter writer, IReadOnlyList<DayTemplate> templates)
     {
         writer.WriteStartArray();
 
@@ -71,8 +56,6 @@ public static class DayTemplateCodec
             writer.WriteStartArray();
             foreach (var eventPrototype in template.EventPrototypes) WriteEventPrototype(writer, eventPrototype);
             writer.WriteEndArray();
-
-            if (extras.TryGetValue(template.Id, out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
 
             writer.WriteEndObject();
         }

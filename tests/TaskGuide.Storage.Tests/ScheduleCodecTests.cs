@@ -28,24 +28,19 @@ public sealed class ScheduleCodecTests
         return directory?.FullName ?? throw new InvalidOperationException("Could not find repo root (task-guide.slnx) above " + AppContext.BaseDirectory);
     }
 
-    private static string RoundTripPatterns(
-        PatternBook book,
-        IReadOnlyDictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras,
-        IReadOnlyList<KeyValuePair<string, JsonElement>> envelopeExtras)
+    private static string RoundTripPatterns(PatternBook book)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) PatternCodec.Write(writer, book, extras, envelopeExtras);
+        using (var writer = new Utf8JsonWriter(buffer)) PatternCodec.Write(writer, book);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
     }
 
-    private static string RoundTripOverrides(
-        IReadOnlyList<DateOverride> overrides,
-        IReadOnlyDictionary<DateOnly, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    private static string RoundTripOverrides(IReadOnlyList<DateOverride> overrides)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) OverrideCodec.Write(writer, overrides, extras);
+        using (var writer = new Utf8JsonWriter(buffer)) OverrideCodec.Write(writer, overrides);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -58,8 +53,8 @@ public sealed class ScheduleCodecTests
     {
         var original = FixtureJson("patterns.json");
 
-        var (book, extras, envelopeExtras) = PatternCodec.Read(original);
-        var written = RoundTripPatterns(book, extras, envelopeExtras);
+        var book = PatternCodec.Read(original);
+        var written = RoundTripPatterns(book);
 
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
     }
@@ -67,7 +62,7 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void A_pattern_s_seven_days_are_indexed_by_weekday_with_sunday_first()
     {
-        var (book, _, _) = PatternCodec.Read(FixtureJson("patterns.json"));
+        var book = PatternCodec.Read(FixtureJson("patterns.json"));
         var schoolYear = Assert.Single(book.Patterns, p => p.Name == "School year");
 
         // Fixture order: Sun, Mon, Tue, Wed, Thu, Fri, Sat — Tuesday is the odd one out (G01).
@@ -95,8 +90,8 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void No_codec_writes_a_status_property_whatever_type_it_would_carry_PatternCodec()
     {
-        var (book, extras, envelopeExtras) = PatternCodec.Read(FixtureJson("patterns.json"));
-        var written = RoundTripPatterns(book, extras, envelopeExtras);
+        var book = PatternCodec.Read(FixtureJson("patterns.json"));
+        var written = RoundTripPatterns(book);
 
         using var document = JsonDocument.Parse(written);
         CodecAssertions.NoStatusProperty(document.RootElement);
@@ -113,8 +108,8 @@ public sealed class ScheduleCodecTests
     {
         var original = FixtureJson("overrides.json");
 
-        var (overrides, extras) = OverrideCodec.Read(original);
-        var written = RoundTripOverrides(overrides, extras);
+        var overrides = OverrideCodec.Read(original);
+        var written = RoundTripOverrides(overrides);
 
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
     }
@@ -122,7 +117,7 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void An_overrides_copy_preserves_each_windows_id()
     {
-        var (overrides, _) = OverrideCodec.Read(FixtureJson("overrides.json"));
+        var overrides = OverrideCodec.Read(FixtureJson("overrides.json"));
         var volleyball = Assert.Single(overrides, o => o.Date == new DateOnly(2026, 8, 15));
 
         var window = Assert.Single(volleyball.Windows);
@@ -132,7 +127,7 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void An_override_carries_its_used_record_with_the_template_name_as_it_was()
     {
-        var (overrides, _) = OverrideCodec.Read(FixtureJson("overrides.json"));
+        var overrides = OverrideCodec.Read(FixtureJson("overrides.json"));
         var volleyball = Assert.Single(overrides, o => o.Date == new DateOnly(2026, 8, 15));
 
         Assert.NotNull(volleyball.Used);
@@ -143,12 +138,12 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void A_one_off_day_round_trips_with_a_null_used()
     {
-        var (overrides, extras) = OverrideCodec.Read(FixtureJson("overrides.json"));
+        var overrides = OverrideCodec.Read(FixtureJson("overrides.json"));
         var oneOff = Assert.Single(overrides, o => o.Date == new DateOnly(2026, 9, 11));
         Assert.True(oneOff.IsOneOffDay);
         Assert.Null(oneOff.Used);
 
-        var written = RoundTripOverrides(overrides, extras);
+        var written = RoundTripOverrides(overrides);
         using var document = JsonDocument.Parse(written);
         var writtenOneOff = document.RootElement.EnumerateArray()
             .Single(e => CodecPrimitives.ReadDate(e.GetProperty("date")) == new DateOnly(2026, 9, 11));
@@ -159,8 +154,8 @@ public sealed class ScheduleCodecTests
     [Fact]
     public void No_codec_writes_a_status_property_whatever_type_it_would_carry_OverrideCodec()
     {
-        var (overrides, extras) = OverrideCodec.Read(FixtureJson("overrides.json"));
-        var written = RoundTripOverrides(overrides, extras);
+        var overrides = OverrideCodec.Read(FixtureJson("overrides.json"));
+        var written = RoundTripOverrides(overrides);
 
         using var document = JsonDocument.Parse(written);
         foreach (var element in document.RootElement.EnumerateArray())

@@ -98,7 +98,7 @@ public sealed class WholeStoreTests : IDisposable
         // if OrderedWrites were applied in reverse, the Override write would have thrown first
         // and events.json would never have been touched.
         Assert.True(File.Exists(eventsPath));
-        var (onDiskEvents, _) = EventCodec.Read(File.ReadAllText(eventsPath));
+        var onDiskEvents = EventCodec.Read(File.ReadAllText(eventsPath));
         Assert.Contains(onDiskEvents, e => e.Id == newEvent.Id);
     }
 
@@ -121,7 +121,7 @@ public sealed class WholeStoreTests : IDisposable
 
         // The Event survived; the Override that was supposed to land alongside it did not — this
         // is exactly the inconsistency the overlap check is designed to notice and re-prompt for.
-        var (onDiskEvents, _) = EventCodec.Read(File.ReadAllText(eventsPath));
+        var onDiskEvents = EventCodec.Read(File.ReadAllText(eventsPath));
         Assert.Contains(onDiskEvents, e => e.Id == newEvent.Id);
 
         Assert.False(store.LastWriteSucceeded);
@@ -149,8 +149,8 @@ public sealed class WholeStoreTests : IDisposable
             _ => new StoreMutation([new DayTemplatesWrite(newTemplates), new OverridesWrite(newOverrides)]),
             CancellationToken.None);
 
-        var (onDiskTemplates, _) = DayTemplateCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "day-templates.json")));
-        var (onDiskOverrides, _) = OverrideCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")));
+        var onDiskTemplates = DayTemplateCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "day-templates.json")));
+        var onDiskOverrides = OverrideCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")));
 
         Assert.Equal(newTemplates.Count, onDiskTemplates.Count);
         Assert.Contains(onDiskTemplates, t => t.Name == "New template");
@@ -179,7 +179,7 @@ public sealed class WholeStoreTests : IDisposable
         Assert.False(store.LastWriteSucceeded);
         Assert.Equal(beforeTaskCount, store.Read().Tasks.Count); // the view was not swapped, even though tasks.json itself did get rewritten on disk
 
-        var (onDiskTasks, _) = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
+        var onDiskTasks = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
         Assert.Equal(beforeTaskCount + 1, onDiskTasks.Count); // the first write's file was in fact rewritten — the accepted, non-rolled-back design
     }
 
@@ -261,7 +261,7 @@ public sealed class WholeStoreTests : IDisposable
         // The Tasks write genuinely landed on disk before the unrecognised payload was reached —
         // this is the case the pre-existing "not recorded" carve-out did not cover, and where
         // staying silent would itself be the lie IStore.LastWriteSucceeded's doc rules out.
-        var (onDiskTasks, _) = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
+        var onDiskTasks = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
         Assert.Contains(onDiskTasks, t => t.Id == newTask.Id);
         Assert.False(store.LastWriteSucceeded);
     }
@@ -279,7 +279,6 @@ public sealed class WholeStoreTests : IDisposable
               { "date": "2026-08-15",
                 "used": null,
                 "windows": [],
-                "priority": "urgent",
                 "fromTheFuture": "should not survive" }
             ]
             """);
@@ -290,7 +289,7 @@ public sealed class WholeStoreTests : IDisposable
         await store.MutateAsync(view => new StoreMutation([new OverridesWrite(view.Overrides)]), CancellationToken.None);
 
         var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
-        Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
+        Assert.Equal("2026-08-15", onDisk[0]!["date"]!.GetValue<string>());
         Assert.Null(onDisk[0]!["fromTheFuture"]);
     }
 }

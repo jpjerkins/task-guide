@@ -11,8 +11,8 @@ namespace TaskGuide.Infrastructure.Storage;
 /// <summary>
 /// The shared JSON codec primitives every store codec is built from: the three date/time
 /// encodings (`TaskCodec` fixture README — authored clock times, calendar dates, recorded
-/// instants), <see cref="TagSet"/>, <see cref="Offset"/>, unknown-field capture, and the
-/// Availability Window shape shared by `day-templates.json` and `overrides.json`.
+/// instants), <see cref="TagSet"/>, <see cref="Offset"/>, and the Availability Window shape
+/// shared by `day-templates.json` and `overrides.json`.
 /// </summary>
 /// <remarks>
 /// Extracted from `TaskCodec`, which was the first and, until now, only codec. Behaviour is
@@ -198,25 +198,6 @@ public static class CodecPrimitives
     /// <summary>Shared with Recurrence's `weekly` rule, which also carries a list of weekdays.</summary>
     public static DayOfWeek ReadWeekday(JsonElement element) =>
         Enum.Parse<DayOfWeek>(element.GetString()!, ignoreCase: true);
-
-    // ---- Unknown fields ----
-
-    public static IReadOnlyList<KeyValuePair<string, JsonElement>> UnknownFields(
-        JsonElement e, IReadOnlyCollection<string> knownFields) =>
-        e.EnumerateObject()
-            .Where(p => !knownFields.Contains(p.Name))
-            .Select(p => KeyValuePair.Create(p.Name, p.Value.Clone()))
-            .ToList();
-
-    public static void WriteUnknownFields(
-        Utf8JsonWriter w, IReadOnlyList<KeyValuePair<string, JsonElement>> extras)
-    {
-        foreach (var (name, value) in extras)
-        {
-            w.WritePropertyName(name);
-            value.WriteTo(w);
-        }
-    }
 
     // ---- Availability Window (shared by day-templates.json and overrides.json) ----
 

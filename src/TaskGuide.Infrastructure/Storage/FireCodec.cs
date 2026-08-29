@@ -14,53 +14,36 @@ public static class FireCodec
 {
     private const string FileDateFormat = "yyyy-MM-dd";
 
-    private static readonly string[] KnownFireFields =
-        ["windowId", "kind", "windowName", "windowStart", "windowEnd", "dueAt", "firedAt", "matched", "carried"];
-
     /// <summary>`fires/&lt;date&gt;.json` - the date comes from the filename.</summary>
-    public static (DayFires Fires, IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> Extras)
-        Read(DateOnly date, string json)
+    public static DayFires Read(DateOnly date, string json)
     {
         using var document = JsonDocument.Parse(json);
 
         var rows = new List<FireRow>();
-        var extras = new Dictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
-            var row = ReadRow(element);
-            rows.Add(row);
-
-            var extra = CodecPrimitives.UnknownFields(element, KnownFireFields);
-            if (extra.Count > 0) extras[KeyOf(row)] = extra;
+            rows.Add(ReadRow(element));
         }
 
         RejectDuplicateKeys(date, rows);
 
-        return (new DayFires(date, rows), extras);
+        return new DayFires(date, rows);
     }
 
-    public static void Write(
-        Utf8JsonWriter writer,
-        DayFires fires,
-        IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    public static void Write(Utf8JsonWriter writer, DayFires fires)
     {
         writer.WriteStartArray();
         foreach (var row in fires.Rows)
         {
             writer.WriteStartObject();
             WriteRowBody(writer, row);
-            if (extras.TryGetValue(KeyOf(row), out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
             writer.WriteEndObject();
         }
 
         writer.WriteEndArray();
     }
 
-    /// <summary>
-    /// The key a Fire row's unknown fields are stored against: exactly the key
-    /// <see cref="RejectDuplicateKeys"/> enforces uniqueness on, so the two cannot drift apart.
-    /// </summary>
     private static FireKey KeyOf(FireRow row) => new(row.WindowId, row.Kind);
 
     public static string FileNameFor(DateOnly date) => $"{date:yyyy-MM-dd}.json";
