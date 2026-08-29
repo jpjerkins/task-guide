@@ -360,8 +360,14 @@ Against `fixtures/data`, the golden store.
 - a version ahead of this binary refuses to start, named — a rollback must not silently
   down-migrate
 - `manifest.json` is written only after every migration step succeeds
-- a migration cycle refuses to start instead of hanging
+- a migration step that does not move the version strictly forward is rejected where it is built —
+  the cycle that would hang the walk cannot be constructed (ADR-0009), so this is a property of
+  `StoreMigration`, not of a startup run
+- `StoreMigration` is not a record: `with` would be a second door around that invariant
 - a migration walk that would overshoot `CurrentVersion` refuses to start
+- **every conscious refusal at startup leaves the data directory exactly as it found it** (ADR-0009)
+  — asserted by listing the whole directory, not by checking named files absent: registry collision,
+  version ahead, walk overshoot
 - startup against a fresh `/data` creates `manifest.json` without snapshotting
 - the registry sweep makes no `MutateAsync` call when nothing moved
 - the registry sweep promotes a loose Tag the registry now claims, and writes the change

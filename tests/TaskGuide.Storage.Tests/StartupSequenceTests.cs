@@ -38,6 +38,15 @@ public sealed class StartupSequenceTests : IDisposable
 
     private string SnapshotsDir => Path.Combine(_dataDir, "snapshots");
 
+    /// <summary>
+    /// ADR-0009's phase rule, as an assertion: a conscious refusal is raised before the first
+    /// write, so the data directory still holds exactly what it held when RunAsync was called.
+    /// A whole listing rather than an absence check on named files — the point is to catch the
+    /// next file some future lane adds on this path, which an absence check by definition cannot.
+    /// </summary>
+    private void AssertNothingWasWritten(params string[] expected) =>
+        Assert.Equal(expected, Directory.GetFiles(_dataDir).Select(Path.GetFileName).Cast<string>().Order().ToArray());
+
     private StartupSequence NewSequence(
         DimensionRegistry? registry = null,
         IReadOnlyList<StoreMigration>? migrations = null,
@@ -170,6 +179,7 @@ public sealed class StartupSequenceTests : IDisposable
         var signalledMessage = Assert.Single(signalled);
         Assert.Contains("garage", signalledMessage);
         Assert.False(Directory.Exists(SnapshotsDir));
+        AssertNothingWasWritten("manifest.json");
     }
 
     [Fact]
@@ -201,11 +211,7 @@ public sealed class StartupSequenceTests : IDisposable
         Assert.Equal(ManifestCodec.CurrentVersion, ex.CurrentVersion);
         Assert.Contains((ManifestCodec.CurrentVersion + 1).ToString(), ex.Message);
         Assert.False(Directory.Exists(SnapshotsDir));
-        // The refusal must write nothing: the data directory holds only what it held before
-        // RunAsync was ever called (just the manifest this test wrote above). A wider listing,
-        // not just an absence check on the two files a prior lane's seed happened to write,
-        // catches the next file some future lane adds on this path.
-        Assert.Equal(["manifest.json"], Directory.GetFiles(_dataDir).Select(Path.GetFileName).Cast<string>().ToArray());
+        AssertNothingWasWritten("manifest.json");
     }
 
     [Fact]
@@ -251,6 +257,7 @@ public sealed class StartupSequenceTests : IDisposable
 
         Assert.Equal(ManifestCodec.CurrentVersion + 1, ex.StoredVersion);
         Assert.Equal(ManifestCodec.CurrentVersion, ManifestCodec.Read(File.ReadAllText(ManifestPath)));
+        AssertNothingWasWritten("manifest.json");
     }
 
     /// <summary>
