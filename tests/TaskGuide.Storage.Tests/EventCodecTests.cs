@@ -101,6 +101,23 @@ public sealed class EventCodecTests
     }
 
     [Fact]
+    public void Two_event_exceptions_sharing_a_date_and_prototypeId_are_rejected_at_read_naming_both()
+    {
+        const string json = """
+            [
+              { "date": "2026-08-18", "prototypeId": "ep_01ARZ3NDEKTSV4RRFFQ69G5J00", "deleted": true,
+                "name": null, "start": null, "end": null },
+              { "date": "2026-08-18", "prototypeId": "ep_01ARZ3NDEKTSV4RRFFQ69G5J00", "deleted": false,
+                "name": "Karate late", "start": "19:00", "end": "20:00" }
+            ]
+            """;
+
+        var ex = Assert.Throws<JsonException>(() => EventCodec.ReadExceptions(json));
+        Assert.Contains("2026-08-18", ex.Message);
+        Assert.Contains("ep_01ARZ3NDEKTSV4RRFFQ69G5J00", ex.Message);
+    }
+
+    [Fact]
     public void An_event_s_absence_notice_round_trips_and_a_null_one_stays_null()
     {
         var (events, extras) = EventCodec.Read(FixtureJson("events.json"));

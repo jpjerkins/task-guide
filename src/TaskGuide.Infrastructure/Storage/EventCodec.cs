@@ -102,7 +102,21 @@ public static class EventCodec
             exceptions.Add(new EventException(date, prototypeId, deleted, name, start, end));
         }
 
+        RejectDuplicateKeys(exceptions);
+
         return exceptions;
+    }
+
+    private static void RejectDuplicateKeys(IReadOnlyList<EventException> exceptions)
+    {
+        var duplicate = exceptions
+            .GroupBy(e => (e.Date, e.PrototypeId))
+            .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicate is null) return;
+
+        throw new JsonException(
+            $"Event exception has duplicate key (date, prototypeId)=({duplicate.Key.Date:yyyy-MM-dd}, {duplicate.Key.PrototypeId.Value}).");
     }
 
     public static void WriteExceptions(Utf8JsonWriter writer, IReadOnlyList<EventException> exceptions)
