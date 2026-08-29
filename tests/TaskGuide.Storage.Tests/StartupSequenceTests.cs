@@ -228,26 +228,10 @@ public sealed class StartupSequenceTests : IDisposable
         Assert.Equal(-1, ManifestCodec.Read(File.ReadAllText(ManifestPath)));
     }
 
-    /// <summary>
-    /// I2 (review): a cycle in the migration list must refuse promptly rather than spin the walk
-    /// forever — an infinite hang at startup instead of an exception is strictly worse than either.
-    /// </summary>
-    [Fact]
-    public async Task A_migration_cycle_refuses_to_start_instead_of_hanging()
-    {
-        WriteManifest(1);
-        IReadOnlyList<StoreMigration> migrations =
-        [
-            new StoreMigration(1, 2, (_, _) => Task.CompletedTask),
-            new StoreMigration(2, 1, (_, _) => Task.CompletedTask),
-        ];
-        var sut = NewSequence(migrations: migrations);
-
-        // If the monotonicity guard is missing this call does not return at all — Assert.ThrowsAsync
-        // still awaits it directly (no timeout), which is an accepted risk here: the guard being
-        // tested for is exactly what stands between this and a genuine hang.
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.MigrateAsync(CancellationToken.None));
-    }
+    // The migration-cycle case that used to live here is gone, not lost: per ADR-0009 a
+    // non-monotonic step cannot be constructed at all, so this test can no longer build its own
+    // fixture. It is now StoreMigrationTests, where a property of one step belongs — driving a
+    // whole StartupSequence to prove it was always coverage at the wrong level.
 
     /// <summary>
     /// I2 (review): a walk that would land past `CurrentVersion` must refuse rather than write a
