@@ -334,25 +334,26 @@ Against `fixtures/data`, the golden store.
 - one global write lock serialises mutations
 - **a read never blocks on a write**
 - `tasks.json` round-trips with no `status` field
-- an unknown field written by a newer binary **survives a load-and-save round trip**
 - `day-templates.json` round-trips the golden store unchanged
 - a Window's start and end round-trip as authored clock times, never as instants
 - an Event prototype's `absenceNotice` Offset round-trips, and a null one stays null
-- an unknown field on a Day template survives a load-and-save round trip
 - no codec writes a `status` property, whatever type it would carry — `TaskCodec`
 - no codec writes a `status` property, whatever type it would carry — `DayTemplateCodec`
 - `patterns.json` round-trips the golden store unchanged
 - a Pattern's seven days are indexed by weekday with Sunday first
 - a Pattern book whose `days` array is not seven long is rejected at read, naming the Pattern
+- an active Pattern id matching no Pattern throws, naming the id — a dangling reference is not
+  absence (ADR-0010b)
 - no codec writes a `status` property, whatever type it would carry — `PatternCodec`
 - `overrides.json` round-trips the golden store unchanged
 - a one-off day round-trips with a null `used`
-- an unknown field on an override survives a load-and-save round trip
 - no codec writes a `status` property, whatever type it would carry — `OverrideCodec`
 - `events.json` round-trips the golden store unchanged
 - an Event's loose Tags survive the round trip, and are what a derived-obligation rule reads
 - `event-exceptions.json` round-trips both the delete row and the edit row
 - an Event exception that is neither a delete nor an edit is rejected at read, naming its date
+- two Event exceptions sharing `(date, prototypeId)` are rejected at read, naming both — otherwise
+  that date becomes permanently unreadable (ADR-0010a)
 - an Event's `absenceNotice` round-trips, and a null one stays null
 - no codec writes a `status` property, whatever type it would carry — `EventCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
@@ -360,8 +361,14 @@ Against `fixtures/data`, the golden store.
 - a version ahead of this binary refuses to start, named — a rollback must not silently
   down-migrate
 - `manifest.json` is written only after every migration step succeeds
-- a migration cycle refuses to start instead of hanging
+- a migration step that does not move the version strictly forward is rejected where it is built —
+  the cycle that would hang the walk cannot be constructed (ADR-0009), so this is a property of
+  `StoreMigration`, not of a startup run
+- `StoreMigration` is not a record: `with` would be a second door around that invariant
 - a migration walk that would overshoot `CurrentVersion` refuses to start
+- **every conscious refusal at startup leaves the data directory exactly as it found it** (ADR-0009)
+  — asserted by listing the whole directory, not by checking named files absent: registry collision,
+  version ahead, walk overshoot
 - startup against a fresh `/data` creates `manifest.json` without snapshotting
 - the registry sweep makes no `MutateAsync` call when nothing moved
 - the registry sweep promotes a loose Tag the registry now claims, and writes the change
@@ -384,7 +391,9 @@ Against `fixtures/data`, the golden store.
 - an unrecognised write payload before any write leaves `LastWriteSucceeded` untouched
 - an unrecognised write payload after a successful write sets `LastWriteSucceeded` false
 - an empty write list leaves `LastWriteSucceeded` untouched — no write is not a false success
-- an unknown field on a non-Tasks collection survives a load, mutate and save round trip
+- an unknown field written by a newer binary **is not preserved** across a load, mutate and
+  save round trip — the channel was removed everywhere (ADR-0001, *Rollback is lossy, and
+  that is accepted*); this is the test that fails if someone re-adds it
 - an Override's copy **preserves each Window's id**
 - a date materialised mid-day does not re-fire an already-fired Window
 - an Override carries its `used` record with the template **name as it was**
@@ -409,6 +418,8 @@ Against `fixtures/data`, the golden store.
 - each completion log round-trips the golden store unchanged
 - a one-off Task's entry round-trips a null `due`
 - `completions/derived.json` round-trips, keyed on `ruleId` + `triggerId` + `due`
+- two derived completions sharing `(ruleId, triggerId, due)` are rejected at read, naming all three
+  (ADR-0010a)
 - the Task id comes from the filename, so a log file carries no id of its own
 - no codec writes a `status` property, whatever type it would carry — `CompletionCodec`
 - `fires/2026-08-15.json` round-trips the golden store unchanged
@@ -428,20 +439,12 @@ Against `fixtures/data`, the golden store.
 - ids minted in sequence sort lexicographically in mint order
 - two ids minted in the same millisecond still differ
 - a minted id is accepted by its own `IPrefixedId` record struct round-trip
-- an unknown field on a fire row survives a load-and-save round trip, keyed on the same
-  `(windowId, kind)` pair the duplicate guard enforces — a second row sharing the `windowId` but
-  not the kind does not receive it
-- an unknown field on a Pattern survives a load-and-save round trip
-- an unknown field on the `patterns.json` envelope survives a load-and-save round trip, in a
-  channel of its own — it is not copied onto a Pattern
-- an unknown field on a completion log entry survives a load-and-save round trip, keyed on the
-  entry's index because the entry has no id and `due` is null for a one-off Task
-- an unknown field on a derived completion entry survives a load-and-save round trip, keyed on
-  `ruleId` + `triggerId` + `due` — a second entry sharing the `ruleId` and `due` does not receive it
 - a missing collection file loads as empty rather than throwing — a fresh `/data` is valid
 - a corrupt collection file fails at registration, not first use, for a collection other than
   `tasks.json`
 - a date with no Override takes the active Pattern's template for its weekday
+- a Pattern naming an absent Day template throws, naming the template, the Pattern and the date
+  (ADR-0010b)
 - a date with an Override takes the Override's Windows and reads `IsOverridden`
 - an Override with zero Windows is a shape, not an absence — `IsOverridden` is true and the Pattern's Windows do not leak through
 - a dated Event on the date appears in the shape

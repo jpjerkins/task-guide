@@ -9,24 +9,15 @@ namespace TaskGuide.Infrastructure.Storage;
 /// (`tests/TaskGuide.Storage.Tests/fixtures/data/README.md`): three date/time encodings, no
 /// `status` field (#47 — Status is derived, never stored), camelCase property names.
 /// </summary>
-/// <remarks>
-/// A property this binary does not know about is preserved verbatim on every field it did not
-/// touch, keyed per Task — a newer binary's addition survives a load-and-save round trip
-/// untouched rather than being silently dropped by an unfamiliar codec.
-/// </remarks>
 public static class TaskCodec
 {
     private const string DateFormat = "yyyy-MM-dd";
 
-    private static readonly string[] KnownFields =
-        ["id", "title", "notes", "dimensions", "looseTags", "deadline", "defer", "postpone", "recurrence", "createdAt"];
-
-    public static (IReadOnlyList<TaskItem> Tasks, IReadOnlyDictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>> Extras) Read(string json)
+    public static IReadOnlyList<TaskItem> Read(string json)
     {
         using var document = JsonDocument.Parse(json);
 
         var tasks = new List<TaskItem>();
-        var extras = new Dictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
@@ -44,19 +35,12 @@ public static class TaskCodec
                 CodecPrimitives.ReadInstant(element.GetProperty("createdAt")));
 
             tasks.Add(task);
-
-            var extra = CodecPrimitives.UnknownFields(element, KnownFields);
-
-            if (extra.Count > 0) extras[id] = extra;
         }
 
-        return (tasks, extras);
+        return tasks;
     }
 
-    public static void Write(
-        Utf8JsonWriter writer,
-        IReadOnlyList<TaskItem> tasks,
-        IReadOnlyDictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    public static void Write(Utf8JsonWriter writer, IReadOnlyList<TaskItem> tasks)
     {
         writer.WriteStartArray();
 
@@ -76,8 +60,6 @@ public static class TaskCodec
             WriteRecurrenceOrNull(writer, "recurrence", task.Recurrence);
 
             CodecPrimitives.WriteInstant(writer, "createdAt", task.CreatedAt);
-
-            if (extras.TryGetValue(task.Id, out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
 
             writer.WriteEndObject();
         }

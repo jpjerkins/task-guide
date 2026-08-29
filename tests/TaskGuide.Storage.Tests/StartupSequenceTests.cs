@@ -38,6 +38,15 @@ public sealed class StartupSequenceTests : IDisposable
 
     private string SnapshotsDir => Path.Combine(_dataDir, "snapshots");
 
+    /// <summary>
+    /// ADR-0009's phase rule, as an assertion: a conscious refusal is raised before the first
+    /// write, so the data directory still holds exactly what it held when RunAsync was called.
+    /// A whole listing rather than an absence check on named files — the point is to catch the
+    /// next file some future lane adds on this path, which an absence check by definition cannot.
+    /// </summary>
+    private void AssertNothingWasWritten(params string[] expected) =>
+        Assert.Equal(expected, Directory.GetFiles(_dataDir).Select(Path.GetFileName).Cast<string>().Order().ToArray());
+
     private StartupSequence NewSequence(
         DimensionRegistry? registry = null,
         IReadOnlyList<StoreMigration>? migrations = null,
@@ -79,7 +88,7 @@ public sealed class StartupSequenceTests : IDisposable
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            PatternCodec.Write(writer, book, new Dictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>>(), []);
+            PatternCodec.Write(writer, book);
         }
 
         File.WriteAllBytes(Path.Combine(_dataDir, "patterns.json"), buffer.ToArray());
@@ -90,7 +99,7 @@ public sealed class StartupSequenceTests : IDisposable
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            DayTemplateCodec.Write(writer, templates, new Dictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+            DayTemplateCodec.Write(writer, templates);
         }
 
         File.WriteAllBytes(Path.Combine(_dataDir, "day-templates.json"), buffer.ToArray());
@@ -105,7 +114,7 @@ public sealed class StartupSequenceTests : IDisposable
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            TaskCodec.Write(writer, tasks, new Dictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+            TaskCodec.Write(writer, tasks);
         }
 
         File.WriteAllBytes(Path.Combine(_dataDir, "tasks.json"), buffer.ToArray());
@@ -170,6 +179,7 @@ public sealed class StartupSequenceTests : IDisposable
         var signalledMessage = Assert.Single(signalled);
         Assert.Contains("garage", signalledMessage);
         Assert.False(Directory.Exists(SnapshotsDir));
+        AssertNothingWasWritten("manifest.json");
     }
 
     [Fact]
@@ -201,11 +211,7 @@ public sealed class StartupSequenceTests : IDisposable
         Assert.Equal(ManifestCodec.CurrentVersion, ex.CurrentVersion);
         Assert.Contains((ManifestCodec.CurrentVersion + 1).ToString(), ex.Message);
         Assert.False(Directory.Exists(SnapshotsDir));
-        // The refusal must write nothing: the data directory holds only what it held before
-        // RunAsync was ever called (just the manifest this test wrote above). A wider listing,
-        // not just an absence check on the two files a prior lane's seed happened to write,
-        // catches the next file some future lane adds on this path.
-        Assert.Equal(["manifest.json"], Directory.GetFiles(_dataDir).Select(Path.GetFileName).Cast<string>().ToArray());
+        AssertNothingWasWritten("manifest.json");
     }
 
     [Fact]
@@ -228,26 +234,10 @@ public sealed class StartupSequenceTests : IDisposable
         Assert.Equal(-1, ManifestCodec.Read(File.ReadAllText(ManifestPath)));
     }
 
-    /// <summary>
-    /// I2 (review): a cycle in the migration list must refuse promptly rather than spin the walk
-    /// forever — an infinite hang at startup instead of an exception is strictly worse than either.
-    /// </summary>
-    [Fact]
-    public async Task A_migration_cycle_refuses_to_start_instead_of_hanging()
-    {
-        WriteManifest(1);
-        IReadOnlyList<StoreMigration> migrations =
-        [
-            new StoreMigration(1, 2, (_, _) => Task.CompletedTask),
-            new StoreMigration(2, 1, (_, _) => Task.CompletedTask),
-        ];
-        var sut = NewSequence(migrations: migrations);
-
-        // If the monotonicity guard is missing this call does not return at all — Assert.ThrowsAsync
-        // still awaits it directly (no timeout), which is an accepted risk here: the guard being
-        // tested for is exactly what stands between this and a genuine hang.
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.MigrateAsync(CancellationToken.None));
-    }
+    // The migration-cycle case that used to live here is gone, not lost: per ADR-0009 a
+    // non-monotonic step cannot be constructed at all, so this test can no longer build its own
+    // fixture. It is now StoreMigrationTests, where a property of one step belongs — driving a
+    // whole StartupSequence to prove it was always coverage at the wrong level.
 
     /// <summary>
     /// I2 (review): a walk that would land past `CurrentVersion` must refuse rather than write a
@@ -267,6 +257,7 @@ public sealed class StartupSequenceTests : IDisposable
 
         Assert.Equal(ManifestCodec.CurrentVersion + 1, ex.StoredVersion);
         Assert.Equal(ManifestCodec.CurrentVersion, ManifestCodec.Read(File.ReadAllText(ManifestPath)));
+        AssertNothingWasWritten("manifest.json");
     }
 
     /// <summary>

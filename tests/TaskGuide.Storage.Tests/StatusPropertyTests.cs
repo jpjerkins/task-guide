@@ -35,7 +35,7 @@ public sealed class StatusPropertyTests
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            TaskCodec.Write(writer, [task], new Dictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+            TaskCodec.Write(writer, [task]);
         }
 
         buffer.Position = 0;
@@ -55,7 +55,7 @@ public sealed class StatusPropertyTests
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            DayTemplateCodec.Write(writer, [template], new Dictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>>());
+            DayTemplateCodec.Write(writer, [template]);
         }
 
         buffer.Position = 0;

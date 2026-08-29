@@ -38,6 +38,21 @@ public sealed class DayShapeReaderTests
     }
 
     [Fact]
+    public void A_Pattern_naming_an_absent_Day_template_throws_naming_the_template_the_Pattern_and_the_date()
+    {
+        var monday = new DateOnly(2026, 8, 31);
+        var store = Store(
+            dayTemplates: [],
+            patterns: PatternBook("p_active", sunday: new DayTemplateId("dt_sunday"), monday: new DayTemplateId("dt_monday")));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new DayShapeReader(store).For(monday));
+
+        Assert.Contains("dt_monday", ex.Message);
+        Assert.Contains("p_active", ex.Message);
+        Assert.Contains("2026-08-31", ex.Message);
+    }
+
+    [Fact]
     public void A_date_with_an_Override_takes_the_Overrides_Windows_and_reads_IsOverridden()
     {
         var monday = new DateOnly(2026, 8, 31);

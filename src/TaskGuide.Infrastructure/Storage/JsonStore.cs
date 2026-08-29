@@ -41,55 +41,45 @@ public sealed class JsonStore : IStore
     /// </summary>
     private static StoreView Load(string dataDir)
     {
-        var (tasks, taskExtras) = File.Exists(Path.Combine(dataDir, "tasks.json"))
+        IReadOnlyList<TaskItem> tasks = File.Exists(Path.Combine(dataDir, "tasks.json"))
             ? TaskCodec.Read(File.ReadAllText(Path.Combine(dataDir, "tasks.json")))
-            : ((IReadOnlyList<TaskItem>)[], EmptyExtras<TaskId>());
+            : [];
 
-        var (dayTemplates, dayTemplateExtras) = File.Exists(Path.Combine(dataDir, "day-templates.json"))
+        IReadOnlyList<DayTemplate> dayTemplates = File.Exists(Path.Combine(dataDir, "day-templates.json"))
             ? DayTemplateCodec.Read(File.ReadAllText(Path.Combine(dataDir, "day-templates.json")))
-            : ((IReadOnlyList<DayTemplate>)[], EmptyExtras<DayTemplateId>());
+            : [];
 
-        PatternBook patterns;
-        IReadOnlyDictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>> patternExtras;
-        IReadOnlyList<KeyValuePair<string, JsonElement>> patternEnvelopeExtras;
         var patternsPath = Path.Combine(dataDir, "patterns.json");
-        if (File.Exists(patternsPath))
-        {
-            (patterns, patternExtras, patternEnvelopeExtras) = PatternCodec.Read(File.ReadAllText(patternsPath));
-        }
-        else
-        {
-            patterns = new PatternBook(default, []);
-            patternExtras = EmptyExtras<PatternId>();
-            patternEnvelopeExtras = [];
-        }
+        var patterns = File.Exists(patternsPath)
+            ? PatternCodec.Read(File.ReadAllText(patternsPath))
+            : new PatternBook(default, []);
 
-        var (overrides, overrideExtras) = File.Exists(Path.Combine(dataDir, "overrides.json"))
+        IReadOnlyList<DateOverride> overrides = File.Exists(Path.Combine(dataDir, "overrides.json"))
             ? OverrideCodec.Read(File.ReadAllText(Path.Combine(dataDir, "overrides.json")))
-            : ((IReadOnlyList<DateOverride>)[], EmptyExtras<DateOnly>());
+            : [];
 
-        var (events, eventExtras) = File.Exists(Path.Combine(dataDir, "events.json"))
+        IReadOnlyList<Event> events = File.Exists(Path.Combine(dataDir, "events.json"))
             ? EventCodec.Read(File.ReadAllText(Path.Combine(dataDir, "events.json")))
-            : ((IReadOnlyList<Event>)[], EmptyExtras<EventId>());
+            : [];
 
         var eventExceptionsPath = Path.Combine(dataDir, "event-exceptions.json");
         IReadOnlyList<EventException> eventExceptions = File.Exists(eventExceptionsPath)
             ? EventCodec.ReadExceptions(File.ReadAllText(eventExceptionsPath))
             : [];
 
-        var (completionLogs, completionExtras, derivedCompletions, derivedExtras) = LoadCompletions(dataDir);
-        var (fires, fireExtras) = LoadFires(dataDir);
+        var (completionLogs, derivedCompletions) = LoadCompletions(dataDir);
+        var fires = LoadFires(dataDir);
 
         return new StoreView(
-            tasks, taskExtras,
-            dayTemplates, dayTemplateExtras,
-            patterns, patternExtras, patternEnvelopeExtras,
-            overrides, overrideExtras,
-            events, eventExtras,
+            tasks,
+            dayTemplates,
+            patterns,
+            overrides,
+            events,
             eventExceptions,
-            completionLogs, completionExtras,
-            derivedCompletions, derivedExtras,
-            fires, fireExtras);
+            completionLogs,
+            derivedCompletions,
+            fires);
     }
 
     /// <summary>
@@ -99,25 +89,20 @@ public sealed class JsonStore : IStore
     /// </summary>
     private static (
         IReadOnlyDictionary<TaskId, CompletionLog> Logs,
-        IReadOnlyDictionary<TaskId, IReadOnlyDictionary<int, IReadOnlyList<KeyValuePair<string, JsonElement>>>> Extras,
-        IReadOnlyList<DerivedCompletionEntry> Derived,
-        IReadOnlyDictionary<DerivedCompletionKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> DerivedExtras)
+        IReadOnlyList<DerivedCompletionEntry> Derived)
         LoadCompletions(string dataDir)
     {
         var completionsDir = Path.Combine(dataDir, "completions");
 
         var logs = new Dictionary<TaskId, CompletionLog>();
-        var extras = new Dictionary<TaskId, IReadOnlyDictionary<int, IReadOnlyList<KeyValuePair<string, JsonElement>>>>();
         IReadOnlyList<DerivedCompletionEntry> derived = [];
-        IReadOnlyDictionary<DerivedCompletionKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> derivedExtras =
-            EmptyExtras<DerivedCompletionKey>();
 
         if (Directory.Exists(completionsDir))
         {
             var derivedPath = Path.Combine(completionsDir, "derived.json");
             if (File.Exists(derivedPath))
             {
-                (derived, derivedExtras) = CompletionCodec.ReadDerived(File.ReadAllText(derivedPath));
+                derived = CompletionCodec.ReadDerived(File.ReadAllText(derivedPath));
             }
 
             foreach (var path in Directory.EnumerateFiles(completionsDir, "*.json"))
@@ -125,25 +110,19 @@ public sealed class JsonStore : IStore
                 if (Path.GetFileName(path) == "derived.json") continue;
 
                 var taskId = new TaskId(Path.GetFileNameWithoutExtension(path));
-                var (log, logExtras) = CompletionCodec.Read(taskId, File.ReadAllText(path));
-                logs[taskId] = log;
-                extras[taskId] = logExtras;
+                logs[taskId] = CompletionCodec.Read(taskId, File.ReadAllText(path));
             }
         }
 
-        return (logs, extras, derived, derivedExtras);
+        return (logs, derived);
     }
 
     /// <summary>`fires/&lt;date&gt;.json` — one file per day; the date comes from the filename.</summary>
-    private static (
-        IReadOnlyDictionary<DateOnly, DayFires> Fires,
-        IReadOnlyDictionary<DateOnly, IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>> Extras)
-        LoadFires(string dataDir)
+    private static IReadOnlyDictionary<DateOnly, DayFires> LoadFires(string dataDir)
     {
         var firesDir = Path.Combine(dataDir, "fires");
 
         var fires = new Dictionary<DateOnly, DayFires>();
-        var extras = new Dictionary<DateOnly, IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>>();
 
         if (Directory.Exists(firesDir))
         {
@@ -152,18 +131,12 @@ public sealed class JsonStore : IStore
                 var date = FireCodec.DateFromFileName(Path.GetFileName(path));
                 if (date is null) continue;
 
-                var (dayFires, fireExtras) = FireCodec.Read(date.Value, File.ReadAllText(path));
-                fires[date.Value] = dayFires;
-                extras[date.Value] = fireExtras;
+                fires[date.Value] = FireCodec.Read(date.Value, File.ReadAllText(path));
             }
         }
 
-        return (fires, extras);
+        return fires;
     }
-
-    private static IReadOnlyDictionary<TKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> EmptyExtras<TKey>()
-        where TKey : notnull
-        => new Dictionary<TKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
 
     /// <summary>Not a copy — the current immutable view, swapped by reference on every successful mutation.</summary>
     public IStoreView Read() => _current;
@@ -203,23 +176,14 @@ public sealed class JsonStore : IStore
             // write in the list is applied — never all at once, so a write list that only
             // touches some collections leaves the rest exactly as they were.
             var tasks = view.Tasks;
-            var taskExtras = view.TaskExtras;
             var dayTemplates = view.DayTemplates;
-            var dayTemplateExtras = view.DayTemplateExtras;
             var patterns = view.Patterns;
-            var patternExtras = view.PatternExtras;
-            var patternEnvelopeExtras = view.PatternEnvelopeExtras;
             var overrides = view.Overrides;
-            var overrideExtras = view.OverrideExtras;
             var events = view.Events;
-            var eventExtras = view.EventExtras;
             var eventExceptions = view.EventExceptions;
             var completionLogs = view.CompletionLogs;
-            var completionExtras = view.CompletionExtras;
             var derivedCompletions = view.DerivedCompletions;
-            var derivedCompletionExtras = view.DerivedCompletionExtras;
             var fires = view.Fires;
-            var fireExtras = view.FireExtras;
 
             // Whether any file was actually opened for writing this call. LastWriteSucceeded
             // documents the outcome of the most recent *actual disk write* — an unrecognised
@@ -242,7 +206,7 @@ public sealed class JsonStore : IStore
                             // concurrent reader already holds. Every write below makes the same
                             // copy for the same reason.
                             tasks = w.Tasks.ToArray();
-                            await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks, taskExtras), cancellationToken);
+                            await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks), cancellationToken);
                             break;
 
                         case DayTemplatesWrite w:
@@ -250,7 +214,7 @@ public sealed class JsonStore : IStore
                             dayTemplates = w.Templates.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "day-templates.json"),
-                                writer => DayTemplateCodec.Write(writer, dayTemplates, dayTemplateExtras),
+                                writer => DayTemplateCodec.Write(writer, dayTemplates),
                                 cancellationToken);
                             break;
 
@@ -259,7 +223,7 @@ public sealed class JsonStore : IStore
                             patterns = w.Book with { Patterns = w.Book.Patterns.ToArray() };
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "patterns.json"),
-                                writer => PatternCodec.Write(writer, patterns, patternExtras, patternEnvelopeExtras),
+                                writer => PatternCodec.Write(writer, patterns),
                                 cancellationToken);
                             break;
 
@@ -268,7 +232,7 @@ public sealed class JsonStore : IStore
                             overrides = w.Overrides.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "overrides.json"),
-                                writer => OverrideCodec.Write(writer, overrides, overrideExtras),
+                                writer => OverrideCodec.Write(writer, overrides),
                                 cancellationToken);
                             break;
 
@@ -277,7 +241,7 @@ public sealed class JsonStore : IStore
                             events = w.Events.ToArray();
                             await WriteAtomicAsync(
                                 Path.Combine(_dataDir, "events.json"),
-                                writer => EventCodec.Write(writer, events, eventExtras),
+                                writer => EventCodec.Write(writer, events),
                                 cancellationToken);
                             break;
 
@@ -299,10 +263,9 @@ public sealed class JsonStore : IStore
 
                                 var completionsDir = Path.Combine(_dataDir, "completions");
                                 Directory.CreateDirectory(completionsDir);
-                                var logExtras = completionExtras.TryGetValue(log.TaskId, out var extra) ? extra : EmptyExtras<int>();
                                 await WriteAtomicAsync(
                                     Path.Combine(completionsDir, CompletionCodec.FileNameFor(log.TaskId)),
-                                    writer => CompletionCodec.Write(writer, log, logExtras),
+                                    writer => CompletionCodec.Write(writer, log),
                                     cancellationToken);
                             }
                             break;
@@ -315,7 +278,7 @@ public sealed class JsonStore : IStore
                                 Directory.CreateDirectory(completionsDir);
                                 await WriteAtomicAsync(
                                     Path.Combine(completionsDir, "derived.json"),
-                                    writer => CompletionCodec.WriteDerived(writer, derivedCompletions, derivedCompletionExtras),
+                                    writer => CompletionCodec.WriteDerived(writer, derivedCompletions),
                                     cancellationToken);
                             }
                             break;
@@ -329,10 +292,9 @@ public sealed class JsonStore : IStore
 
                                 var firesDir = Path.Combine(_dataDir, "fires");
                                 Directory.CreateDirectory(firesDir);
-                                var fireExtrasForDate = fireExtras.TryGetValue(dayFires.Date, out var extra) ? extra : EmptyExtras<FireKey>();
                                 await WriteAtomicAsync(
                                     Path.Combine(firesDir, FireCodec.FileNameFor(dayFires.Date)),
-                                    writer => FireCodec.Write(writer, dayFires, fireExtrasForDate),
+                                    writer => FireCodec.Write(writer, dayFires),
                                     cancellationToken);
                             }
                             break;
@@ -361,15 +323,15 @@ public sealed class JsonStore : IStore
             }
 
             _current = new StoreView(
-                tasks, taskExtras,
-                dayTemplates, dayTemplateExtras,
-                patterns, patternExtras, patternEnvelopeExtras,
-                overrides, overrideExtras,
-                events, eventExtras,
+                tasks,
+                dayTemplates,
+                patterns,
+                overrides,
+                events,
                 eventExceptions,
-                completionLogs, completionExtras,
-                derivedCompletions, derivedCompletionExtras,
-                fires, fireExtras);
+                completionLogs,
+                derivedCompletions,
+                fires);
 
             // Symmetric with the failure path above: an empty OrderedWrites list attempted no
             // real disk write, so LastWriteSucceeded must stay exactly as an unwritten store
@@ -428,71 +390,35 @@ public sealed class JsonStore : IStore
 
 internal sealed class StoreView(
     IReadOnlyList<TaskItem> tasks,
-    IReadOnlyDictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>> taskExtras,
     IReadOnlyList<DayTemplate> dayTemplates,
-    IReadOnlyDictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>> dayTemplateExtras,
     PatternBook patterns,
-    IReadOnlyDictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>> patternExtras,
-    IReadOnlyList<KeyValuePair<string, JsonElement>> patternEnvelopeExtras,
     IReadOnlyList<DateOverride> overrides,
-    IReadOnlyDictionary<DateOnly, IReadOnlyList<KeyValuePair<string, JsonElement>>> overrideExtras,
     IReadOnlyList<Event> events,
-    IReadOnlyDictionary<EventId, IReadOnlyList<KeyValuePair<string, JsonElement>>> eventExtras,
     IReadOnlyList<EventException> eventExceptions,
     IReadOnlyDictionary<TaskId, CompletionLog> completionLogs,
-    IReadOnlyDictionary<TaskId, IReadOnlyDictionary<int, IReadOnlyList<KeyValuePair<string, JsonElement>>>> completionExtras,
     IReadOnlyList<DerivedCompletionEntry> derivedCompletions,
-    IReadOnlyDictionary<DerivedCompletionKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> derivedCompletionExtras,
-    IReadOnlyDictionary<DateOnly, DayFires> fires,
-    IReadOnlyDictionary<DateOnly, IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>> fireExtras)
+    IReadOnlyDictionary<DateOnly, DayFires> fires)
     : IStoreView
 {
     public IReadOnlyList<TaskItem> Tasks { get; } = tasks;
 
-    /// <summary>Unknown top-level properties per Task, carried untouched across a load-and-save round trip.</summary>
-    internal IReadOnlyDictionary<TaskId, IReadOnlyList<KeyValuePair<string, JsonElement>>> TaskExtras { get; } = taskExtras;
-
     public IReadOnlyList<DayTemplate> DayTemplates { get; } = dayTemplates;
-
-    /// <summary>Unknown top-level properties per Day template, carried untouched across a load-and-save round trip.</summary>
-    internal IReadOnlyDictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>> DayTemplateExtras { get; } = dayTemplateExtras;
 
     public PatternBook Patterns { get; } = patterns;
 
-    /// <summary>Unknown top-level properties per Pattern, carried untouched across a load-and-save round trip.</summary>
-    internal IReadOnlyDictionary<PatternId, IReadOnlyList<KeyValuePair<string, JsonElement>>> PatternExtras { get; } = patternExtras;
-
-    /// <summary>Unknown properties on the `patterns.json` envelope itself — a channel of its own, not copied onto a Pattern.</summary>
-    internal IReadOnlyList<KeyValuePair<string, JsonElement>> PatternEnvelopeExtras { get; } = patternEnvelopeExtras;
-
     public IReadOnlyList<DateOverride> Overrides { get; } = overrides;
 
-    /// <summary>Unknown top-level properties per Override date, carried untouched across a load-and-save round trip.</summary>
-    internal IReadOnlyDictionary<DateOnly, IReadOnlyList<KeyValuePair<string, JsonElement>>> OverrideExtras { get; } = overrideExtras;
-
     public IReadOnlyList<Event> Events { get; } = events;
-
-    /// <summary>Unknown top-level properties per Event, carried untouched across a load-and-save round trip.</summary>
-    internal IReadOnlyDictionary<EventId, IReadOnlyList<KeyValuePair<string, JsonElement>>> EventExtras { get; } = eventExtras;
 
     public IReadOnlyList<EventException> EventExceptions { get; } = eventExceptions;
 
     /// <summary>Every per-Task completion log that has a file, keyed by TaskId — the filename's inverse (<see cref="CompletionCodec.FileNameFor"/>).</summary>
     internal IReadOnlyDictionary<TaskId, CompletionLog> CompletionLogs { get; } = completionLogs;
 
-    /// <summary>Unknown properties per completion entry, keyed by entry index, per Task.</summary>
-    internal IReadOnlyDictionary<TaskId, IReadOnlyDictionary<int, IReadOnlyList<KeyValuePair<string, JsonElement>>>> CompletionExtras { get; } = completionExtras;
-
     public IReadOnlyList<DerivedCompletionEntry> DerivedCompletions { get; } = derivedCompletions;
-
-    /// <summary>Unknown properties per derived-completion entry, keyed on (ruleId, triggerId, due).</summary>
-    internal IReadOnlyDictionary<DerivedCompletionKey, IReadOnlyList<KeyValuePair<string, JsonElement>>> DerivedCompletionExtras { get; } = derivedCompletionExtras;
 
     /// <summary>Every day's Fire record that has a file, keyed by date — the filename's inverse (<see cref="FireCodec.FileNameFor"/>).</summary>
     internal IReadOnlyDictionary<DateOnly, DayFires> Fires { get; } = fires;
-
-    /// <summary>Unknown properties per Fire row, keyed on (windowId, kind), per date.</summary>
-    internal IReadOnlyDictionary<DateOnly, IReadOnlyDictionary<FireKey, IReadOnlyList<KeyValuePair<string, JsonElement>>>> FireExtras { get; } = fireExtras;
 
     /// <summary>An absent log reads as the empty log, never null and never a throw.</summary>
     public CompletionLog CompletionsFor(TaskId task) =>

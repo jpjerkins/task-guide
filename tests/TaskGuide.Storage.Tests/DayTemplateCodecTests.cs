@@ -30,10 +30,10 @@ public sealed class DayTemplateCodecTests
         return directory?.FullName ?? throw new InvalidOperationException("Could not find repo root (task-guide.slnx) above " + AppContext.BaseDirectory);
     }
 
-    private static string RoundTrip(IReadOnlyList<DayTemplate> templates, IReadOnlyDictionary<DayTemplateId, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    private static string RoundTrip(IReadOnlyList<DayTemplate> templates)
     {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) DayTemplateCodec.Write(writer, templates, extras);
+        using (var writer = new Utf8JsonWriter(buffer)) DayTemplateCodec.Write(writer, templates);
         buffer.Position = 0;
         using var reader = new StreamReader(buffer);
         return reader.ReadToEnd();
@@ -44,9 +44,9 @@ public sealed class DayTemplateCodecTests
     {
         var original = FixtureJson("day-templates.json");
 
-        var (templates, extras) = DayTemplateCodec.Read(original);
+        var templates = DayTemplateCodec.Read(original);
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer)) DayTemplateCodec.Write(writer, templates, extras);
+        using (var writer = new Utf8JsonWriter(buffer)) DayTemplateCodec.Write(writer, templates);
 
         buffer.Position = 0;
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(buffer)));
@@ -55,8 +55,8 @@ public sealed class DayTemplateCodecTests
     [Fact]
     public void A_window_s_start_and_end_round_trip_as_authored_clock_times_never_as_instants()
     {
-        var (templates, extras) = DayTemplateCodec.Read(FixtureJson("day-templates.json"));
-        var written = RoundTrip(templates, extras);
+        var templates = DayTemplateCodec.Read(FixtureJson("day-templates.json"));
+        var written = RoundTrip(templates);
 
         using var document = JsonDocument.Parse(written);
         var firstWindow = document.RootElement[0].GetProperty("windows")[0];
@@ -68,7 +68,7 @@ public sealed class DayTemplateCodecTests
     [Fact]
     public void An_event_prototype_s_absence_notice_offset_round_trips_and_a_null_one_stays_null()
     {
-        var (templates, extras) = DayTemplateCodec.Read(FixtureJson("day-templates.json"));
+        var templates = DayTemplateCodec.Read(FixtureJson("day-templates.json"));
 
         var volleyballTuesday = Assert.Single(templates, t => t.Id == new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G01"));
         var karate = Assert.Single(volleyballTuesday.EventPrototypes);
@@ -87,8 +87,8 @@ public sealed class DayTemplateCodecTests
             .ToList();
 
         // Push both the non-null and the null AbsenceNotice through Write and back.
-        var written = RoundTrip(withExtra, extras);
-        var (roundTripped, _) = DayTemplateCodec.Read(written);
+        var written = RoundTrip(withExtra);
+        var roundTripped = DayTemplateCodec.Read(written);
 
         var roundTrippedVolleyballTuesday = Assert.Single(roundTripped, t => t.Id == new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G01"));
         var roundTrippedKarate = Assert.Single(roundTrippedVolleyballTuesday.EventPrototypes);
@@ -97,22 +97,5 @@ public sealed class DayTemplateCodecTests
         var extraTemplate = Assert.Single(roundTripped, t => t.Id == new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5G03"));
         var roundTrippedPrototype = Assert.Single(extraTemplate.EventPrototypes);
         Assert.Null(roundTrippedPrototype.AbsenceNotice);
-    }
-
-    [Fact]
-    public void An_unknown_field_on_a_day_template_survives_a_load_and_save_round_trip()
-    {
-        const string json = """
-            [
-              { "id": "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "name": "Ordinary weekday",
-                "windows": [], "eventPrototypes": [], "futureField": "keep me" }
-            ]
-            """;
-
-        var (templates, extras) = DayTemplateCodec.Read(json);
-        var written = RoundTrip(templates, extras);
-
-        using var document = JsonDocument.Parse(written);
-        Assert.Equal("keep me", document.RootElement[0].GetProperty("futureField").GetString());
     }
 }

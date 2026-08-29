@@ -162,7 +162,7 @@ public sealed class JsonStoreTests : IDisposable
 
         await store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, newTask])]), CancellationToken.None);
 
-        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json"))).Tasks;
+        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
         Assert.Single(onDisk);
         Assert.Equal("Water the plants", onDisk[0].Title);
         Assert.Single(store.Read().Tasks);
@@ -216,7 +216,7 @@ public sealed class JsonStoreTests : IDisposable
         await Task.WhenAll(mutations);
 
         Assert.Equal(20, store.Read().Tasks.Count);
-        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json"))).Tasks;
+        var onDisk = TaskCodec.Read(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")));
         Assert.Equal(20, onDisk.Count);
         Assert.Equal(20, onDisk.Select(t => t.Id).Distinct().Count());
     }
@@ -286,45 +286,17 @@ public sealed class JsonStoreTests : IDisposable
         // TaskItem exposes no Status setter at all (#47) — there is no field to round-trip.
         Assert.DoesNotContain("\"status\"", FixtureTasksJson);
 
-        var (tasks, extras) = TaskCodec.Read(FixtureTasksJson);
+        var tasks = TaskCodec.Read(FixtureTasksJson);
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            TaskCodec.Write(writer, tasks, extras);
+            TaskCodec.Write(writer, tasks);
         }
 
         buffer.Position = 0;
         var roundTripped = JsonNode.Parse(buffer);
         var original = JsonNode.Parse(FixtureTasksJson);
         Assert.True(JsonNode.DeepEquals(original, roundTripped));
-    }
-
-    [Fact]
-    public async Task An_unknown_field_written_by_a_newer_binary_survives_a_load_and_save_round_trip()
-    {
-        SeedTasksJson("""
-            [
-              { "id": "t_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-                "title": "From the future",
-                "notes": null,
-                "dimensions": {},
-                "looseTags": [],
-                "deadline": null,
-                "defer": null,
-                "postpone": null,
-                "recurrence": null,
-                "createdAt": "2026-08-15T14:02:11Z",
-                "priority": "urgent" }
-            ]
-            """);
-
-        var store = new JsonStore(_dataDir);
-
-        // A no-op mutation: write the exact Tasks list back out unchanged.
-        await store.MutateAsync(view => new StoreMutation([new TasksWrite(view.Tasks)]), CancellationToken.None);
-
-        var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")))!.AsArray();
-        Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
     }
 
     [Fact]

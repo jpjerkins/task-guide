@@ -11,22 +11,13 @@ namespace TaskGuide.Infrastructure.Storage;
 /// and the optional <see cref="DayTemplateUse"/> use record carries the template name exactly as
 /// it was captured, not resolved by looking the id up in `day-templates.json`.
 /// </summary>
-/// <remarks>
-/// A property this binary does not know about is preserved verbatim on every field it did not
-/// touch, keyed per date — the same convention `TaskCodec` and `DayTemplateCodec` use.
-/// </remarks>
 public static class OverrideCodec
 {
-    private static readonly string[] KnownFields = ["date", "used", "windows"];
-
-    public static (IReadOnlyList<DateOverride> Overrides,
-        IReadOnlyDictionary<DateOnly, IReadOnlyList<KeyValuePair<string, JsonElement>>> Extras)
-        Read(string json)
+    public static IReadOnlyList<DateOverride> Read(string json)
     {
         using var document = JsonDocument.Parse(json);
 
         var overrides = new List<DateOverride>();
-        var extras = new Dictionary<DateOnly, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
@@ -37,12 +28,9 @@ public static class OverrideCodec
                 .ToList();
 
             overrides.Add(new DateOverride(date, windows, ReadUsedOrNull(element.GetProperty("used"))));
-
-            var extra = CodecPrimitives.UnknownFields(element, KnownFields);
-            if (extra.Count > 0) extras[date] = extra;
         }
 
-        return (overrides, extras);
+        return overrides;
     }
 
     private static DayTemplateUse? ReadUsedOrNull(JsonElement element) =>
@@ -52,10 +40,7 @@ public static class OverrideCodec
                 new DayTemplateId(element.GetProperty("templateId").GetString()!),
                 element.GetProperty("templateName").GetString()!);
 
-    public static void Write(
-        Utf8JsonWriter writer,
-        IReadOnlyList<DateOverride> overrides,
-        IReadOnlyDictionary<DateOnly, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    public static void Write(Utf8JsonWriter writer, IReadOnlyList<DateOverride> overrides)
     {
         writer.WriteStartArray();
 
@@ -70,8 +55,6 @@ public static class OverrideCodec
             writer.WriteStartArray();
             foreach (var window in dateOverride.Windows) CodecPrimitives.WriteWindow(writer, window);
             writer.WriteEndArray();
-
-            if (extras.TryGetValue(dateOverride.Date, out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
 
             writer.WriteEndObject();
         }

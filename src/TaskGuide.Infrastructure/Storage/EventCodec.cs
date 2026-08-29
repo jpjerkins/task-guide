@@ -9,25 +9,19 @@ namespace TaskGuide.Infrastructure.Storage;
 /// the golden store fixture (`tests/TaskGuide.Storage.Tests/fixtures/data/README.md`).
 /// </summary>
 /// <remarks>
-/// An unknown field is preserved verbatim, keyed per Event id — the same convention `TaskCodec`,
-/// `DayTemplateCodec` and `OverrideCodec` use. Event exceptions carry no such extras: an exception
-/// is a small, fully-known row (`CONTEXT.md`, "Event exception") keyed by (date, prototypeId), and
-/// a <c>deleted: false</c> row with all three of name/start/end null is rejected at read — that
-/// shape is meaningless (neither a delete nor an edit).
+/// Per ADR-0001, an unknown field is dropped, not preserved — on either <c>events.json</c> or
+/// <c>event-exceptions.json</c>. An exception is a small, fully-known row (`CONTEXT.md`, "Event
+/// exception") keyed by (date, prototypeId), and a <c>deleted: false</c> row with all three of
+/// name/start/end null is rejected at read — that shape is meaningless (neither a delete nor an
+/// edit).
 /// </remarks>
 public static class EventCodec
 {
-    private static readonly string[] KnownEventFields =
-        ["id", "date", "name", "start", "end", "dimensions", "looseTags", "absenceNotice"];
-
-    public static (IReadOnlyList<Event> Events,
-        IReadOnlyDictionary<EventId, IReadOnlyList<KeyValuePair<string, JsonElement>>> Extras)
-        Read(string json)
+    public static IReadOnlyList<Event> Read(string json)
     {
         using var document = JsonDocument.Parse(json);
 
         var events = new List<Event>();
-        var extras = new Dictionary<EventId, IReadOnlyList<KeyValuePair<string, JsonElement>>>();
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
@@ -41,18 +35,12 @@ public static class EventCodec
                 CodecPrimitives.ReadClockTime(element.GetProperty("end")),
                 CodecPrimitives.ReadTagSet(element),
                 CodecPrimitives.ReadOffsetOrNull(element, "absenceNotice")));
-
-            var extra = CodecPrimitives.UnknownFields(element, KnownEventFields);
-            if (extra.Count > 0) extras[id] = extra;
         }
 
-        return (events, extras);
+        return events;
     }
 
-    public static void Write(
-        Utf8JsonWriter writer,
-        IReadOnlyList<Event> events,
-        IReadOnlyDictionary<EventId, IReadOnlyList<KeyValuePair<string, JsonElement>>> extras)
+    public static void Write(Utf8JsonWriter writer, IReadOnlyList<Event> events)
     {
         writer.WriteStartArray();
 
@@ -67,8 +55,6 @@ public static class EventCodec
             CodecPrimitives.WriteClockTime(writer, "end", @event.End);
             CodecPrimitives.WriteTagSet(writer, @event.Tags);
             CodecPrimitives.WriteOffsetOrNull(writer, "absenceNotice", @event.AbsenceNotice);
-
-            if (extras.TryGetValue(@event.Id, out var extra)) CodecPrimitives.WriteUnknownFields(writer, extra);
 
             writer.WriteEndObject();
         }
@@ -102,7 +88,21 @@ public static class EventCodec
             exceptions.Add(new EventException(date, prototypeId, deleted, name, start, end));
         }
 
+        RejectDuplicateKeys(exceptions);
+
         return exceptions;
+    }
+
+    private static void RejectDuplicateKeys(IReadOnlyList<EventException> exceptions)
+    {
+        var duplicate = exceptions
+            .GroupBy(e => (e.Date, e.PrototypeId))
+            .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicate is null) return;
+
+        throw new JsonException(
+            $"Event exception has duplicate key (date, prototypeId)=({duplicate.Key.Date:yyyy-MM-dd}, {duplicate.Key.PrototypeId.Value}).");
     }
 
     public static void WriteExceptions(Utf8JsonWriter writer, IReadOnlyList<EventException> exceptions)

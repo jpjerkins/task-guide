@@ -271,9 +271,10 @@ public sealed class StartupSequence(
     /// walk finds, both cheap because a well-formed N→N+1 list already satisfies them and neither
     /// reintroduces the "can't fake the constant" problem:
     /// <list type="bullet">
-    /// <item>Each step must move the cursor <em>strictly forward</em> (<c>step.To &gt; cursor</c>).
-    /// Without this, a cycle in <paramref name="migrations"/> (or the constructor's fake list)
-    /// spins this loop forever — an infinite hang at startup, not an exception.</item>
+    /// <item>Each step moves the cursor <em>strictly forward</em>. This is not checked here: it is
+    /// an invariant of <see cref="StoreMigration"/>, enforced at construction per ADR-0009, so the
+    /// cycle that would spin this loop forever cannot be built — not in production, and not in a
+    /// test's fake list either.</item>
     /// <item>The walk's landing version must not exceed <see cref="ManifestCodec.CurrentVersion"/>.
     /// Without this, a walk that outruns what this binary can run writes a `manifest.json` this
     /// very binary would refuse to start on next boot with <see cref="StoreVersionAheadException"/>
@@ -301,13 +302,10 @@ public sealed class StartupSequence(
         var cursor = version;
         while (migrations.FirstOrDefault(m => m.From == cursor) is { } step)
         {
-            if (step.To <= cursor)
-            {
-                throw new InvalidOperationException(
-                    $"Migration step {step.From}→{step.To} does not move the version strictly forward; " +
-                    "a non-monotonic step would let the walk cycle and hang startup.");
-            }
-
+            // No monotonicity check here: `step.To > step.From` is an invariant of StoreMigration,
+            // enforced at construction (ADR-0009), and the walk selects on `m.From == cursor`, so
+            // `step.To > cursor` holds for every step this loop can ever see. The cycle that would
+            // hang this loop cannot be built.
             pending.Add(step);
             cursor = step.To;
         }
