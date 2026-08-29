@@ -300,34 +300,6 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task An_unknown_field_written_by_a_newer_binary_survives_a_load_and_save_round_trip()
-    {
-        SeedTasksJson("""
-            [
-              { "id": "t_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-                "title": "From the future",
-                "notes": null,
-                "dimensions": {},
-                "looseTags": [],
-                "deadline": null,
-                "defer": null,
-                "postpone": null,
-                "recurrence": null,
-                "createdAt": "2026-08-15T14:02:11Z",
-                "priority": "urgent" }
-            ]
-            """);
-
-        var store = new JsonStore(_dataDir);
-
-        // A no-op mutation: write the exact Tasks list back out unchanged.
-        await store.MutateAsync(view => new StoreMutation([new TasksWrite(view.Tasks)]), CancellationToken.None);
-
-        var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "tasks.json")))!.AsArray();
-        Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
-    }
-
-    [Fact]
     public void AddJsonStore_loads_eagerly_a_corrupt_tasks_json_fails_at_registration_not_first_use()
     {
         SeedTasksJson("{ not valid json");

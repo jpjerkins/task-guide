@@ -98,21 +98,4 @@ public sealed class DayTemplateCodecTests
         var roundTrippedPrototype = Assert.Single(extraTemplate.EventPrototypes);
         Assert.Null(roundTrippedPrototype.AbsenceNotice);
     }
-
-    [Fact]
-    public void An_unknown_field_on_a_day_template_survives_a_load_and_save_round_trip()
-    {
-        const string json = """
-            [
-              { "id": "dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "name": "Ordinary weekday",
-                "windows": [], "eventPrototypes": [], "futureField": "keep me" }
-            ]
-            """;
-
-        var (templates, extras) = DayTemplateCodec.Read(json);
-        var written = RoundTrip(templates, extras);
-
-        using var document = JsonDocument.Parse(written);
-        Assert.Equal("keep me", document.RootElement[0].GetProperty("futureField").GetString());
-    }
 }

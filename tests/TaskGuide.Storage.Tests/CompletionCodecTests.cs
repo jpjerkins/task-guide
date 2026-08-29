@@ -153,50 +153,6 @@ public sealed class CompletionCodecTests
     }
 
     [Fact]
-    public void An_unknown_field_on_a_completion_log_entry_survives_a_load_and_save_round_trip()
-    {
-        // A log entry has no id and `due` is null for a one-off Task, so the extras channel is
-        // keyed on the entry's index. Only the second entry carries the field, which pins that
-        // the index is respected rather than every entry being handed the same extras.
-        const string json = """
-            [
-              { "due": "2026-08-11", "done": "2026-08-11T22:45:03Z" },
-              { "due": null, "done": "2026-08-12T22:45:03Z", "futureField": "keep me" }
-            ]
-            """;
-
-        var (log, extras) = CompletionCodec.Read(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB3"), json);
-        var written = RoundTrip(log, extras);
-
-        using var document = JsonDocument.Parse(written);
-        Assert.False(document.RootElement[0].TryGetProperty("futureField", out _),
-            "The unknown field belongs to the second entry, not the first.");
-        Assert.Equal("keep me", document.RootElement[1].GetProperty("futureField").GetString());
-    }
-
-    [Fact]
-    public void An_unknown_field_on_a_derived_completion_entry_survives_a_load_and_save_round_trip()
-    {
-        // Keyed on (ruleId, triggerId, due) — the two rows below share a ruleId and differ only
-        // in triggerId, so the field must follow its own row.
-        const string json = """
-            [
-              { "ruleId": "absence", "triggerId": "evt_01ARZ3NDEKTSV4RRFFQ69G5M00",
-                "due": "2026-09-27", "done": "2026-09-20T14:02:00Z" },
-              { "ruleId": "absence", "triggerId": "evt_01ARZ3NDEKTSV4RRFFQ69G5M01",
-                "due": "2026-09-27", "done": "2026-09-21T14:02:00Z", "futureField": "keep me" }
-            ]
-            """;
-
-        var written = RoundTripDerived(json);
-
-        using var document = JsonDocument.Parse(written);
-        Assert.False(document.RootElement[0].TryGetProperty("futureField", out _),
-            "The unknown field belongs to the second derived entry, not the first.");
-        Assert.Equal("keep me", document.RootElement[1].GetProperty("futureField").GetString());
-    }
-
-    [Fact]
     public void CompletionCodec_writes_no_status_property()
     {
         var written = RoundTrip(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0"), FixtureJson("t_01ARZ3NDEKTSV4RRFFQ69G5FB0.json"));

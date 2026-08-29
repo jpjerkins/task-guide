@@ -218,32 +218,6 @@ public sealed class FireCodecTests
     }
 
     [Fact]
-    public void An_unknown_field_on_a_fire_row_survives_a_load_and_save_round_trip()
-    {
-        // Two rows differing only in kind: the extras channel is keyed on (windowId, kind), the
-        // same pair the duplicate guard enforces, so the field must land back on its own row.
-        const string json = """
-            [
-              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "window",
-                "windowName": "Evening prep", "windowStart": "17:30", "windowEnd": "18:00",
-                "dueAt": null, "firedAt": "2026-08-15T22:45:03Z", "matched": 4, "carried": null },
-              { "windowId": "w_01ARZ3NDEKTSV4RRFFQ69G5H02", "kind": "snooze",
-                "windowName": null, "windowStart": null, "windowEnd": null,
-                "dueAt": "2026-08-15T23:07:00Z", "firedAt": null, "matched": null, "carried": null,
-                "futureField": "keep me" }
-            ]
-            """;
-
-        var (fires, extras) = FireCodec.Read(new DateOnly(2026, 8, 15), json);
-        var written = RoundTrip(fires, extras);
-
-        using var document = JsonDocument.Parse(written);
-        Assert.False(document.RootElement[0].TryGetProperty("futureField", out _),
-            "The unknown field belongs to the snooze row, not the window row.");
-        Assert.Equal("keep me", document.RootElement[1].GetProperty("futureField").GetString());
-    }
-
-    [Fact]
     public void FireCodec_writes_no_status_property()
     {
         var written = RoundTrip(new DateOnly(2026, 8, 15), FixtureJson("2026-08-15.json"));

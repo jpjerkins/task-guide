@@ -267,30 +267,6 @@ public sealed class WholeStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task An_unknown_field_on_a_non_Tasks_collection_survives_a_load_mutate_and_save_round_trip()
-    {
-        // overrides.json, not tasks.json — Global Constraint 11 ("extras carry through every
-        // write") has a net for Tasks (JsonStoreTests) but nothing was pinning it for any other
-        // collection until this test.
-        File.WriteAllText(Path.Combine(_dataDir, "overrides.json"), """
-            [
-              { "date": "2026-08-15",
-                "used": null,
-                "windows": [],
-                "priority": "urgent" }
-            ]
-            """);
-
-        var store = new JsonStore(_dataDir);
-
-        // A no-op mutation: write the exact Overrides list back out unchanged.
-        await store.MutateAsync(view => new StoreMutation([new OverridesWrite(view.Overrides)]), CancellationToken.None);
-
-        var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
-        Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
-    }
-
-    [Fact]
     public async Task An_unknown_field_written_by_a_newer_binary_is_not_preserved()
     {
         // ADR-0001, "Rollback is lossy, and that is accepted": the unknown-field preservation
