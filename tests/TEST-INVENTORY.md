@@ -356,8 +356,25 @@ Against `fixtures/data`, the golden store.
 - an Event's `absenceNotice` round-trips, and a null one stays null
 - no codec writes a `status` property, whatever type it would carry — `EventCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
+- a store already at `CurrentVersion` runs no migration step and takes no snapshot
+- a version ahead of this binary refuses to start, named — a rollback must not silently
+  down-migrate
+- `manifest.json` is written only after every migration step succeeds
+- a migration cycle refuses to start instead of hanging
+- a migration walk that would overshoot `CurrentVersion` refuses to start
+- startup against a fresh `/data` creates `manifest.json` without snapshotting
+- the registry sweep makes no `MutateAsync` call when nothing moved
+- the registry sweep promotes a loose Tag the registry now claims, and writes the change
+- the registry sweep promotes a loose Tag on a Day template Window
+- an empty `/data` starts and the active Pattern resolves without throwing
+- a fresh `/data` seeds one vanilla weekly Pattern of a single plain Day template
+- the default Pattern seed takes no snapshot
+- a store that already has a Pattern is never reseeded
+- `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
+- a Snapshot is a whole-file copy, not a re-serialisation
+- a Snapshot recreates the relative directory structure of the paths it is given
 - an Event-plus-Override write puts the **Event first**
 - a crash between the two leaves the state the overlap check detects, and the next read re-offers
   the prompt
@@ -384,6 +401,7 @@ Against `fixtures/data`, the golden store.
 - a fire file exactly 30 days old is kept (the boundary must not drift)
 - a file in `fires/` whose name is not a date is left untouched
 - the sweep on an absent `fires/` directory is a no-op, not an error
+- a per-file delete failure is recorded and the sweep keeps going
 - a fire row carries the Window's name and span **as they were**
 - `(date, null, "fallback")` is unique per day
 - a completion log is not rewritten when its Task's title changes
