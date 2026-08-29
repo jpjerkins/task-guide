@@ -422,6 +422,16 @@ Against `fixtures/data`, the golden store.
 - a missing collection file loads as empty rather than throwing — a fresh `/data` is valid
 - a corrupt collection file fails at registration, not first use, for a collection other than
   `tasks.json`
+- a date with no Override takes the active Pattern's template for its weekday
+- a date with an Override takes the Override's Windows and reads `IsOverridden`
+- an Override with zero Windows is a shape, not an absence — `IsOverridden` is true and the Pattern's Windows do not leak through
+- a dated Event on the date appears in the shape
+- a recurring instance from the weekday's Event prototype appears in the shape
+- a deleted instance's Event exception drops it
+- an edited instance's Event exception replaces its name and span, leaving the prototype untouched
+- an Event exception for a different prototype on the same date changes nothing
+- reading a day's shape writes nothing — no Override is materialised and `MutateAsync` is never called
+- a recurring instance's Event id is the same on two reads of the same date
 
 ---
 
