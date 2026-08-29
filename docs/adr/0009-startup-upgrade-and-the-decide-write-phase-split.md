@@ -45,6 +45,13 @@ reintroduces it.
 - **A snapshot is taken only when a migration or a registry sweep is actually about to write,** and it
   copies `manifest.json` along with the collection files. A restored set without its version stamp hands
   already-migrated data to a binary that migrates it again.
+- **The registry sweep runs after the migration, never before.** The order is snapshot → migrate →
+  sweep, and only the first two are conditional. The sweep promotes loose Tags the registry now
+  claims, so a step that adds or renames a Dimension value changes what it is sweeping *for*;
+  sweeping first promotes against a registry the data has not reached yet. This is intent rather than
+  full effect today — `JsonStore`'s read view is loaded at construction, so the sweep still sees
+  pre-migration data, and closing that needs a store-reload API
+  ([#53](https://github.com/jpjerkins/task-guide/issues/53)).
 
 ### The decide/write phase split
 
@@ -77,6 +84,8 @@ two calls cannot change it. That is the reachability argument this rule asks to 
 - **Do not write `manifest.json` per step.** Partial walks are not resumable; the whole walk is the unit.
 - **Do not add a down-migration.** The rollback path is snapshot restoration, and it is deliberate that
   there is only one.
+- **Do not move the registry sweep above `MigrateAsync`.** Nothing in the suite fails if you do — the
+  sweep's own no-op guard hides it — which is exactly why the order is written here.
 
 ## Consequences
 
