@@ -383,6 +383,7 @@ Against `fixtures/data`, the golden store.
 - a write of one collection leaves every other collection in the swapped-in view unchanged
 - an unrecognised write payload before any write leaves `LastWriteSucceeded` untouched
 - an unrecognised write payload after a successful write sets `LastWriteSucceeded` false
+- an empty write list leaves `LastWriteSucceeded` untouched — no write is not a false success
 - an unknown field on a non-Tasks collection survives a load, mutate and save round trip
 - an Override's copy **preserves each Window's id**
 - a date materialised mid-day does not re-fire an already-fired Window

@@ -370,7 +370,14 @@ public sealed class JsonStore : IStore
                 completionLogs, completionExtras,
                 derivedCompletions, derivedCompletionExtras,
                 fires, fireExtras);
-            Interlocked.Exchange(ref _lastWriteOutcome, WriteSucceeded);
+
+            // Symmetric with the failure path above: an empty OrderedWrites list attempted no
+            // real disk write, so LastWriteSucceeded must stay exactly as an unwritten store
+            // leaves it — untouched, not a false "succeeded".
+            if (attemptedWrite)
+            {
+                Interlocked.Exchange(ref _lastWriteOutcome, WriteSucceeded);
+            }
         }
         finally
         {

@@ -97,32 +97,22 @@ public sealed class DayTemplateLifecycleTests
     }
 
     /// <summary>
-    /// `tests/TEST-INVENTORY.md`: "deleting an `Unused` template corrupts no record". An
-    /// `Unused` template is reachable from nothing — no Pattern names it, and every Override
-    /// holds a copy — so removing it from the caller's template list leaves every Override's
-    /// Windows byte-identical.
+    /// The `Unused` half of "deleting an `Unused` template corrupts no record"
+    /// (`tests/TEST-INVENTORY.md`) — the "corrupts no record" half is rebuilt in
+    /// `StoreMutationRulesTests` against the real store (routed there by #52's final triage): a
+    /// delete has nothing to assert against here, since an Override holds a copy rather than a
+    /// reference and this test's own array is not a record.
     /// </summary>
     [Fact]
-    public void Deleting_an_Unused_template_corrupts_no_record()
+    public void An_Unused_template_is_reachable_from_no_Pattern_and_no_recent_stamp()
     {
-        var templates = new List<DayTemplateId> { Volleyball, Workday };
         var unrelatedStamp = Stamp(Today.AddMonths(-1), Workday, "Workday");
         var oneOff = OneOffDay(Today.AddDays(3));
         var overrides = new[] { unrelatedStamp, oneOff };
-        var windowsBefore = overrides.Select(o => o.Windows).ToList();
 
         var unused = DayTemplateLifecycle.IsUnused(Volleyball, [], overrides, Today);
+
         Assert.True(unused);
-
-        // "Deleting" is dropping the id from the caller's templates list — there is no store
-        // mutation to call, since an Override holds a copy rather than a reference to it.
-        templates.Remove(Volleyball);
-
-        Assert.DoesNotContain(Volleyball, templates);
-        for (var i = 0; i < overrides.Length; i++)
-        {
-            Assert.Equal(windowsBefore[i], overrides[i].Windows);
-        }
     }
 
     /// <summary>Beyond-inventory: a one-date span yields exactly that date.</summary>
