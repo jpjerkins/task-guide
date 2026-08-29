@@ -13,8 +13,9 @@ ubiquitous language lives in `CONTEXT.md` (start at `CONTEXT-INDEX.md`).
 | [0005](0005-firing-engine.md) | One ~30 s tick of predicates; no timers, no catch-up | the tick loop, Fire records, notifications |
 | [0006](0006-controls-survive-their-own-input-events.md) | Never remount a control in its own input handler | any date, time, select or slider control |
 | [0007](0007-status-is-derived-and-gates-null-duration.md) | Status derived; the gate is what handles null Duration | Task shape, matching, anything reading Duration |
+| [0008](0008-empty-store-guarantee.md) | An empty store must start; the default Pattern's content is not a contract | the startup seed, first-run behaviour, tests over a fresh store |
 
-## Three lines that recur across all seven
+## Three lines that recur across all eight
 
 - **Facts stored, everything else derived.** Status, Opportunities, Orphan-ness and `Unused` are
   computed on read and never persisted.
