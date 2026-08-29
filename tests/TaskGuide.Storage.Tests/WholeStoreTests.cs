@@ -289,4 +289,32 @@ public sealed class WholeStoreTests : IDisposable
         var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
         Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
     }
+
+    [Fact]
+    public async Task An_unknown_field_written_by_a_newer_binary_is_not_preserved()
+    {
+        // ADR-0001, "Rollback is lossy, and that is accepted": the unknown-field preservation
+        // channel was removed everywhere. A field a newer binary wrote and an older one cannot
+        // name must be dropped, not carried through a load/mutate/save round trip — this is what
+        // stops someone re-adding the channel (ADR-0001, "Do not re-add an unknown-field
+        // preservation channel").
+        File.WriteAllText(Path.Combine(_dataDir, "overrides.json"), """
+            [
+              { "date": "2026-08-15",
+                "used": null,
+                "windows": [],
+                "priority": "urgent",
+                "fromTheFuture": "should not survive" }
+            ]
+            """);
+
+        var store = new JsonStore(_dataDir);
+
+        // A no-op mutation: write the exact Overrides list back out unchanged.
+        await store.MutateAsync(view => new StoreMutation([new OverridesWrite(view.Overrides)]), CancellationToken.None);
+
+        var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
+        Assert.Equal("urgent", onDisk[0]!["priority"]!.GetValue<string>());
+        Assert.Null(onDisk[0]!["fromTheFuture"]);
+    }
 }
