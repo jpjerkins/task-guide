@@ -1,7 +1,8 @@
 # ADR-0001 — The store is memory-authoritative, mirrored to whole JSON files
 
 **Status:** Accepted · **Source:** [#23](https://github.com/jpjerkins/task-guide/issues/23), amended by [#47](https://github.com/jpjerkins/task-guide/issues/47),
-[#52](https://github.com/jpjerkins/task-guide/issues/52) and [#58](https://github.com/jpjerkins/task-guide/issues/58) · **Proven in production** 2026-08-26
+[#52](https://github.com/jpjerkins/task-guide/issues/52), [#58](https://github.com/jpjerkins/task-guide/issues/58) and
+[#59](https://github.com/jpjerkins/task-guide/issues/59) · **Proven in production** 2026-08-26
 
 ## Context
 
@@ -19,6 +20,8 @@ mutation updates memory and writes the affected file(s) before the request retur
 
 - **One global write lock.** A read never blocks on a write and never sees a torn view.
 - **Atomic whole-file replace** — write to a temp file, `fsync`, rename. Never an in-place edit.
+  **The guarantee stops at one file**: a mutation that writes several is not atomic as a whole. See
+  *Atomic is per file, and that is the whole guarantee*.
 - **One file per collection**, not per instance and not per date.
 - **Type-prefixed ULIDs** — `w_01ARZ3NDEKTSV4RRFFQ69G5FAV`. Lexicographic order is chronological
   order; the prefix makes a stray id self-describing in the audit trail.
@@ -54,6 +57,44 @@ mutation updates memory and writes the affected file(s) before the request retur
 | Authored clock times | `"17:30"` | Window and Event Start/End |
 | Calendar dates | `"2026-08-15"` | Override/Event date, Deadline, Defer, Postpone, completion `due` |
 | Recorded instants | `"2026-08-15T22:45:03Z"` | `CreatedAt`, `firedAt`, `dueAt`, completion `done` |
+
+### Atomic is per file, and that is the whole guarantee
+
+_Amended 2026-08-29 ([#59](https://github.com/jpjerkins/task-guide/issues/59) — "Amend ADR-0001 for
+the scope of atomic whole-file replace"), via map [#54](https://github.com/jpjerkins/task-guide/issues/54)._
+
+"Atomic whole-file replace" is a claim about **one** file. `MutateAsync` takes a list of writes and
+applies them in order, each a temp-file–`fsync`–rename on its own; nothing spans them. A crash, or an
+IO failure, between two writes in one list leaves a mutation half on disk.
+
+**Multi-file atomicity is ruled out, not deferred.** Nothing short of genuinely atomic multi-file
+writes prevents the half-written mutation, and that realistically means one file for the whole store
+— trading away the layout this ADR chose (one file per collection, restorable by someone with `cp`)
+to defend a case a single-user, single-writer store meets rarely. Rejected on cost.
+
+Three things stand in its place:
+
+- **Write the record whose survival makes the inconsistency detectable, first.** For
+  Event-plus-Override that is the Event: a crash after it lands leaves exactly the condition the
+  overlap check looks for, so the next read re-offers the prompt and the store heals itself. This is
+  why `StoreMutation.OrderedWrites` is an ordered list and not a set — the order is the mitigation.
+- **No conscious abort may follow a write** ([ADR-0009](0009-startup-upgrade-and-the-decide-write-phase-split.md)).
+  The half that is under our control is that *we* never stop a sequence half-written. The disk is not
+  under our control, and this ADR does not pretend otherwise.
+- **`fsync` before the rename**, so the file that lands is whole even when the process does not
+  survive the write, and the rename is atomic on the same filesystem. **The containing directory is
+  not fsynced** — .NET exposes no portable API for it — so a host crash between the rename and the
+  directory entry reaching stable storage could in theory lose the rename. Accepted for the walking
+  skeleton; the caveat is written where the discipline lives, and
+  [#64](https://github.com/jpjerkins/task-guide/issues/64) makes that one place rather than two.
+
+**Consequence: after a partial write, memory and disk disagree until restart.** A write that throws
+part-way leaves the earlier files on disk, sets `LastWriteSucceeded` false — which Liveness
+*observes* rather than probes ([#25](https://github.com/jpjerkins/task-guide/issues/25)) — and
+**does not swap the read view**. The process goes on serving the pre-mutation state while disk holds
+part of the new one. That is the deliberate choice: the alternative is publishing a view assembled
+from writes that did not all land. The divergence resolves on restart, which reloads from disk, and
+the health signal is how you learn to restart.
 
 ### Rollback is lossy, and that is accepted
 
@@ -105,6 +146,9 @@ which loses nothing.
   hand or via `[JsonExtensionData]`. It was removed for being all cost and no value, and it is worth
   less on each re-add than it looks. Enforced by test, not by prose — prose forbade the index-keyed
   completion channel and the code kept it anyway.
+- **Do not append a write to a mutation list without deciding where in the list it goes.** The order
+  is the mitigation for the half-written mutation; a write added at the end because that was the
+  easy place to add it silently picks a failure mode.
 - **Do not store a derived value.** `status` was removed from `tasks.json`, not migrated, because
   nothing read it back. Opportunities, Orphan-ness and `Unused` are likewise never persisted.
 - **Do not partition Overrides or Events by date.** Fires are partitioned because the day is the
@@ -114,8 +158,15 @@ which loses nothing.
 `BadStoreFileException` as the single catchable failure type — is
 [ADR-0010](0010-store-read-contract.md), not this ADR.
 
+**The startup upgrade model** — forward only, no down-migrations, `manifest.json` written once at the
+end, a version ahead refusing to start, and a fresh `/data` bootstrapping *without* taking a snapshot
+(there is nothing yet for one to protect) — is
+[ADR-0009](0009-startup-upgrade-and-the-decide-write-phase-split.md), not this ADR.
+
 ## Consequences
 
+- **A mutation is atomic per file, never across files.** Order the writes so that a crash between
+  them leaves a detectable inconsistency, and let the next read heal it.
 - **A restore requires the service stopped.** Files restored under a running service are invisible
   to memory, then destroyed by the next mutation. This is a documented failure mode
   ([#49](https://github.com/jpjerkins/task-guide/issues/49)), not a bug to fix.
