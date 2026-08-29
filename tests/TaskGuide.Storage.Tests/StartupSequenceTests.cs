@@ -201,6 +201,11 @@ public sealed class StartupSequenceTests : IDisposable
         Assert.Equal(ManifestCodec.CurrentVersion, ex.CurrentVersion);
         Assert.Contains((ManifestCodec.CurrentVersion + 1).ToString(), ex.Message);
         Assert.False(Directory.Exists(SnapshotsDir));
+        // The refusal must write nothing: the data directory holds only what it held before
+        // RunAsync was ever called (just the manifest this test wrote above). A wider listing,
+        // not just an absence check on the two files a prior lane's seed happened to write,
+        // catches the next file some future lane adds on this path.
+        Assert.Equal(["manifest.json"], Directory.GetFiles(_dataDir).Select(Path.GetFileName).Cast<string>().ToArray());
     }
 
     [Fact]

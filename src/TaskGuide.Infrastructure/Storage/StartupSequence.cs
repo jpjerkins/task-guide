@@ -221,14 +221,16 @@ public sealed class StartupSequence(
             throw;
         }
 
-        // Runs before the snapshot decision and is never folded into `willWrite` below: the
-        // default-Pattern seed takes no snapshot (ruled — an empty store has nothing for a
-        // snapshot to protect, same reasoning as the fresh-manifest bootstrap in MigrateAsync).
-        await SeedDefaultPatternAsync(cancellationToken);
-
-        // Reading version-ahead here, before any snapshot decision, is what makes that refusal
-        // write nothing: PlanMigration throws before SnapshotAsync is ever considered.
+        // Reading version-ahead here, before the seed or any snapshot decision, is what makes
+        // that refusal write nothing: PlanMigration throws before the seed or SnapshotAsync is
+        // ever considered.
         var (storedVersion, pendingMigrations) = PlanMigration();
+
+        // Runs after the version-ahead refusal but still before the snapshot decision, and is
+        // never folded into `willWrite` below: the default-Pattern seed takes no snapshot
+        // (ruled — an empty store has nothing for a snapshot to protect, same reasoning as the
+        // fresh-manifest bootstrap in MigrateAsync).
+        await SeedDefaultPatternAsync(cancellationToken);
 
         // Only a gate for "should this startup snapshot at all" — it has to run before anything
         // else does, so it can only see what is on disk right now. It is deliberately not reused
