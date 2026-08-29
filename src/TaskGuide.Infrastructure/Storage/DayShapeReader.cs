@@ -11,8 +11,12 @@ public sealed class DayShapeReader(IStore store) : IDayShapeReader
     public DayShape For(DateOnly date)
     {
         var view = _store.Read();
-        var templateId = view.Patterns.Active[date.DayOfWeek];
-        var template = view.DayTemplates.Single(t => t.Id == templateId);
+        var active = view.Patterns.Active;
+        var templateId = active[date.DayOfWeek];
+        var template = view.DayTemplates.SingleOrDefault(t => t.Id == templateId)
+            ?? throw new InvalidOperationException(
+                $"Day template {templateId.Value} does not match any Day template in the store, " +
+                $"but Pattern {active.Id.Value} names it for {date.DayOfWeek} ({date:yyyy-MM-dd}).");
         var dateOverride = view.Overrides.SingleOrDefault(o => o.Date == date);
         var windows = dateOverride?.Windows;
         windows ??= template.Windows;

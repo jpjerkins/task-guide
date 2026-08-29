@@ -28,5 +28,7 @@ public sealed record Pattern(PatternId Id, string Name, IReadOnlyList<DayTemplat
 /// </summary>
 public sealed record PatternBook(PatternId ActivePatternId, IReadOnlyList<Pattern> Patterns)
 {
-    public Pattern Active => Patterns.Single(p => p.Id == ActivePatternId);
+    public Pattern Active => Patterns.SingleOrDefault(p => p.Id == ActivePatternId)
+        ?? throw new InvalidOperationException(
+            $"Active Pattern {ActivePatternId.Value} does not match any Pattern in the store.");
 }
