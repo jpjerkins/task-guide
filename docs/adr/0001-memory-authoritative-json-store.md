@@ -99,6 +99,10 @@ which is what "most schema changes need no migration" rests on.
 - **Do not partition Overrides or Events by date.** Fires are partitioned because the day is the
   unit you *delete*; Overrides and Events are kept indefinitely and read by *range*.
 
+**What a read guarantees its caller** — duplicate keys rejected at read, the two arms of absence, and
+`BadStoreFileException` as the single catchable failure type — is
+[ADR-0010](0010-store-read-contract.md), not this ADR.
+
 ## Consequences
 
 - **A restore requires the service stopped.** Files restored under a running service are invisible
