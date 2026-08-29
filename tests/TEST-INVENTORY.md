@@ -344,6 +344,8 @@ Against `fixtures/data`, the golden store.
 - `patterns.json` round-trips the golden store unchanged
 - a Pattern's seven days are indexed by weekday with Sunday first
 - a Pattern book whose `days` array is not seven long is rejected at read, naming the Pattern
+- an active Pattern id matching no Pattern throws, naming the id — a dangling reference is not
+  absence (ADR-0010b)
 - no codec writes a `status` property, whatever type it would carry — `PatternCodec`
 - `overrides.json` round-trips the golden store unchanged
 - a one-off day round-trips with a null `used`
@@ -353,6 +355,8 @@ Against `fixtures/data`, the golden store.
 - an Event's loose Tags survive the round trip, and are what a derived-obligation rule reads
 - `event-exceptions.json` round-trips both the delete row and the edit row
 - an Event exception that is neither a delete nor an edit is rejected at read, naming its date
+- two Event exceptions sharing `(date, prototypeId)` are rejected at read, naming both — otherwise
+  that date becomes permanently unreadable (ADR-0010a)
 - an Event's `absenceNotice` round-trips, and a null one stays null
 - no codec writes a `status` property, whatever type it would carry — `EventCodec`
 - `manifest.json` version mismatch runs the ordered N→N+1 steps at startup
@@ -415,6 +419,8 @@ Against `fixtures/data`, the golden store.
 - each completion log round-trips the golden store unchanged
 - a one-off Task's entry round-trips a null `due`
 - `completions/derived.json` round-trips, keyed on `ruleId` + `triggerId` + `due`
+- two derived completions sharing `(ruleId, triggerId, due)` are rejected at read, naming all three
+  (ADR-0010a)
 - the Task id comes from the filename, so a log file carries no id of its own
 - no codec writes a `status` property, whatever type it would carry — `CompletionCodec`
 - `fires/2026-08-15.json` round-trips the golden store unchanged
@@ -448,6 +454,8 @@ Against `fixtures/data`, the golden store.
 - a corrupt collection file fails at registration, not first use, for a collection other than
   `tasks.json`
 - a date with no Override takes the active Pattern's template for its weekday
+- a Pattern naming an absent Day template throws, naming the template, the Pattern and the date
+  (ADR-0010b)
 - a date with an Override takes the Override's Windows and reads `IsOverridden`
 - an Override with zero Windows is a shape, not an absence — `IsOverridden` is true and the Pattern's Windows do not leak through
 - a dated Event on the date appears in the shape
