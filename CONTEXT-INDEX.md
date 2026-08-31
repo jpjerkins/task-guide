@@ -5,7 +5,7 @@ subagent's window before it writes a line, so **read the entries your task actua
 range:
 
 ```sh
-sed -n '885,1023p' CONTEXT.md    # the Firing entry
+sed -n '894,1032p' CONTEXT.md    # the Firing entry
 ```
 
 **Decisions** — the things you would otherwise violate — live in [`docs/adr/`](docs/adr/README.md).
@@ -32,7 +32,7 @@ Read those first; they are short. This file points at the *vocabulary*.
 
 ## Every entry, by line range
 
-### Glossary — `45–1700`
+### Glossary — `45–1709`
 
 | Entry | Lines | Size |
 |---|---|---|
@@ -43,42 +43,42 @@ Read those first; they are short. This file points at the *vocabulary*.
 | **Postpone** | `205–262` | 4.1 KB |
 | **Offset** | `263–280` | 1.0 KB |
 | **Recurrence** | `281–338` | 3.1 KB |
-| **Dimension** | `339–473` | 8.2 KB |
-| **Tag** | `474–555` | 5.5 KB |
-| **Drift** | `556–588` | 2.0 KB |
-| **Availability Window** | `589–634` | 2.8 KB |
-| **Day template** | `635–685` | 3.2 KB |
-| **Pattern** | `686–711` | 1.7 KB |
-| **Override** | `712–779` | 5.1 KB |
-| **Event** | `780–832` | 3.7 KB |
-| **Event exception** | `833–863` | 1.8 KB |
-| **Day boundary** | `864–884` | 1.3 KB |
-| **Firing** | `885–1023` | 7.9 KB |
-| **Liveness** | `1024–1098` | 4.8 KB |
-| **Backup** | `1099–1183` | 5.3 KB |
-| **Fire record** | `1184–1232` | 2.9 KB |
-| **Notification** | `1233–1309` | 4.4 KB |
-| **Receipt** | `1310–1358` | 3.1 KB |
-| **Glance** | `1359–1435` | 4.4 KB |
-| **Snooze** | `1436–1565` | 7.6 KB |
-| **Matching rule** | `1566–1577` | 0.7 KB |
-| **Derived-obligation rule** | `1578–1691` | 6.1 KB |
-| **Rules generally** | `1692–1700` | 0.5 KB |
+| **Dimension** | `339–482` | 9.0 KB |
+| **Tag** | `483–564` | 5.5 KB |
+| **Drift** | `565–597` | 2.0 KB |
+| **Availability Window** | `598–643` | 2.8 KB |
+| **Day template** | `644–694` | 3.2 KB |
+| **Pattern** | `695–720` | 1.7 KB |
+| **Override** | `721–788` | 5.1 KB |
+| **Event** | `789–841` | 3.7 KB |
+| **Event exception** | `842–872` | 1.8 KB |
+| **Day boundary** | `873–893` | 1.3 KB |
+| **Firing** | `894–1032` | 7.9 KB |
+| **Liveness** | `1033–1107` | 4.8 KB |
+| **Backup** | `1108–1192` | 5.3 KB |
+| **Fire record** | `1193–1241` | 2.9 KB |
+| **Notification** | `1242–1318` | 4.4 KB |
+| **Receipt** | `1319–1367` | 3.1 KB |
+| **Glance** | `1368–1444` | 4.4 KB |
+| **Snooze** | `1445–1574` | 7.6 KB |
+| **Matching rule** | `1575–1586` | 0.7 KB |
+| **Derived-obligation rule** | `1587–1700` | 6.1 KB |
+| **Rules generally** | `1701–1709` | 0.5 KB |
 
-### Ranking — `1701–1861`
-
-| Entry | Lines | Size |
-|---|---|---|
-| **Urgency band** | `1714–1738` | 1.3 KB |
-| **Duration as tiebreak** | `1739–1750` | 0.6 KB |
-| **Opportunities** | `1751–1759` | 0.5 KB |
-| **Scarcity** | `1760–1861` | 7.0 KB |
-
-### Capture — `1862–1958`
+### Ranking — `1710–1870`
 
 | Entry | Lines | Size |
 |---|---|---|
-| **Application bootstrap** | `1959–1967` | 0.7 KB |
+| **Urgency band** | `1723–1747` | 1.3 KB |
+| **Duration as tiebreak** | `1748–1759` | 0.6 KB |
+| **Opportunities** | `1760–1768` | 0.5 KB |
+| **Scarcity** | `1769–1870` | 7.0 KB |
+
+### Capture — `1871–1967`
+
+| Entry | Lines | Size |
+|---|---|---|
+| **Application bootstrap** | `1968–1976` | 0.7 KB |
 
 ---
 

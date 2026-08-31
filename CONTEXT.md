@@ -366,14 +366,23 @@ actually carries a Weather Tag — no weather-tagged Tasks, no API call.
 
 **Unknown or unavailable weather resolves differently depending on who's watching:**
 
-- **Headless** (an unattended engine tick, a background Scarcity computation) — unknown is treated as
-  the **empty set**, the same rule absence already follows for every categorical Dimension. Fails
-  closed, silently — consistent with *no Reminder ⟺ nothing fit*.
+- **Headless** (an unattended engine tick) — unknown is treated as the **empty set**, the same rule
+  absence already follows for every categorical Dimension. Fails closed, silently — consistent with
+  *no Reminder ⟺ nothing fit*.
 - **UI-visible** (a firing, or the landing page) — same fail-closed match behavior, plus a **footer
   note** naming the failure ("Weather unavailable"), so a missed weather-gated Task is visible rather
   than silently dropped. The footer rule is **generic, not weather-specific**: any fetched Dimension
   whose check failed gets named in the footer, so a second fetched Dimension (air quality, say) needs
   no new UI. Failure visibility rides the **existing** footer — no standalone health-check surface.
+
+**Counting is not matching, and fails the other way.** The two cases above govern whether a Task
+**fits** — membership in a shortlist. Where a fetched value is instead an input to **Opportunities**
+(and so to **Scarcity**), a failed fetch yields an **unknown** count, never a zero: zero is the
+*floor* of the ranking key, so failing closed there would put every affected Task at the top of its
+urgency band for as long as the outage lasts. An unknown count sorts **last within its band**, the
+Task stays in the shortlist matching already admitted it to, and the failure is named in the footer
+by the rule above. **Ranking orders the matched set; it never removes from it** — membership belongs
+to matching alone, which is what keeps *no Reminder ⟺ nothing fit* checkable in one place.
 
 No new top-level domain concept was needed: "live external condition" collapses entirely into the
 existing Dimension/Tag machinery once the Window side is allowed to be fetched instead of authored or
