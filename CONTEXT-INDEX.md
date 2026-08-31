@@ -24,7 +24,7 @@ Read those first; they are short. This file points at the *vocabulary*.
 | **Duration snapping** | Dimension, Tag, Task | 0007 |
 | **The tick loop** | Firing, Fire record, Day boundary, Snooze, Liveness | 0005 |
 | **Notifications / Pushover** | Notification, Receipt, Snooze, Firing, Glance | 0005 |
-| **Storage + startup** | Task, Override, Event exception, Fire record, Backup, Dimension | 0001, 0008, 0009, 0010 |
+| **Storage + startup** | Application bootstrap, Task, Override, Event exception, Fire record, Backup, Dimension | 0001, 0008, 0009, 0010 |
 | **Schedule authoring** | Availability Window, Day template, Pattern, Override, Event, Event exception | — |
 | **Derived obligations** | Derived-obligation rule, Offset, Event, Rules generally | — |
 | **Any UI surface** | Glance, Status, Drift + the SPA README | 0006, 0002 |
@@ -74,7 +74,11 @@ Read those first; they are short. This file points at the *vocabulary*.
 | **Opportunities** | `1751–1759` | 0.5 KB |
 | **Scarcity** | `1760–1861` | 7.0 KB |
 
-### Capture — `1862–end`
+### Capture — `1862–1958`
+
+| Entry | Lines | Size |
+|---|---|---|
+| **Application bootstrap** | `1959–1967` | 0.7 KB |
 
 ---
 

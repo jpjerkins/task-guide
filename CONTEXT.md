@@ -1955,3 +1955,13 @@ the Task earlier. An exact bucket value snaps to itself.
 
 Any inline triage ("one unprocessed Task + five Duration buttons") lives on the **landing page** the
 notification opens, not in the notification itself. See **Notification**.
+
+### Application bootstrap
+
+The **application bootstrap** is the one pre-serving phase that validates and upgrades the
+on-disk store. Its **planner** performs every conscious refusal and returns an immutable startup
+plan without writing; its **writer** applies only that plan and makes no conscious refusal. It
+completes before the running Store can serve reads, before HTTP endpoints can serve, and before
+the tick loop starts. An empty store is made readable there; a future-version store refuses there
+without exposing a running application. Upgrades are forward-only; rollback restores the
+pre-upgrade snapshot before deploying the older binary.
