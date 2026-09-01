@@ -1,4 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- The onion's core. No I/O, no framework references, no package references.
-       Everything here is a record or a pure function. -->
+  <!-- The onion's core. No I/O, no framework references, and no dependency that gives this project
+       a reason to change for a cause outside the domain (ADR-0011). Everything here is a record or
+       a pure function.
+
+       OneOf is admitted under that rule: a type-level library with no runtime behaviour of its own.
+       Closed sets are `[GenerateOneOf] partial class X : OneOfBase<...>`; compare them with
+       .Equals, never ==. -->
 </Project>

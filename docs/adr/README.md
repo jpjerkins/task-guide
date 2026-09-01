@@ -16,6 +16,7 @@ ubiquitous language lives in `CONTEXT.md` (start at `CONTEXT-INDEX.md`).
 | [0008](0008-empty-store-guarantee.md) | An empty store must start; the default Pattern's content is not a contract | the startup seed, first-run behaviour, tests over a fresh store |
 | [0009](0009-startup-upgrade-and-the-decide-write-phase-split.md) | Forward-only startup upgrades; every conscious refusal is raised before the first write | `StartupSequence`, migration steps, snapshots, anything that refuses at startup |
 | [0010](0010-store-read-contract.md) | Duplicate keys rejected at read; two arms of absence; one catchable failure type | any codec, store loading, day-shape or Pattern reads |
+| [0011](0011-nullable-strictness-and-union-representation.md) | Nullable strict repo-wide; closed sets are `OneOf` unions; compare them with `.Equals` | any closed set, any switch over one, any new Domain dependency |
 
 ## Three lines that recur across all ten
 
