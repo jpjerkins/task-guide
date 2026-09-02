@@ -1021,9 +1021,10 @@ This is **at-least-once**, chosen to protect the biconditional. If a transient n
 silently eat a Reminder, `no Reminder ⟺ nothing fit` quietly becomes `no Reminder ⟺ nothing fit OR
 the wifi hiccuped`, and silence stops being information — the same argument that rejected a daily cap.
 
-**This rule is a Reminder's, not a notification's.** A **Receipt** is deliberately fire-and-forget —
-see its entry. It carries no guarantee for a retry to protect, and a Receipt arriving an hour late is
-noise about a Task the user has stopped thinking about.
+**This rule is a Reminder's, not a notification's.** A **Receipt** retries only inside the moment of
+capture — three attempts, seconds apart, never across ticks — see its entry. It carries no guarantee
+for at-least-once to protect, and a Receipt arriving an hour later is noise about a Task the user has
+stopped thinking about.
 
 Accepted risk: if Pushover accepts a message but the response is lost, one duplicate push follows.
 Rare, and far cheaper than a silent loss. Recording on *attempt* (at-most-once) would make duplicates
@@ -1335,7 +1336,7 @@ Check all the brakes · 30m           ← the Task's Title verbatim, then its Du
 | Priority | **always `0`** | The buzz *is* the confirmation. A Receipt is never downgraded by us |
 | `ttl` | **24 hours from sending** | See below |
 | Sound | a distinct, deliberately quieter sound | |
-| Delivery | **fire-and-forget** — one attempt, failure logged, never retried | See **Delivery failure** |
+| Delivery | **up to three attempts, only while Pushover has not accepted**; failure logged, never escalated | See **Delivery failure** |
 | Recorded in the **Fire record** | **no** — application log only | It has no Window and makes no decision the tick loop revisits |
 
 **Sent for every capture that happens outside the app**, and for no capture made inside it. In-app
@@ -1351,8 +1352,18 @@ reopen the standing refusal to invent constants.
 
 **A failed Receipt is indistinguishable from an ignored one.** The server gets no tap event below
 emergency priority (issue #3), so "saw it, had no Tags to add" and "never arrived" look identical
-from the outside. That ambiguity is the second reason not to retry: a retry would re-notify for
-something quite possibly already dismissed.
+from the outside. That ambiguity is what bounds the retry rather than what forbids it, and the
+boundary it draws is **acceptance**: re-attempting a send Pushover *never accepted* — a refused
+connection, a timeout, a 5xx — cannot re-notify anything, because nothing was notified. Re-attempting
+one it *did* accept could, and that case is exactly the ambiguous one, so it is never retried. A 4xx
+is not retried either: a bad token or a malformed message fails the same way three times.
+
+**Three attempts, and the capture waits for them.** Roughly 3 seconds per attempt with a short
+backoff between — the pause is the point, since three immediate attempts down a dead socket are one
+attempt with extra steps. The Task is written and committed *before* the first push, so a slow
+Receipt delays the capture's response and never the capture itself. The capture succeeds whether or
+not the Receipt lands, which is the same asymmetry as above read forwards: a Receipt that fails
+silently is the designed outcome, not an error to surface.
 
 **Audibility at night is not ours to guarantee.** Pushover's quiet hours delivers priority `0` as
 though it were `-1`, and the only thing that bypasses it is priority `1`, which is a permanent never
@@ -1877,7 +1888,7 @@ and a capture that supplied it produces an `Active` Task with nothing left to pr
 **No capture path collects Tags.** They are added afterwards, through the **Receipt**.
 
 **Capture is never queued.** A capture is one attempt against a reachable server; nothing on the
-client holds it for later. This is the **Receipt**'s fire-and-forget rule read on the inbound side,
+client holds it for later. This is the **Receipt**'s never-across-ticks rule read on the inbound side,
 and rests on the same asymmetry — a capture that outlives the moment it was made can no longer be
 told apart from one already delivered. A capture that cannot reach the server **fails loudly**, at
 the moment of capture, and is simply made again.
