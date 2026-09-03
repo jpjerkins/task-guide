@@ -164,7 +164,8 @@ public sealed class OpportunityCounter(
 }
 
 /// <summary>
-/// Two zeroes that look identical and mean opposite things.
+/// Two zeroes that look identical and mean opposite things — plus a third state that is not a
+/// zero at all.
 /// </summary>
 public enum ZeroKind
 {
@@ -182,6 +183,14 @@ public enum ZeroKind
     /// an Override or Event displaced it. Nothing is wrong.
     /// </summary>
     NoneInThisStretch,
+
+    /// <summary>
+    /// No value, because the input failed — nearer to <em>absence</em> than to either kind of
+    /// zero. Per ADR-0004's amendment: a failed Opportunity fetch must <b>not</b> read as 0, because
+    /// 0 is the floor of the Scarcity key, and a fetch failure counted as zero would lift every
+    /// weather-tagged Task to the top of its band — the opposite of "unknown."
+    /// </summary>
+    Unknown,
 }
 
 public static class OrphanDetection
@@ -192,18 +201,23 @@ public static class OrphanDetection
     /// whether any Window could <em>ever</em> admit the Task. Tasks only — Events are never
     /// matched — and derived Tasks are included, since an orphaned one means a badly written rule.
     /// </summary>
-    public static bool IsOrphan(TaskItem task, Status status, int patternWeekCount) =>
+    public static bool IsTaskOrphan(TaskItem task, Status status, int patternWeekCount) =>
         status == Status.Active && patternWeekCount == 0;
 
     /// <summary>
-    /// Which of the two zeroes this one is, told apart by the Pattern-week count — or
-    /// <c>null</c> where there is no zero to read. Two cases return null and they are not the
-    /// same case: <b>Opportunities of 1 or more is not a zero</b> (a near-orphan gets no badge;
-    /// Ranking already surfaces it), and a Task the Status gate excludes has <b>no
-    /// Opportunities value at all</b> — an absence, not a zero.
+    /// Which of the three states this is, told apart by the Status gate and then the fetch and
+    /// the Pattern-week count — or <c>null</c> where there is no zero to read. <b>The Status gate
+    /// still wins over an unknown count:</b> a Task the Status gate excludes has no Opportunities
+    /// value at all whether or not the fetch that would have produced it failed, so that check
+    /// runs first regardless of <paramref name="opportunities"/>. Three more cases follow, in
+    /// order: <paramref name="opportunities"/> being <c>null</c> means the count could not be
+    /// computed at all, which is <see cref="ZeroKind.Unknown"/> — not a zero and not an absence;
+    /// a non-zero count is not a zero at all (a near-orphan gets no badge; Ranking already
+    /// surfaces it); otherwise it is one of the two zeroes, told apart by the Pattern-week count.
     /// </summary>
-    public static ZeroKind? KindOfZero(TaskItem task, Status status, int opportunities, int patternWeekCount) =>
-        status != Status.Active || opportunities != 0
-            ? null
-            : IsOrphan(task, status, patternWeekCount) ? ZeroKind.Orphan : ZeroKind.NoneInThisStretch;
+    public static ZeroKind? KindOfZero(TaskItem task, Status status, int? opportunities, int patternWeekCount) =>
+        status != Status.Active ? null
+        : opportunities is null ? ZeroKind.Unknown
+        : opportunities != 0 ? null
+        : IsTaskOrphan(task, status, patternWeekCount) ? ZeroKind.Orphan : ZeroKind.NoneInThisStretch;
 }

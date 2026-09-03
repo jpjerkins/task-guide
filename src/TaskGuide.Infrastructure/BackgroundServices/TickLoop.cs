@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using TaskGuide.Application.Firing;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Firing;

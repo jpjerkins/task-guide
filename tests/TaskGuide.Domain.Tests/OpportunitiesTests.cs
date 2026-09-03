@@ -180,7 +180,7 @@ public sealed class OpportunitiesTests
         var patternWeekCount = counter.CountInPatternWeek(overdue, pattern, [template], Tuesday);
 
         Assert.True(counter.CountAhead(overdue, At(Tuesday, 12)) > 0);
-        Assert.False(OrphanDetection.IsOrphan(overdue, Status.Active, patternWeekCount));
+        Assert.False(OrphanDetection.IsTaskOrphan(overdue, Status.Active, patternWeekCount));
     }
 
     [Fact]
@@ -280,7 +280,7 @@ public sealed class OpportunitiesTests
         var patternWeekCount = counter.CountInPatternWeek(sunny, pattern, [workday], Tuesday);
 
         Assert.Equal(7, patternWeekCount);
-        Assert.False(OrphanDetection.IsOrphan(sunny, Status.Active, patternWeekCount));
+        Assert.False(OrphanDetection.IsTaskOrphan(sunny, Status.Active, patternWeekCount));
     }
 
     [Fact]
