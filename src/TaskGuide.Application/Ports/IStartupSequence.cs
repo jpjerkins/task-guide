@@ -62,7 +62,27 @@ public interface IStartupPlanner
 /// Declaration only — #78 owns the contents. <see cref="OrderedSteps"/> is the minimum that
 /// compiles: the ordered writes the apply phase should carry out.
 /// </summary>
-public sealed record StartupPlan(IReadOnlyList<StoreMutation> OrderedSteps);
+public sealed record StartupPlan(IReadOnlyList<StoreMutation> OrderedSteps)
+{
+    /// <summary>
+    /// A positional record's synthesised equality compares <see cref="OrderedSteps"/> by
+    /// <b>reference</b>, so two structurally identical plans built on different list instances
+    /// would compare unequal — the same reference-equality trap filed as #114 (there for
+    /// <c>TagSet</c>), arriving through this door instead. Sequence equality closes it, matching
+    /// <c>InsideWindow</c>/<c>NextWindow</c> in
+    /// <see cref="TaskGuide.Domain.Notifications.GlanceState"/>.
+    /// </summary>
+    public bool Equals(StartupPlan? other) =>
+        other is not null
+        && OrderedSteps.SequenceEqual(other.OrderedSteps);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var step in OrderedSteps) hash.Add(step);
+        return hash.ToHashCode();
+    }
+}
 
 /// <summary>
 /// Declaration only — #78 owns the contents. <see cref="Reason"/> is the minimum that compiles;
