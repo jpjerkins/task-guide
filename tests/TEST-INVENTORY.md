@@ -477,6 +477,27 @@ Against `fixtures/data`, the golden store.
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
 - `DELETE /api/patterns/{id}` is refused for the active Pattern
 - `GET /api/patterns/active/switch-impact` returns the orphan count **before** the switch
+- `PUT /api/overrides/{date}/stamp` copies the template's shape and **preserves each Window's id**
+- `PUT /api/overrides/{date}/stamp` is refused for an unknown template id
+- `POST /api/overrides/{date}/promote` writes a new Day template and **does not re-link** the source
+  date, which keeps its own copy
+- `POST /api/overrides/{date}/promote` leaves the source date with a **use record**, so the promoted
+  template is not born `Unused`
+- `DELETE /api/day-templates/{id}` is refused while the template is in use, and accepted when it is
+  `Unused`
+- `GET /api/day-templates/{id}/usage` names every Pattern referencing the template — dormant ones
+  included
+- `PATCH /api/day-templates/{id}/windows/{windowId}` edits that Window only and **does not propagate**
+  to a same-named Window in another template
+- `GET /api/day-templates/{id}/windows/{windowId}/dependents` counts the Tasks that would be orphaned
+  by removing a Dimension value, **before** the edit is saved, and writes nothing
+- `POST /api/events` writes the Event **first**, then the one-off day its overlap resolution generates
+- `GET /api/events/overlap-check` names every Window the proposed Event overlaps, **partial overlaps
+  included**, and writes nothing
+- `PUT /api/event-exceptions/{date}/{prototypeId}` records a **move** as an edit, not as
+  delete-plus-create, and **stamps no Override**
+- `DELETE /api/event-exceptions/{date}/{prototypeId}` on an instance the active Pattern no longer
+  assumes matches nothing and is not an error
 - `/health` is reachable without traversing `/api`
 
 ## `TaskGuide.Web` (vitest)
