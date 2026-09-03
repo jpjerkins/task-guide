@@ -291,6 +291,11 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - `ttl` runs to the day boundary for a snooze past the span, an unconditional fire and a fallback
 - a Receipt's `ttl` is 24 hours **from sending**
 
+### FetchOutcome (#76)
+
+- a `Known` outcome matches to the known arm and yields its value
+- an `Unavailable` outcome matches to the unavailable arm and yields its reason
+
 ### Weather, the fetched axis
 
 - no weather-tagged Active Task ⇒ **no API call**
@@ -310,6 +315,10 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Glance
 
+- `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
+  `Shortlist` instances compare equal — the reference-equality trap a positional record falls
+  into on an `IReadOnlyList` member
+- a genuine difference (a different `MatchingNow`, a different shortlist member) still compares unequal
 - recomputed every tick, sent only when the payload differs from the last one **sent**
 - not sent again inside 30 minutes
 - **a Window start preempts the floor**
