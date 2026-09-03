@@ -18,6 +18,10 @@ predicted (matching, ranking, recurrence, staleness, duration snapping) is **alr
 both notification rules. What is left is the *application* layer, and it does not decompose the way
 step 5 assumed.
 
+**Reviewed 2026-09-03** by a fresh session against #67–#70 and the source tree; 49 findings, all
+applied. The corrections are recorded in the affected tickets under *Correction — plan review*, and
+the one place this plan knowingly departs from a resolution is declared below.
+
 ---
 
 ## Global constraints
@@ -63,10 +67,15 @@ layer cut forces two lanes to move in lockstep for one feature.
 | **Integration** | `Application/Ports/`, `Api/Program.cs`, `TaskGuide.TestSupport/`, `TaskGuide.Infrastructure.Tests/`, `docs/adr/`, `src/TaskGuide.Web/src/api/schema.d.ts`, the Web shell (`App.tsx`, `TabBar.tsx`, `client.ts`), every `.csproj`, `task-guide.slnx` | Claude |
 | **Firing** | `Application/Firing/`, `Domain/Firing/`, `Domain/Notifications/{Glance,Reminder}.cs`, `Infrastructure/BackgroundServices/` | Codex |
 | **Adapters** | `Infrastructure/Pushover/`, `Infrastructure/Health/`, `Infrastructure/Weather/`, `Infrastructure/Notifications/` (Glance renderer) | Claude |
-| **Schedule** | `Application/Schedule/`, `Domain/Schedule/`, `Api/Endpoints/{Schedule,Event,Dimension}Endpoints.cs` | Codex |
-| **Capture & Tasks** | `Application/{Capture,Tasks,Reminders}/`, `Domain/Notifications/Receipt.cs`, `Api/Endpoints/{Capture,Task,Reminder,RightNow}Endpoints.cs` | Codex |
-| **Web-Now** | `Web/src/components/` — landing page, task list/detail/triage, quick capture, "Right now", day view | Claude |
-| **Web-Authoring** | `Web/src/components/` — window, day-template, pattern, override, event editors | Claude |
+| **Schedule** | `Application/Schedule/`, `Domain/Schedule/`, `Api/Endpoints/{DayTemplate,Pattern,Override,Window,Event}Endpoints.cs` | Codex |
+| **Capture & Tasks** | `Application/{Capture,Tasks,Reminders}/`, `Domain/Notifications/Receipt.cs`, `Api/Endpoints/{Capture,Task,Reminder,RightNow,Dimension,Day}Endpoints.cs` | Codex |
+| **Web-Now** | `Web/src/components/` — landing page, task list/detail/triage, quick capture, "Right now", `DayView*` | Claude |
+| **Web-Authoring** | `Web/src/components/` — window, day-template, pattern, override, event editors, dimensions viewer | Claude |
+
+The **Web shell** (`App.tsx`, `TabBar.tsx`, `client.ts`) and the three **shared controls** both Web
+lanes need — a date-entry control, the Recurrence editor, the ordinal-Dimension sliders — are the
+integration lane's, in [#111](https://github.com/jpjerkins/task-guide/issues/111). #111 introduces a
+screen registry so that adding a surface never means editing a file seven branches share.
 
 **Storage is untouched.** #63, #64 and #65 are storage-only and out of scope; they merge whenever
 they are ready and block nothing here.
@@ -88,8 +97,17 @@ server lane rather than both. Claude owns both; the constraint is the agent, not
 - **Ownership is per file, never per project.** `TaskGuide.Application.Tests` is shared by three
   lanes: one test file per `TEST-INVENTORY.md` section, each named in exactly one ticket. The
   `.csproj` is integration-lane owned, so a lane needing a package reference **asks**.
+- **Sequential co-ownership, named on both sides.** Two tickets may own the same file **only** when a
+  dependency edge strictly orders them — then there is no concurrency and so no hazard. The later
+  ticket's *Owns* block must name the earlier one (`Domain/Ranking/Opportunities.cs` — after #76).
+  Unordered tickets never share a file, and this exception is never a way to avoid splitting one.
+- **A ticket owns its own test call sites.** A signature change owns the tests that call it, even
+  where another ticket owns the test project — otherwise constraint 12 (the suite stays green) and
+  constraint 6 (stay in your lane) contradict each other, and `main` goes red between two Wave-0
+  tickets.
 - **One accepted exception:** `tests/TEST-INVENTORY.md` is appended to by many tickets. Appends land
-  at distinct section ends and the conflicts are trivial.
+  at distinct section ends and the conflicts are trivial. #100 and #104 append under **distinct
+  subsection headings** (`### Web-Now` / `### Web-Authoring`), not the same section end.
 
 [51]: https://github.com/jpjerkins/task-guide/issues/51
 
@@ -106,6 +124,33 @@ when a human-context review earns its cost.
 A lane is done when its tickets are merged, `dotnet test` is green, **and** a ~10-minute guided smoke
 session has been run with Phil, phone in hand, over the surface that just landed. The smoke scripts
 are throwaway; only the final guided session (V3) is written down.
+
+---
+
+## Departures from the resolutions
+
+Per `docs/adr/README.md` § *If your work contradicts one*, a departure is declared, not silently
+substituted. There is exactly one.
+
+**#70 says the seven `StoreMutationRulesTests` *move* to `Application.Tests`. This plan deletes them
+in 0b-2 and writes fresh command tests in S1 instead.** Read carefully, what #70 rejects is *leaving
+them in place*; it did not consider the third option. The reason for departing: a mechanical move of
+a test that enacts the rule in its own body produces a test that enacts the rule in its own body, in
+a different project — #70's own objection ("it can never go red for the right reason") survives the
+move intact, so moving buys nothing and costs a rewrite anyway.
+
+**The cost, stated plainly:** the promote / stamp / delete rules have **no coverage of any kind**
+between 0b-2 and S1 — which is after all of Wave 0 including the composition root. That gap is real
+and was not sanctioned by #70. It is accepted because the coverage being lost never detected
+anything: those seven tests pass against a store that has never seen the rule.
+
+## Working a ticket
+
+`/start-lane` in Claude Code, `$start-lane` in Codex, claims a ticket and walks this plan's rules.
+
+The Claude Code copy is project-scoped (`.claude/skills/start-lane/`) and travels with the clone.
+**Codex has no project-scoped skill discovery**, so its copy lives at `~/.codex/skills/start-lane/`
+and must be installed by hand on each machine that runs a Codex lane.
 
 ---
 
@@ -415,18 +460,20 @@ not map children.
 | [#95](https://github.com/jpjerkins/task-guide/issues/95) | C2 · Task mutations | Capture & Tasks | #94 |
 | [#96](https://github.com/jpjerkins/task-guide/issues/96) | C3 · Snooze | Capture & Tasks | #94 |
 | [#97](https://github.com/jpjerkins/task-guide/issues/97) | C4 · Right-now, triage, dimensions | Capture & Tasks | #94 |
-| [#98](https://github.com/jpjerkins/task-guide/issues/98) | I1 · `schema.d.ts` regen | Integration | #97, #84 |
-| [#99](https://github.com/jpjerkins/task-guide/issues/99) | I2 · `schema.d.ts` regen | Integration | #93 |
-| [#100](https://github.com/jpjerkins/task-guide/issues/100) | WN0 · Web-Now test list | Web-Now | #98 |
+| [#98](https://github.com/jpjerkins/task-guide/issues/98) | I1 · `schema.d.ts` regen | Integration | #95, #96, #97, #84 |
+| [#99](https://github.com/jpjerkins/task-guide/issues/99) | I2 · `schema.d.ts` regen | Integration | #90, #91, #92, #93 |
+| [#111](https://github.com/jpjerkins/task-guide/issues/111) | 0b-4 · Web shell, client seam, shared controls | Integration | #77 |
+| [#100](https://github.com/jpjerkins/task-guide/issues/100) | WN0 · Web-Now test list | Web-Now | #98, #111 |
 | [#101](https://github.com/jpjerkins/task-guide/issues/101) | WN1 · Reminder landing page | Web-Now | #100 |
 | [#102](https://github.com/jpjerkins/task-guide/issues/102) | WN2 · Task list, detail, triage | Web-Now | #100 |
 | [#103](https://github.com/jpjerkins/task-guide/issues/103) | WN3 · Quick capture, Right now, day view | Web-Now | #100 |
-| [#104](https://github.com/jpjerkins/task-guide/issues/104) | WA0 · Web-Authoring test list | Web-Authoring | #99 |
+| [#104](https://github.com/jpjerkins/task-guide/issues/104) | WA0 · Web-Authoring test list | Web-Authoring | #99, #111 |
 | [#105](https://github.com/jpjerkins/task-guide/issues/105) | WA1 · Window and day-template editors | Web-Authoring | #104 |
 | [#106](https://github.com/jpjerkins/task-guide/issues/106) | WA2 · Pattern editor and switcher | Web-Authoring | #104 |
 | [#107](https://github.com/jpjerkins/task-guide/issues/107) | WA3 · Override a date | Web-Authoring | #104 |
 | [#108](https://github.com/jpjerkins/task-guide/issues/108) | WA4 · Event create and overlap | Web-Authoring | #104 |
-| [#109](https://github.com/jpjerkins/task-guide/issues/109) | V1 · The E2E suite | Validation | #74, #103, #108, #84, #88 |
+| [#112](https://github.com/jpjerkins/task-guide/issues/112) | WA5 · Read-only dimensions viewer | Web-Authoring | #104 |
+| [#109](https://github.com/jpjerkins/task-guide/issues/109) | V1 · The E2E suite | Validation | #74, #84, #88, #101, #102, #103, #106, #107, #108, #112 |
 | [#49](https://github.com/jpjerkins/task-guide/issues/49) | V2 · Restore drill | Validation | #109 |
 | [#110](https://github.com/jpjerkins/task-guide/issues/110) | V3 · Guided walkthrough → tutorial | Validation | #109, #49 |
 
