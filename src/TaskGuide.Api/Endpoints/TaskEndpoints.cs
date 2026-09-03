@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -54,8 +55,8 @@ public static class TaskEndpoints
 
             try
             {
-                await store.MutateAsync(
-                    view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, task])]),
+                await store.MutateAsync<Never>(
+                    view => OneOf<StoreMutation, Never>.FromT0(new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, task])])),
                     ct);
             }
             catch (Exception ex)

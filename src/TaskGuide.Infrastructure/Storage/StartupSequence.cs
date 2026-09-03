@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -60,7 +61,7 @@ public sealed class StartupSequence(
     /// that already has a Pattern is untouched by this check.
     /// </summary>
     /// <remarks>
-    /// Goes through <see cref="IStore.MutateAsync"/>, not a direct file write (ruled): that is what
+    /// Goes through <see cref="IStore.MutateAsync{T}"/>, not a direct file write (ruled): that is what
     /// swaps the already-loaded in-memory view in the same act as the disk write — a raw file write
     /// would leave <see cref="_current"/>'s already-loaded, empty <see cref="PatternBook"/> in
     /// memory, still crashing <c>.Active</c> on the very next read. Builds the Day templates write
@@ -92,11 +93,11 @@ public sealed class StartupSequence(
         var pattern = new Pattern(idMinter.NextPatternId(), "Default", days);
         var book = new PatternBook(pattern.Id, [pattern]);
 
-        await store.MutateAsync(_ => new StoreMutation(
+        await store.MutateAsync<Never>(_ => OneOf<StoreMutation, Never>.FromT0(new StoreMutation(
         [
             new DayTemplatesWrite([.. view.DayTemplates, template]),
             new PatternsWrite(book),
-        ]), cancellationToken);
+        ])), cancellationToken);
     }
 
     public void AssertRegistry() => registry.AssertNoDuplicateValues();
@@ -156,12 +157,12 @@ public sealed class StartupSequence(
     /// Applies <see cref="RegistrySweep.Sweep"/> to every Tag-bearing collection — Tasks, Day
     /// template Windows and Event prototypes, Override Windows, and Events — and writes back only
     /// the collections that actually changed. A store where nothing promoted or demoted writes
-    /// nothing at all: no <see cref="IStore.MutateAsync"/> call is made, not merely an empty one —
+    /// nothing at all: no <see cref="IStore.MutateAsync{T}"/> call is made, not merely an empty one —
     /// <see cref="IStore.LastWriteSucceeded"/> documents the outcome of an actual disk write, and
     /// an empty <see cref="StoreMutation"/> would still (wrongly) report one.
     /// </summary>
     /// <remarks>
-    /// The pre-check below is only a gate against calling <see cref="IStore.MutateAsync"/> for
+    /// The pre-check below is only a gate against calling <see cref="IStore.MutateAsync{T}"/> for
     /// nothing. What actually gets written is computed <em>again</em>, inside the callback, from
     /// the view the callback itself supplies rather than reused from the pre-check — that is the
     /// atomic read-modify-write <see cref="JsonStore.MutateAsync"/>'s write lock exists to
@@ -175,7 +176,7 @@ public sealed class StartupSequence(
     {
         if (!ComputeSweepPlan(store.Read()).HasChanges) return;
 
-        await store.MutateAsync(view =>
+        await store.MutateAsync<Never>(view =>
         {
             var plan = ComputeSweepPlan(view);
 
@@ -185,7 +186,7 @@ public sealed class StartupSequence(
             if (plan.OverridesChanged) writes.Add(new OverridesWrite(plan.Overrides));
             if (plan.EventsChanged) writes.Add(new EventsWrite(plan.Events));
 
-            return new StoreMutation(writes);
+            return OneOf<StoreMutation, Never>.FromT0(new StoreMutation(writes));
         }, cancellationToken);
     }
 
@@ -204,7 +205,7 @@ public sealed class StartupSequence(
     /// see pre-migration data even though they run after <see cref="MigrateAsync"/> textually.
     /// The fix that <em>is</em> mine is sequencing and atomicity: the sweep's actual write-plan is
     /// computed strictly after the migration call, and strictly inside <see
-    /// cref="IStore.MutateAsync"/>'s callback rather than from a separate, non-atomic
+    /// cref="IStore.MutateAsync{T}"/>'s callback rather than from a separate, non-atomic
     /// <c>store.Read()</c> — see <see cref="SweepRegistryAsync"/>'s remarks. Closing the residual
     /// needs either a store-reload API or migrations that go through the store, both out of this
     /// unit's lane; recorded against the branch's final triage.

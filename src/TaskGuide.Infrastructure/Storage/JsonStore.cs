@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Firing;
@@ -15,7 +16,7 @@ namespace TaskGuide.Infrastructure.Storage;
 /// <c>event-exceptions.json</c>, every <c>completions/&lt;taskId&gt;.json</c> plus
 /// <c>completions/derived.json</c>, and every <c>fires/&lt;date&gt;.json</c> — into a fully
 /// populated <see cref="StoreView"/>; a missing file loads as the empty collection and a corrupt
-/// one throws here, at construction. <see cref="MutateAsync"/> writes every collection: a
+/// one throws here, at construction. <see cref="MutateAsync{T}"/> writes every collection: a
 /// <see cref="StoreMutation"/> carries one payload per file kind (<see cref="TasksWrite"/> and the
 /// rest of `StoreWrites.cs`), applied in list order, each atomic on its own.
 /// </summary>
@@ -161,16 +162,24 @@ public sealed class JsonStore : IStore
     /// own file. Every other collection is carried forward unchanged from the pre-mutation view —
     /// a write touching only some collections must not erase what the rest of the view already
     /// held. A write that throws part-way leaves the earlier files written on disk (the accepted
-    /// design — see <see cref="IStore.MutateAsync"/>'s doc comment); <see cref="_current"/> is
+    /// design — see <see cref="IStore.MutateAsync{T}"/>'s doc comment); <see cref="_current"/> is
     /// swapped only once every write in the list has succeeded.
     /// </summary>
-    public async Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken)
+    public async Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)
     {
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
             var view = _current;
-            var result = mutation(view);
+            var decision = mutation(view);
+
+            // The gate runs inside the write lock, against the view just read above — a refusal
+            // decided from a view fetched before this call would be stale (IStore.MutateAsync's
+            // own doc comment). Nothing is written and _current is left untouched.
+            if (decision.TryPickT1(out var refusal, out var result))
+            {
+                return refusal;
+            }
 
             // Carried forward from `view` and replaced in place, one field at a time, as each
             // write in the list is applied — never all at once, so a write list that only
@@ -340,6 +349,8 @@ public sealed class JsonStore : IStore
             {
                 Interlocked.Exchange(ref _lastWriteOutcome, WriteSucceeded);
             }
+
+            return new Applied();
         }
         finally
         {

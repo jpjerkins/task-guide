@@ -14,7 +14,7 @@ namespace TaskGuide.Infrastructure.Health;
 /// <b>observed, not probed</b>: work the store was already doing, never a synthetic write
 /// manufactured for the health check.
 /// </summary>
-public sealed class HealthReporter(IStore store, string dataDir) : IHealthReporter
+public sealed class HealthReporter(IStore store, TickHeartbeat heartbeat, string dataDir) : IHealthReporter
 {
     /// <summary>
     /// A tick loop with a ~30s cadence: three missed ticks (90s) before the reporter calls it
@@ -30,20 +30,13 @@ public sealed class HealthReporter(IStore store, string dataDir) : IHealthReport
     private readonly string _tasksPath = Path.Combine(dataDir, "tasks.json");
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
 
-    // DateTimeOffset? can't be volatile (not atomically readable); store the UTC ticks instead,
-    // 0 meaning "never ticked", read/written via Interlocked so no lock is needed on either side.
-    private long _lastTickUtcTicks;
-
-    public void RecordTick(DateTimeOffset at) => Interlocked.Exchange(ref _lastTickUtcTicks, at.UtcTicks);
-
     public HealthReport Current()
     {
         var now = DateTimeOffset.UtcNow;
         var readable = TryParseTasksJson();
         var writable = store.LastWriteSucceeded; // null = no write attempted yet since boot
 
-        var lastTickUtcTicks = Interlocked.Read(ref _lastTickUtcTicks);
-        DateTimeOffset? lastTick = lastTickUtcTicks == 0 ? null : new DateTimeOffset(lastTickUtcTicks, TimeSpan.Zero);
+        var lastTick = heartbeat.LastTick;
         var fresh = lastTick is { } tick && now - tick <= StalenessThreshold;
 
         // Unknown does not fail `ok`: a service that simply hasn't written anything yet (nothing
