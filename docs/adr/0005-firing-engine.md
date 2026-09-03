@@ -1,6 +1,8 @@
 # ADR-0005 — One ~30 s tick recomputing predicates; no timers, no catch-up sweep
 
-**Status:** Accepted · **Source:** [#16](https://github.com/jpjerkins/task-guide/issues/16)
+**Status:** Accepted · **Source:** [#16](https://github.com/jpjerkins/task-guide/issues/16)  
+**Amended** 2026-09-03 — the planner/executor split and per-step failure isolation, from
+[#68](https://github.com/jpjerkins/task-guide/issues/68) via [#75](https://github.com/jpjerkins/task-guide/issues/75).
 
 ## Context
 
@@ -80,6 +82,49 @@ Derived from the same boundary that governs the fire: a Window fire and an in-sp
 to the Window's end; a past-span re-fire, an unconditional fire and a fallback push run to the Day
 boundary.
 
+### Amendment — the tick is a planner and an executor
+
+*Added 2026-09-03 from [#68](https://github.com/jpjerkins/task-guide/issues/68).* The pseudocode
+above says what one pass computes. It does not say who computes it, and read literally it invites one
+method that decides and pushes in the same breath.
+
+**The pass is two phases: a pure planner decides, an executor delivers and records.** This is the
+same decide-then-write split ADR-0009 makes for bootstrap, so the codebase carries one idea in two
+places rather than two ideas.
+
+- `TickPlanner` reads the store view plus `now` and returns an immutable
+  `TickPlan(IReadOnlyList<FireIntent> Fires, Glance? Glance)`. A `FireIntent` carries the kind, the
+  resolved Window (null for a fallback), **the ranked shortlist**, the `ttl`, and the Fire-record row
+  to write on accept.
+- `TickExecutor` pushes and records. It decides nothing.
+
+**The shortlist is computed during planning, not at execute.** *A Window that matches nothing sends
+nothing* is a biconditional: the decision to fire **is** the result of matching, so a plan that says
+"fire this Window" before knowing the shortlist is non-empty has already given up the silence
+guarantee this ADR exists to protect. Carrying the Fire row in the intent also captures
+`windowName` / `windowStart` / `windowEnd` **as they were at decision time**, which is what the
+record's denormalisation is for.
+
+**Per-step failure isolation.** A throw in any of the four steps — windows, snoozes, fallback, sweep
+— is logged and the pass continues, and a throw on one Window does not skip its siblings. A failed
+push is already the ordinary path here (at-least-once, retried next tick), so it must not cost the
+retention sweep, whose success *is* the store's write health on a 30-second cadence.
+
+**Per-intent writes.** The executor writes each fire row immediately after that push is accepted, one
+mutation per intent. Batching a pass's fires would lose the record of a push that *did* go out if the
+process died mid-pass — manufacturing exactly the duplicate this ADR accepts only as a rare
+lost-response case.
+
+**Placement.** `TickPlanner`, `TickExecutor` and the driving `ITickLoop` are **Application**;
+`FiringPolicy`, `SnoozePolicy`, the matcher and the ranker stay **Domain** with `now` as a parameter;
+`TickLoop : BackgroundService` stays **Infrastructure** and owns cadence and hosting only.
+
+**Carrier duty is derived, never recorded.** "Has any row with a `firedAt` landed today?" is read off
+the Fire record each tick — this ADR's own shape, a predicate about a moment. It yields *a Window
+eaten by downtime does not consume the duty* for free, since a Window that never fired left no row.
+The fallback row's `carried` field stays audit-only; nothing reads it to decide.
+
+
 ## What this forbids
 
 - **No timers, no scheduled jobs, no startup catch-up sweep.** A catch-up path is a second
@@ -99,6 +144,11 @@ boundary.
   and costs a field, a restart behaviour and a paragraph.
 - **An Override's copy must preserve each Window's id.** Copying is not minting. Otherwise an
   already-fired Window reads as unfired and pushes again a minute later.
+- **Do not let the executor decide anything.** If it is choosing whether to fire, or computing a
+  shortlist, the biconditional is no longer enforced in one place.
+- **Do not let one step's failure end the pass.** In particular the retention sweep must run after a
+  push has thrown, or the tick stops reporting write health exactly when it matters.
+- **Do not batch a pass's fire rows into one write.**
 
 ## Liveness: the staleness threshold is 90 s
 
@@ -119,3 +169,8 @@ The walking skeleton's tick pushes only once and only when a real Task exists, g
 flag (`TickLoop`, an `Interlocked` 0/1). **That flag is scaffolding and dies with this ADR's
 implementation** — it must not be inherited, and neither must the push-only-once-a-real-Task-exists
 behaviour it gates. Both describe the skeleton, and the engine above replaces them wholesale.
+
+**Owner, as of 2026-09-03:** both die in
+[#82](https://github.com/jpjerkins/task-guide/issues/82) (F4), once the planner/executor above is in
+place. Until #82 merges this section still describes live code — it is scaffolding with a scheduled
+removal, not scaffolding already removed.
