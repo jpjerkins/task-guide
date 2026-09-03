@@ -41,17 +41,38 @@ gh issue edit <n> --add-assignee @me
 This is the session's first write. An unassigned open ticket is unclaimed; assignment is the
 claim, full stop.
 
-## 3. Branch
+## 3. Branch — always in its own git worktree
 
-Off an up-to-date `main`:
+**Never work a ticket in the main clone.** Several agents work this repo concurrently; two
+sessions switching branches in `/Users/phil/dev/task-guide` collide, and that has already
+happened. Every ticket gets its own branch *and* its own worktree, one per ticket, no exceptions
+— not even for a one-file change.
 
 ```sh
-git switch main && git pull && git switch -c <lane>/<short-slug>
+git -C /Users/phil/dev/task-guide fetch origin
+git -C /Users/phil/dev/task-guide worktree add \
+  /Users/phil/dev/task-guide-<short-slug> -b <lane>/<short-slug> origin/main
+cd /Users/phil/dev/task-guide-<short-slug>
 ```
 
 `<lane>` comes from the ticket's `lane:*` label (`lane:integration`, `lane:firing`,
 `lane:adapters`, `lane:schedule`, `lane:capture-tasks`, `lane:web-now`, `lane:web-authoring`,
-`lane:validation`).
+`lane:validation`). The worktree directory is a sibling of the main clone, named
+`task-guide-<short-slug>` — matching the branch's slug so a stray worktree is traceable to its
+ticket.
+
+Rules that follow from this:
+
+- **`git switch` in the main clone is off-limits for this skill.** The main clone stays on
+  `main`; branch it out, don't switch it.
+- Every path in the rest of this skill — `dotnet test`, `npm test`, `/code-review`, the commits
+  — runs inside the worktree, and "repo root" means the worktree root.
+- Check `git worktree list` first. If a worktree for this ticket's slug already exists, another
+  session may hold it: report that rather than reusing or removing it. Never `worktree remove`
+  or `git worktree prune` a directory with uncommitted work in it.
+- The worktree needs its own `npm install` for web lanes (`node_modules` is not shared).
+- Leave the worktree in place when the ticket is done. Removing it is Phil's call, same as
+  pushing and merging (step 9).
 
 ## 4. Read only what the ticket names
 
@@ -95,7 +116,9 @@ Then run `/code-review` on the branch and fix what it finds.
 
 ## 8. PR into `main`
 
-Rebase onto `main` first. If the diff touches `Application/Ports/`, `Api/Program.cs`, or
+Rebase onto `main` first — from inside the worktree, `git fetch origin && git rebase
+origin/main` (the local `main` ref belongs to the main clone and may be stale). If the diff
+touches `Application/Ports/`, `Api/Program.cs`, or
 `TaskGuide.TestSupport`, say so plainly in the PR body — those additionally need a Claude
 integration-lane review before merge.
 
