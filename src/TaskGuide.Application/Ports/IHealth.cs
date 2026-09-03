@@ -26,6 +26,17 @@ public interface IHealthReporter
     HealthReport Current();
 }
 
+/// <summary>
+/// The write side split off <see cref="IHealthReporter"/> (#69): the tick loop records, the
+/// reporter only reads. Two Infrastructure classes sharing this fact need no port between them —
+/// see <c>HealthReporter</c>'s concrete dependency on <c>TickHeartbeat</c> — but the tick loop is
+/// Application-side and needs one.
+/// </summary>
+public interface ITickHeartbeat
+{
+    void RecordTick(DateTimeOffset at);
+}
+
 /// <param name="Ok">The boolean, for the two automatic consumers.</param>
 /// <param name="LastTick">Also the one line Liveness surfaces in the app — the last fire, on a screen that already exists.</param>
 public sealed record HealthReport(bool Ok, DateTimeOffset? LastTick, StorageHealth Storage, TimeSpan Uptime);
