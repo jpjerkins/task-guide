@@ -336,7 +336,7 @@ public sealed class StartupSequenceTests : IDisposable
             new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [new LooseTag("garage")]),
             null, null, null, null,
             DateTimeOffset.UtcNow);
-        await store.MutateAsync(_ => new StoreMutation([new TasksWrite([looseTagged])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite([looseTagged])]), CancellationToken.None);
 
         var sut = NewSequence(store: store);
         await sut.SweepRegistryAsync(CancellationToken.None);
@@ -366,7 +366,7 @@ public sealed class StartupSequenceTests : IDisposable
             new TimeOnly(21, 0),
             new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [new LooseTag("garage")]));
         var template = new DayTemplate(new DayTemplateId("dt_test00000000000000001"), "Weekday", [looseTaggedWindow], []);
-        await store.MutateAsync(_ => new StoreMutation([new DayTemplatesWrite([template])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([template])]), CancellationToken.None);
 
         var sut = NewSequence(store: store);
         await sut.SweepRegistryAsync(CancellationToken.None);
