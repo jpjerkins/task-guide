@@ -1,3 +1,6 @@
+using TaskGuide.Domain.Firing;
+using TaskGuide.Domain.Schedule;
+
 namespace TaskGuide.Domain.Time;
 
 /// <summary>
@@ -53,4 +56,17 @@ public sealed class ClockTimeResolution(DayBoundary boundary)
     /// zero-length Window is no opportunity at all, so it does not fire. No rule of its own.
     /// </summary>
     public TimeSpan LengthOf(DateOnly date, TimeOnly start, TimeOnly end) => Resolve(date, end) - Resolve(date, start);
+
+    /// <summary>
+    /// Resolves a Window's Start and End on the given date, or <c>null</c> when the resolved
+    /// span is empty — a Window lying entirely inside the spring gap collapses to zero length
+    /// and is not an opportunity at all, per <see cref="FiringPolicy.IsWindowSpanEmpty"/>.
+    /// </summary>
+    public ResolvedWindow? ResolveWindow(DateOnly date, AvailabilityWindow window)
+    {
+        var start = Resolve(date, window.Start);
+        var end = Resolve(date, window.End);
+
+        return FiringPolicy.IsWindowSpanEmpty(start, end) ? null : new ResolvedWindow(window, start, end);
+    }
 }

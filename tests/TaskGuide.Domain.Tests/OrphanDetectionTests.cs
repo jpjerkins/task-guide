@@ -312,4 +312,29 @@ public sealed class OrphanDetectionTests
         Assert.False(OrphanDetection.IsTaskOrphan(sunny, Status.Active, patternWeekCount));
         Assert.Equal(ZeroKind.NoneInThisStretch, OrphanDetection.KindOfZero(sunny, Status.Active, 0, patternWeekCount));
     }
+
+    [Fact]
+    public void An_unknown_Opportunity_count_is_a_third_ZeroKind_not_a_zero_and_not_an_absence()
+    {
+        // ADR-0004's amendment: a failed Opportunity fetch must not read as 0 (the Scarcity key's
+        // floor, which would wrongly lift the Task to the top of its band) and must not read as
+        // null either — a genuine absence means the count was never asked for. `null` here stands
+        // for "asked, but the fetch failed."
+        var task = GarageTask();
+        var patternWeekCount = PatternWeekCount(task, Workday);
+
+        Assert.Equal(ZeroKind.Unknown, OrphanDetection.KindOfZero(task, Status.Active, null, patternWeekCount));
+    }
+
+    [Fact]
+    public void The_Status_gate_still_wins_over_an_unknown_count()
+    {
+        // A Task the Status gate excludes has no Opportunities value at all, whether or not the
+        // fetch that would have produced it failed — so a non-Active Status still reads as a
+        // plain absence, never as Unknown.
+        var unprocessed = Item(tags: Tags((KnownDimensions.Location, "garage")));
+        Assert.Equal(Status.Unprocessed, StatusOf(unprocessed));
+
+        Assert.Null(OrphanDetection.KindOfZero(unprocessed, StatusOf(unprocessed), null, 0));
+    }
 }

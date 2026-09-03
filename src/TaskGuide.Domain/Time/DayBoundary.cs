@@ -27,4 +27,15 @@ public sealed class DayBoundary(TimeZoneInfo zone)
         var offset = Zone.GetUtcOffset(nextMidnightLocal);
         return new DateTimeOffset(nextMidnightLocal, offset);
     }
+
+    /// <summary>
+    /// The instant the given date begins — i.e. that date's own local midnight. So
+    /// <c>StartOf(d.AddDays(1)) == EndOf(d)</c>: one midnight, named from both sides.
+    /// </summary>
+    public DateTimeOffset StartOf(DateOnly date)
+    {
+        var midnightLocal = date.ToDateTime(TimeOnly.MinValue);
+        var offset = Zone.GetUtcOffset(midnightLocal);
+        return new DateTimeOffset(midnightLocal, offset);
+    }
 }

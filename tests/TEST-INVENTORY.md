@@ -174,6 +174,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - Orphan is never counted in the process/stale footer counts — the three are disjoint
 - `Opportunities = 1` gets no badge
 - a fetched axis never makes a zero read as an Orphan — the Pattern-week count is counterfactual
+- an unknown Opportunity count is a third `ZeroKind`, not a zero and not an absence
+- the Status gate still wins over an unknown count
 
 ### Day boundary and clock-time resolution
 
@@ -185,6 +187,12 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a span crossing the fall-back transition is honestly an hour longer
 - **a Window lying entirely inside the spring gap has zero length and does not fire**
 - Deadline, Defer and Postpone resolve at the day boundary
+- `StartOf` is the given date's own local midnight
+- `StartOf` the next day is the same instant as `EndOf` this one, across both DST transitions
+- a Window span is empty when the end equals or precedes the start; not empty otherwise
+- `ResolveWindow` resolves an ordinary Window to the same two instants `Resolve` would give
+- `ResolveWindow` returns `null` for a Window entirely inside the spring gap
+- `ResolveWindow` on a Window merely crossing the spring transition still resolves, an hour shorter
 
 ### Snooze arithmetic
 
