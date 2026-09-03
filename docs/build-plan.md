@@ -112,14 +112,23 @@ the same way. It is a hard coding constraint that currently lives only in a clos
 Also: at 119 KB, `CONTEXT.md` burns a large slice of every subagent's window before it writes a
 line. Split it, or at minimum give it a navigation index.
 
-### 5. Decompose, then fan out on the pure functions only
+### 5. Decompose, then fan out on the pure functions only ✅ superseded 2026-09-03
 
-That is where a fleet pays: **matching, Scarcity/ranking, Recurrence + DST resolution, staleness,
-Duration snapping.** No shared state, no I/O, fully specified in `CONTEXT.md`, and each one is a
-test list writable before the implementation.
+*The domain fan-out is **done** — `TaskGuide.Domain.Tests` holds 147 tests and only two
+`NotImplementedException`s remain in Domain, both notification rules
+(`docs/superpowers/plans/step-5-domain-fan-out.md`). What is left is the **application** layer, and
+it does not decompose the way this step assumed: the sequential/fan-out split below is a layer cut,
+and the settled boundaries (#67–#70) cut by **change-reason** instead.*
 
-The stateful parts — storage, the registry startup sweep, the firing loop — stay **sequential**
-against the skeleton, because they share the write lock and the read view.
+**The live plan is [`docs/superpowers/plans/2026-09-03-application-layer.md`](superpowers/plans/2026-09-03-application-layer.md)** —
+six lanes, a Wave-0 wall, per-ticket file ownership, and the tickets themselves. Read that, not this
+section.
+
+Original reasoning, kept because it is why the fan-out was cheap: that is where a fleet pays —
+**matching, Scarcity/ranking, Recurrence + DST resolution, staleness, Duration snapping.** No shared
+state, no I/O, fully specified in `CONTEXT.md`, and each one is a test list writable before the
+implementation. The stateful parts — storage, the registry startup sweep, the firing loop — stay
+**sequential** against the skeleton, because they share the write lock and the read view.
 
 ## Deploy-phase steps that no ticket owned
 
