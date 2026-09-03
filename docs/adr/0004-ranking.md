@@ -82,7 +82,17 @@ failure while computing one, may take a Task out of the shortlist matching admit
 
 **Opportunities** is counted against a real forecast for the 7-day horizon, so the count has an input
 that can fail. When it does, the count is **unknown** — a third state beside the two kinds of zero
-above, and nearer to *absence* than to either of them.
+above, and nearer to *absence* than to either of them. It is still *"a plain count, computed live on
+read, never cached and never stored"*: what widens is the count's **range**, not its lifetime.
+
+> **None of this exists in `src/` on the day this ADR lands.**
+> `OpportunityCounter.CountAhead` returns a plain `int` and takes no fetched values —
+> `NoFetchedValues` is what stands in for the forecast today — and `ZeroKind` has exactly two cases.
+> [#76](https://github.com/jpjerkins/task-guide/issues/76) gives `ZeroKind` its third state,
+> [#86](https://github.com/jpjerkins/task-guide/issues/86) gives the weather adapter a `FetchOutcome`
+> that can be `Unavailable`, and [#80](https://github.com/jpjerkins/task-guide/issues/80) is where a
+> failed fetch first produces an unknown count on the ranking path. Until then this section states
+> the rule the counter must satisfy, not behaviour you can go and call.
 
 - **The Task keeps its place in the shortlist**, per the amendment above, and the failure is named in
   the reminder footer by the generic fetched-Dimension rule (`CONTEXT.md` § Dimension).
