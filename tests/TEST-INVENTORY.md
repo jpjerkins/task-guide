@@ -494,6 +494,7 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 
 ## `TaskGuide.E2E`
 
+- the landing page loads and lists tasks (#74 ARM64/Debian 12 Playwright smoke check)
 - capture a Task in the SPA, see it in the list, mark it off
 - open a Reminder landing page, snooze it, see the re-fire
 - **the date picker survives its own input events** on every date-entry surface — Deadline, Defer's
