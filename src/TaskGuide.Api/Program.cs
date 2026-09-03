@@ -45,7 +45,11 @@ api.MapTaskEndpoints();
 api.MapCaptureEndpoints();
 api.MapRightNowEndpoints();
 api.MapReminderEndpoints();
-api.MapScheduleEndpoints();
+api.MapDayTemplateEndpoints();
+api.MapWindowEndpoints();
+api.MapPatternEndpoints();
+api.MapOverrideEndpoints();
+api.MapDayEndpoints();
 api.MapEventEndpoints();
 api.MapDimensionEndpoints();
 
