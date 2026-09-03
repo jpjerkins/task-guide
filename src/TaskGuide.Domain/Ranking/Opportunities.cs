@@ -201,7 +201,7 @@ public static class OrphanDetection
     /// whether any Window could <em>ever</em> admit the Task. Tasks only — Events are never
     /// matched — and derived Tasks are included, since an orphaned one means a badly written rule.
     /// </summary>
-    public static bool IsTaskOrphan(TaskItem task, Status status, int patternWeekCount) =>
+    public static bool IsTaskOrphan(Status status, int patternWeekCount) =>
         status == Status.Active && patternWeekCount == 0;
 
     /// <summary>
@@ -215,9 +215,9 @@ public static class OrphanDetection
     /// a non-zero count is not a zero at all (a near-orphan gets no badge; Ranking already
     /// surfaces it); otherwise it is one of the two zeroes, told apart by the Pattern-week count.
     /// </summary>
-    public static ZeroKind? KindOfZero(TaskItem task, Status status, int? opportunities, int patternWeekCount) =>
+    public static ZeroKind? KindOfZero(Status status, int? opportunities, int patternWeekCount) =>
         status != Status.Active ? null
         : opportunities is null ? ZeroKind.Unknown
         : opportunities != 0 ? null
-        : IsTaskOrphan(task, status, patternWeekCount) ? ZeroKind.Orphan : ZeroKind.NoneInThisStretch;
+        : IsTaskOrphan(status, patternWeekCount) ? ZeroKind.Orphan : ZeroKind.NoneInThisStretch;
 }
