@@ -12,11 +12,25 @@ namespace TaskGuide.TestSupport;
 /// </summary>
 public sealed class FakeStoreViewBuilder
 {
+    /// <summary>
+    /// The vanilla Day template and Pattern an unseeded view defaults to — mirroring
+    /// <c>StartupSequence.SeedDefaultPatternAsync</c>'s shape (one plain template, all seven
+    /// weekday slots pointing at it) — so <see cref="PatternBook.Active"/> resolves and
+    /// <c>DayShapeReader.For</c> can walk an unseeded <see cref="FakeStoreView"/> end to end
+    /// instead of throwing (#77 review finding 1).
+    /// </summary>
+    private static readonly DayTemplate DefaultDayTemplate = new(new DayTemplateId("dt_default"), "Ordinary day", [], []);
+
+    private static readonly Pattern DefaultPattern = new(
+        new PatternId("p_default"), "Default", Enumerable.Repeat(DefaultDayTemplate.Id, 7).ToArray());
+
+    private static readonly PatternBook DefaultPatternBook = new(DefaultPattern.Id, [DefaultPattern]);
+
     private IReadOnlyList<TaskItem> _tasks = [];
     private readonly Dictionary<TaskId, CompletionLog> _completions = [];
     private IReadOnlyList<DerivedCompletionEntry> _derivedCompletions = [];
-    private IReadOnlyList<DayTemplate> _dayTemplates = [];
-    private PatternBook _patterns = new(new PatternId(""), []);
+    private IReadOnlyList<DayTemplate> _dayTemplates = [DefaultDayTemplate];
+    private PatternBook _patterns = DefaultPatternBook;
     private IReadOnlyList<DateOverride> _overrides = [];
     private IReadOnlyList<Event> _events = [];
     private IReadOnlyList<EventException> _eventExceptions = [];

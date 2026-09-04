@@ -363,7 +363,10 @@ section.
 **Project:** `TaskGuide.Application.Tests` — the shared doubles in `TaskGuide.TestSupport` are
 production code for every lane after Wave 0, so they carry their own tests.
 
-- an unseeded `FakeStoreView` reads empty on every member
+- an unseeded `FakeStoreView` reads empty on every member except the default Pattern
+- **an unseeded `FakeStoreView`'s default Pattern resolves to a Day template present in
+  `DayTemplates`** — the same three steps `DayShapeReader.For` takes, so an unseeded view no
+  longer throws on the central read path every later lane exercises (#77 review finding 1)
 - a seeded `FakeStoreView` reads back exactly what it was given
 - `CompletionsFor` on an unseeded Task is an empty log, not a throw
 - `FiresOn` on an unseeded date is empty, not a throw
@@ -373,11 +376,24 @@ production code for every lane after Wave 0, so they carry their own tests.
 - a refused mutation returns the refusal, writes nothing, and is not recorded
 - `LastWriteSucceeded` is `null` before any write and `true` after one
 - `LastWriteSucceeded` is untouched by a refusal and by an empty write list
-- an unrecognised write payload throws, naming its type
+- an unrecognised write payload throws `NotImplementedException`, naming its type — matching
+  `JsonStore`'s type and message shape for the same programming error (#77 review finding 6)
+- a write that throws mid-apply leaves `Mutations` empty — a mutation is recorded only once it
+  has actually applied (#77 review finding 4)
+- a `PatternsWrite`'s `Patterns` list is deep-copied, not stored by reference (#77 review finding 2)
+- a `CompletionLogWrite`'s `Entries` list is deep-copied, not stored by reference (#77 review finding 2)
+- a `FiresWrite`'s `Rows` list is deep-copied, not stored by reference (#77 review finding 2)
+- **concurrent `MutateAsync` calls serialise, so none of their writes are lost** (#77 review finding 3)
+- `MutateAsync` throws for an already-cancelled token (#77 review finding 7)
+- `FailNextWrite` makes the next write throw, reports `LastWriteSucceeded` false, and applies
+  nothing (#77 review finding 5)
+- `FailNextWrite` only fails the next write, not the one after it
 - a recording sender records what it was handed and reports success
 - a recording sender reports the failure it was configured for, without throwing
 - an unconfigured `FakeWeatherSource` is `Unavailable` on both axes
 - a configured `FakeWeatherSource` yields its known value and records the call
+- `FakeWeatherSource.CurrentAsync` throws for an already-cancelled token (#77 review finding 7)
+- `FakeWeatherSource.ForecastAsync` throws for an already-cancelled token (#77 review finding 7)
 - an unseeded date reads an empty `DayShape`, and the read is recorded
 - a recording heartbeat keeps every tick instant in order
 - a recording startup sequence keeps its phases in order

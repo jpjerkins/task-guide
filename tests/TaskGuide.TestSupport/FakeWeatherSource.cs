@@ -22,12 +22,14 @@ public sealed class FakeWeatherSource : IWeatherSource
 
     public Task<FetchOutcome<IReadOnlyList<TagValue>>> CurrentAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         CurrentCallCount++;
         return Task.FromResult(_current);
     }
 
     public Task<FetchOutcome<IReadOnlyList<TagValue>>> ForecastAsync(DateOnly date, TimeOnly at, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ForecastCalls.Add((date, at));
         return Task.FromResult(_forecast);
     }

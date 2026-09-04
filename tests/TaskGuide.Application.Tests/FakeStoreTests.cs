@@ -102,10 +102,134 @@ public sealed class FakeStoreTests
     {
         var store = new FakeStore();
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => store.MutateAsync<Never>(
+        var exception = await Assert.ThrowsAsync<NotImplementedException>(() => store.MutateAsync<Never>(
             _ => new StoreMutation([new UnrecognisedWrite()]), CancellationToken.None));
 
         Assert.Contains(nameof(UnrecognisedWrite), exception.Message);
+    }
+
+    [Fact]
+    public async Task A_write_that_throws_mid_apply_leaves_Mutations_empty()
+    {
+        var store = new FakeStore();
+
+        await Assert.ThrowsAsync<NotImplementedException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new UnrecognisedWrite()]), CancellationToken.None));
+
+        Assert.Empty(store.Mutations);
+    }
+
+    [Fact]
+    public async Task A_PatternsWrites_Patterns_list_is_deep_copied_not_stored_by_reference()
+    {
+        var template = new DayTemplate(new DayTemplateId("dt_workday"), "Workday", [], []);
+        var pattern = new Pattern(new PatternId("p_default"), "Default", Enumerable.Repeat(template.Id, 7).ToArray());
+        var otherPattern = new Pattern(new PatternId("p_other"), "Other", Enumerable.Repeat(template.Id, 7).ToArray());
+        var patternsList = new List<Pattern> { pattern };
+        var book = new PatternBook(pattern.Id, patternsList);
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new PatternsWrite(book)]), CancellationToken.None);
+        patternsList.Add(otherPattern);
+
+        Assert.Same(pattern, Assert.Single(store.Read().Patterns.Patterns));
+    }
+
+    [Fact]
+    public async Task A_CompletionLogWrites_Entries_list_is_deep_copied_not_stored_by_reference()
+    {
+        var taskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        var entry = new CompletionEntry(new DateOnly(2026, 8, 15), DateTimeOffset.UtcNow);
+        var otherEntry = new CompletionEntry(new DateOnly(2026, 8, 16), DateTimeOffset.UtcNow);
+        var entries = new List<CompletionEntry> { entry };
+        var log = new CompletionLog(taskId, entries);
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new CompletionLogWrite(log)]), CancellationToken.None);
+        entries.Add(otherEntry);
+
+        Assert.Equal(entry, Assert.Single(store.Read().CompletionsFor(taskId).Entries));
+    }
+
+    [Fact]
+    public async Task A_FiresWrites_Rows_list_is_deep_copied_not_stored_by_reference()
+    {
+        var date = new DateOnly(2026, 8, 15);
+        var row = new FireRow(null, FireKind.Fallback, null, null, null, null, DateTimeOffset.UtcNow, null, null);
+        var otherRow = new FireRow(null, FireKind.Fallback, null, null, null, null, DateTimeOffset.UtcNow, null, null);
+        var rows = new List<FireRow> { row };
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new FiresWrite(new DayFires(date, rows))]), CancellationToken.None);
+        rows.Add(otherRow);
+
+        Assert.Same(row, Assert.Single(store.Read().FiresOn(date).Rows));
+    }
+
+    [Fact]
+    public void Concurrent_MutateAsync_calls_serialise_so_none_of_their_writes_are_lost()
+    {
+        // Dedicated OS threads, not Task.Run/the thread pool: the pool ramps up new threads
+        // slowly, which would mask the race this test exists to catch by serialising writers
+        // anyway before they overlap. A Barrier lines every thread up so all 32 calls truly
+        // race MutateAsync's read-apply-assign at once.
+        const int concurrentWriters = 32;
+        var store = new FakeStore();
+        using var ready = new Barrier(concurrentWriters);
+
+        var threads = Enumerable.Range(0, concurrentWriters).Select(i => new Thread(() =>
+        {
+            ready.SignalAndWait();
+            store.MutateAsync<Never>(
+                view => new StoreMutation([new TasksWrite([.. view.Tasks, NewTask($"t_writer_{i:D3}", $"Writer {i}")])]),
+                CancellationToken.None).GetAwaiter().GetResult();
+        })).ToArray();
+
+        foreach (var thread in threads) thread.Start();
+        foreach (var thread in threads) thread.Join();
+
+        Assert.Equal(concurrentWriters, store.Read().Tasks.Count);
+    }
+
+    [Fact]
+    public async Task MutateAsync_throws_for_an_already_cancelled_token()
+    {
+        var store = new FakeStore();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([]), cts.Token));
+    }
+
+    [Fact]
+    public async Task FailNextWrite_makes_the_next_write_throw_reports_LastWriteSucceeded_false_and_applies_nothing()
+    {
+        var store = new FakeStore();
+        var task = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Water the plants");
+        store.FailNextWrite();
+
+        await Assert.ThrowsAsync<IOException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new TasksWrite([task])]), CancellationToken.None));
+
+        Assert.False(store.LastWriteSucceeded);
+        Assert.Empty(store.Mutations);
+        Assert.Empty(store.Read().Tasks);
+    }
+
+    [Fact]
+    public async Task FailNextWrite_only_fails_the_next_write_not_the_one_after_it()
+    {
+        var store = new FakeStore();
+        var task = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Water the plants");
+        store.FailNextWrite();
+
+        await Assert.ThrowsAsync<IOException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new TasksWrite([task])]), CancellationToken.None));
+        await store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite([task])]), CancellationToken.None);
+
+        Assert.True(store.LastWriteSucceeded);
+        Assert.Same(task, Assert.Single(store.Read().Tasks));
     }
 
     [Fact]

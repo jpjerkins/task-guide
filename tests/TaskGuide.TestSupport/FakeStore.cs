@@ -14,39 +14,73 @@ namespace TaskGuide.TestSupport;
 /// </summary>
 public sealed class FakeStore : IStore
 {
+    private readonly Lock _lock = new();
     private readonly List<StoreMutation> _mutations = [];
     private FakeStoreView _view;
+    private bool _failNextWrite;
 
     public FakeStore(FakeStoreView? initial = null) => _view = initial ?? new FakeStoreViewBuilder().Build();
 
     public IStoreView Read() => _view;
 
+    /// <summary>
+    /// Makes the next <see cref="MutateAsync{T}"/> call whose <see
+    /// cref="StoreMutation.OrderedWrites"/> is non-empty throw instead of applying — <see
+    /// cref="LastWriteSucceeded"/> goes <c>false</c> and nothing is recorded or applied, matching
+    /// how <c>JsonStore</c> would surface a mid-write disk failure (#77 review finding 5).
+    /// A refusal or an empty write list does not consume the flag, the same way neither moves
+    /// <see cref="LastWriteSucceeded"/> on a real write.
+    /// </summary>
+    public void FailNextWrite() => _failNextWrite = true;
+
+    /// <summary>
+    /// Read-apply-assign runs under <see cref="_lock"/> — the real store's contract is one global
+    /// write lock (<see cref="IStore"/>'s doc), and two concurrent callers racing this fake
+    /// unlocked would let the second silently discard the first's writes (#77 review finding 3).
+    /// </summary>
     public Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)
     {
-        var outcome = mutation(_view);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (!outcome.IsT0)
+        lock (_lock)
         {
-            RefusalCount++;
-            return Task.FromResult(OneOf<Applied, T>.FromT1(outcome.AsT1));
-        }
+            var outcome = mutation(_view);
 
-        var storeMutation = outcome.AsT0;
-        _mutations.Add(storeMutation);
-
-        if (storeMutation.OrderedWrites.Count > 0)
-        {
-            var builder = ViewAsBuilder(_view);
-            foreach (var write in storeMutation.OrderedWrites)
+            if (!outcome.IsT0)
             {
-                Apply(builder, write);
+                RefusalCount++;
+                return Task.FromResult(OneOf<Applied, T>.FromT1(outcome.AsT1));
             }
 
-            _view = builder.Build();
-            LastWriteSucceeded = true;
-        }
+            var storeMutation = outcome.AsT0;
 
-        return Task.FromResult(OneOf<Applied, T>.FromT0(new Applied()));
+            if (storeMutation.OrderedWrites.Count > 0)
+            {
+                if (_failNextWrite)
+                {
+                    _failNextWrite = false;
+                    LastWriteSucceeded = false;
+                    throw new IOException("Simulated write failure via FakeStore.FailNextWrite().");
+                }
+
+                var builder = ViewAsBuilder(_view);
+                foreach (var write in storeMutation.OrderedWrites)
+                {
+                    Apply(builder, write);
+                }
+
+                _view = builder.Build();
+                LastWriteSucceeded = true;
+            }
+
+            // Recorded only once the writes above have actually applied — a mutation that threw
+            // part-way (an unrecognised payload, or FailNextWrite above) must not appear here,
+            // matching the property's own doc: "the mutations that were actually applied" (#77
+            // review finding 4).
+            _mutations.Add(storeMutation);
+
+            return Task.FromResult(OneOf<Applied, T>.FromT0(new Applied()));
+        }
     }
 
     public bool? LastWriteSucceeded { get; private set; }
@@ -81,7 +115,13 @@ public sealed class FakeStore : IStore
                 builder.WithDayTemplates(w.Templates);
                 break;
             case PatternsWrite w:
-                builder.WithPatterns(w.Book);
+                // A defensive copy, matching JsonStore.cs: the store must own its storage, and
+                // IReadOnlyList<T> is not a promise of immutability — a caller that keeps its own
+                // reference and mutates it later must not be able to reach a view any concurrent
+                // reader already holds (#77 review finding 2). WithTasks and friends already copy
+                // via `[.. tasks]`; PatternsWrite, CompletionLogWrite, and FiresWrite are the
+                // three that were stored by reference instead.
+                builder.WithPatterns(w.Book with { Patterns = w.Book.Patterns.ToArray() });
                 break;
             case OverridesWrite w:
                 builder.WithOverrides(w.Overrides);
@@ -93,16 +133,18 @@ public sealed class FakeStore : IStore
                 builder.WithEventExceptions(w.Exceptions);
                 break;
             case CompletionLogWrite w:
-                builder.WithCompletions(w.Log.TaskId, w.Log);
+                builder.WithCompletions(w.Log.TaskId, w.Log with { Entries = w.Log.Entries.ToArray() });
                 break;
             case DerivedCompletionsWrite w:
                 builder.WithDerivedCompletions(w.Entries);
                 break;
             case FiresWrite w:
-                builder.WithFires(w.Fires.Date, w.Fires);
+                builder.WithFires(w.Fires.Date, w.Fires with { Rows = w.Fires.Rows.ToArray() });
                 break;
             default:
-                throw new ArgumentException($"Unrecognised write payload type: {write.GetType().Name}", nameof(write));
+                // Matches JsonStore.cs's type and message shape for the same programming error
+                // (#77 review finding 6).
+                throw new NotImplementedException($"FakeStore does not know how to write a {write.GetType().Name}.");
         }
     }
 }

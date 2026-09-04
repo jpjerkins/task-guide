@@ -10,8 +10,9 @@ namespace TaskGuide.Application.Tests;
 
 /// <summary>
 /// `tests/TEST-INVENTORY.md`, "Test support (#77)": <see cref="TaskGuide.TestSupport.FakeStoreView"/>
-/// and its builder default to empty, never to throw, unlike the private fakes each lane used to
-/// hand-roll.
+/// and its builder never throw, unlike the private fakes each lane used to hand-roll — most
+/// members default to empty, and <c>Patterns</c>/<c>DayTemplates</c> default to a resolvable
+/// Pattern instead, since "empty" there is what used to throw.
 /// </summary>
 public sealed class FakeStoreViewTests
 {
@@ -19,17 +20,39 @@ public sealed class FakeStoreViewTests
         new(new TaskId(id), title, null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
 
     [Fact]
-    public void An_unseeded_FakeStoreView_reads_empty_on_every_member()
+    public void An_unseeded_FakeStoreView_reads_empty_on_every_member_except_the_default_Pattern()
     {
         var view = new FakeStoreViewBuilder().Build();
 
         Assert.Empty(view.Tasks);
         Assert.Empty(view.DerivedCompletions);
-        Assert.Empty(view.DayTemplates);
-        Assert.Empty(view.Patterns.Patterns);
         Assert.Empty(view.Overrides);
         Assert.Empty(view.Events);
         Assert.Empty(view.EventExceptions);
+    }
+
+    /// <summary>
+    /// #77 review finding 1: <c>PatternBook.Active</c> throws when the active id matches no
+    /// Pattern, and <c>DayShapeReader.For</c> — the central read path every later lane
+    /// exercises — opens by reading it. An unseeded view must not hand that reader a Pattern
+    /// book it cannot resolve, so the default Pattern's active id must match a Pattern, that
+    /// Pattern's weekday slots must all name a real Day template, and that template must be
+    /// present in <see cref="TaskGuide.TestSupport.FakeStoreView.DayTemplates"/> — the same
+    /// three steps <c>DayShapeReader.For</c> takes, walked here without depending on
+    /// <c>TaskGuide.Infrastructure</c>.
+    /// </summary>
+    [Fact]
+    public void An_unseeded_FakeStoreViews_default_Pattern_resolves_to_a_Day_template_present_in_DayTemplates()
+    {
+        var view = new FakeStoreViewBuilder().Build();
+
+        var active = view.Patterns.Active;
+        foreach (DayOfWeek weekday in Enum.GetValues<DayOfWeek>())
+        {
+            var templateId = active[weekday];
+            var template = Assert.Single(view.DayTemplates, t => t.Id == templateId);
+            Assert.NotNull(template);
+        }
     }
 
     [Fact]
@@ -37,14 +60,14 @@ public sealed class FakeStoreViewTests
     {
         var task = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Water the plants");
         var template = new DayTemplate(new DayTemplateId("dt_workday"), "Workday", [], []);
-        var pattern = new Pattern(new PatternId("pat_default"), "Default", [
+        var pattern = new Pattern(new PatternId("p_default"), "Default", [
             template.Id, template.Id, template.Id, template.Id, template.Id, template.Id, template.Id,
         ]);
         var patterns = new PatternBook(pattern.Id, [pattern]);
         var overrideDate = new DateOnly(2026, 9, 5);
         var dateOverride = new DateOverride(overrideDate, [], null);
         var evt = new Event(new EventId("evt_01ARZ3NDEKTSV4RRFFQ69G5N00"), overrideDate, "Band concert", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
-        var exception = new EventException(overrideDate, new EventPrototypeId("evtp_recital"), true, null, null, null);
+        var exception = new EventException(overrideDate, new EventPrototypeId("ep_recital"), true, null, null, null);
         var derived = new DerivedCompletionEntry(new RuleId("rule_timeoff"), "trigger_1", overrideDate, DateTimeOffset.UtcNow);
 
         var view = new FakeStoreViewBuilder()

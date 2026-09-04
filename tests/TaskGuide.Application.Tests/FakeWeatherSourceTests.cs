@@ -41,4 +41,25 @@ public sealed class FakeWeatherSourceTests
         Assert.Equal(1, weather.CurrentCallCount);
         Assert.Equal((new DateOnly(2026, 9, 5), new TimeOnly(9, 0)), Assert.Single(weather.ForecastCalls));
     }
+
+    [Fact]
+    public async Task CurrentAsync_throws_for_an_already_cancelled_token()
+    {
+        var weather = new FakeWeatherSource();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => weather.CurrentAsync(cts.Token));
+    }
+
+    [Fact]
+    public async Task ForecastAsync_throws_for_an_already_cancelled_token()
+    {
+        var weather = new FakeWeatherSource();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => weather.ForecastAsync(new DateOnly(2026, 9, 5), new TimeOnly(9, 0), cts.Token));
+    }
 }

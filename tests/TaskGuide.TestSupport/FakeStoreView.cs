@@ -7,9 +7,13 @@ using TaskGuide.Domain.Tasks;
 namespace TaskGuide.TestSupport;
 
 /// <summary>
-/// An <see cref="IStoreView"/> whose every member defaults to empty, never throws — the
-/// replacement for the private, mostly-throwing fakes each lane used to hand-roll. Built through
-/// <see cref="FakeStoreViewBuilder"/>.
+/// An <see cref="IStoreView"/> that never throws — the replacement for the private,
+/// mostly-throwing fakes each lane used to hand-roll. Most members default to empty;
+/// <see cref="DayTemplates"/> and <see cref="Patterns"/> default instead to one vanilla Day
+/// template and a Pattern whose seven weekday slots all name it, because <see
+/// cref="PatternBook.Active"/> throws on an active id matching no Pattern and the central read
+/// path (<c>DayShapeReader.For</c>) opens by reading it — an "empty" default there would still
+/// throw. Built through <see cref="FakeStoreViewBuilder"/>.
 /// </summary>
 public sealed class FakeStoreView : IStoreView
 {
