@@ -58,24 +58,17 @@ public sealed class FakeStore : IStore
     /// assert a refusal happened without a write, alongside <see cref="Mutations"/> staying put.</summary>
     public int RefusalCount { get; private set; }
 
-    private static FakeStoreViewBuilder ViewAsBuilder(FakeStoreView view)
-    {
-        var builder = new FakeStoreViewBuilder()
+    private static FakeStoreViewBuilder ViewAsBuilder(FakeStoreView view) =>
+        new FakeStoreViewBuilder()
             .WithTasks(view.Tasks)
             .WithDayTemplates(view.DayTemplates)
             .WithPatterns(view.Patterns)
             .WithOverrides(view.Overrides)
             .WithEvents(view.Events)
             .WithEventExceptions(view.EventExceptions)
-            .WithDerivedCompletions(view.DerivedCompletions);
-
-        foreach (var task in view.Tasks)
-        {
-            builder.WithCompletions(task.Id, view.CompletionsFor(task.Id));
-        }
-
-        return builder;
-    }
+            .WithDerivedCompletions(view.DerivedCompletions)
+            .WithAllCompletions(view.AllCompletions)
+            .WithAllFires(view.AllFires);
 
     private static void Apply(FakeStoreViewBuilder builder, object write)
     {

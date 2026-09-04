@@ -91,5 +91,6 @@ public sealed class FakeStoreViewBuilder
     }
 
     public FakeStoreView Build() => new(
-        _tasks, _completions, _derivedCompletions, _dayTemplates, _patterns, _overrides, _events, _eventExceptions, _fires);
+        _tasks, new Dictionary<TaskId, CompletionLog>(_completions), _derivedCompletions, _dayTemplates, _patterns,
+        _overrides, _events, _eventExceptions, new Dictionary<DateOnly, DayFires>(_fires));
 }

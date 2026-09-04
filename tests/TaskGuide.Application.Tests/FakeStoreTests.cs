@@ -107,4 +107,45 @@ public sealed class FakeStoreTests
 
         Assert.Contains(nameof(UnrecognisedWrite), exception.Message);
     }
+
+    [Fact]
+    public async Task A_written_fire_row_survives_the_next_unrelated_mutation()
+    {
+        var date = new DateOnly(2026, 8, 15);
+        var row = new FireRow(null, FireKind.Fallback, null, null, null, null, DateTimeOffset.UtcNow, null, null);
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new FiresWrite(new DayFires(date, [row]))]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite([])]), CancellationToken.None);
+
+        Assert.Same(row, Assert.Single(store.Read().FiresOn(date).Rows));
+    }
+
+    [Fact]
+    public async Task A_completion_log_seeded_for_a_task_absent_from_Tasks_survives_the_next_mutation()
+    {
+        var taskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        var entry = new CompletionEntry(new DateOnly(2026, 8, 15), DateTimeOffset.UtcNow);
+        var log = CompletionLog.Empty(taskId).With(entry);
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new CompletionLogWrite(log)]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite([])]), CancellationToken.None);
+
+        Assert.Equal(entry, Assert.Single(store.Read().CompletionsFor(taskId).Entries));
+    }
+
+    [Fact]
+    public async Task A_view_already_built_is_unaffected_by_a_later_With_call_on_the_same_builder()
+    {
+        var taskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        var otherTaskId = new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FA2");
+        var log = CompletionLog.Empty(taskId).With(new CompletionEntry(new DateOnly(2026, 8, 15), DateTimeOffset.UtcNow));
+        var builder = new FakeStoreViewBuilder().WithCompletions(taskId, log);
+
+        var view = builder.Build();
+        builder.WithCompletions(otherTaskId, CompletionLog.Empty(otherTaskId).With(new CompletionEntry(null, DateTimeOffset.UtcNow)));
+
+        Assert.Empty(view.CompletionsFor(otherTaskId).Entries);
+    }
 }
