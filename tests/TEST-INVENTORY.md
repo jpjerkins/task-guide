@@ -112,6 +112,25 @@ Categorical, from `CONTEXT.md`'s table, one test each:
   (the boundary must not drift)
 - a `longer` Task fits a long Window and still fails one at the largest sized bucket
 
+### Tag equality
+
+- `TagSet` equality (#115): two separately-constructed, structurally identical tag-bearing sets
+  compare equal, and hash equal — the reference-equality trap a positional record falls into on
+  a dictionary and a list member, the same #69/ADR-0011 watch-budget bug arriving through
+  `TagSet` instead of `GlanceState`
+- two separately-constructed empty sets compare equal, and equal `TagSet.Empty`
+- a Dimension's values compare equal regardless of order, and hash equal
+- loose Tags compare equal regardless of order, and hash equal
+- a Dimension mapped to an empty list equals that Dimension being absent, and hashes equal
+- a genuine difference still compares unequal: a different value on a Dimension; an extra
+  Dimension; a different loose Tag; a duplicate value or loose Tag against the same one held once
+- Dimension key insertion order does not change equality or the hash — `HashCode.Add` folds
+  sequentially, so the per-Dimension hash contributions must be combined order-free too, not just
+  the per-Dimension `Equals`
+- swapping values between two Dimensions compares unequal and hashes differently — a regression
+  guard against summing each Dimension's id hash and its values hash independently (additively
+  decomposable), not a general promise that unequal `TagSet`s always hash differently
+
 ### Dimension registry
 
 - **a registry declaring one value on two Dimensions refuses to start**, naming the value
@@ -335,6 +354,10 @@ section.
 - `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
   `Shortlist` instances compare equal — the reference-equality trap a positional record falls
   into on an `IReadOnlyList` member
+- `GlanceState` equality (#115): the same holds when the `Shortlist`'s `TaskItem`s or the
+  `ResolvedWindow`'s `AvailabilityWindow` carry separately-constructed, structurally-equal
+  Tag-bearing `TagSet`s (not the shared `TagSet.Empty` instance), for both `InsideWindow` and
+  `NextWindow`
 - a genuine difference (a different `MatchingNow`, a different shortlist member) still compares unequal
 - recomputed every tick, sent only when the payload differs from the last one **sent**
 - not sent again inside 30 minutes

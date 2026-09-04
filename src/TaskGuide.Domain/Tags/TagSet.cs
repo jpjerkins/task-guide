@@ -23,4 +23,84 @@ public sealed record TagSet(
     /// <summary>An ordinal axis carries exactly one value per side, or none.</summary>
     public TagValue? SingleOn(DimensionId dimension) =>
         On(dimension) is [var only] ? only : null;
+
+    /// <summary>
+    /// A positional record's synthesised equality compares <see cref="Dimensions"/> and
+    /// <see cref="LooseTags"/> by <b>reference</b> (a dictionary and a list are both reference
+    /// types), so two structurally identical <see cref="TagSet"/>s built from freshly-constructed
+    /// collections would compare unequal — the #69/ADR-0011 watch-budget bug, arriving through
+    /// this door instead of <c>GlanceState</c>'s. Equality here follows the Tag model
+    /// (`CONTEXT.md` § Tag), not convenience: a Dimension's values are a <b>set</b> — order does
+    /// not matter — and the loose Tags are a <b>bag</b>, also order-insensitive; both stay
+    /// duplicate-count-sensitive, since a stray duplicate is a real (if unintended) difference,
+    /// not noise to absorb. A Dimension key mapped to an empty list equals that key being
+    /// absent, mirroring <see cref="On"/>'s "absence is the empty set" rule.
+    /// </summary>
+    public bool Equals(TagSet? other)
+    {
+        if (other is null) return false;
+
+        if (!MultisetEqual(LooseTags, other.LooseTags)) return false;
+
+        var mine = Dimensions.Where(kv => kv.Value.Count > 0).ToArray();
+        var theirs = other.Dimensions.Where(kv => kv.Value.Count > 0).ToArray();
+        if (mine.Length != theirs.Length) return false;
+
+        foreach (var (id, values) in mine)
+        {
+            if (!other.Dimensions.TryGetValue(id, out var otherValues)) return false;
+            if (!MultisetEqual(values, otherValues)) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The per-Dimension contributions are summed (not <see cref="HashCode.Add"/>ed one at a time)
+    /// because <c>Dimensions</c>' enumeration order is insertion order, and <c>HashCode.Add</c>
+    /// folds sequentially — hashing Dimensions in that order would make the hash sensitive to key
+    /// insertion order even though <see cref="Equals"/> is not, breaking the Equals/GetHashCode
+    /// contract for two Dimension-key-reordered but otherwise identical sets.
+    /// </summary>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(MultisetHash(LooseTags));
+        var dimensionSum = 0;
+        foreach (var (id, values) in Dimensions)
+        {
+            if (values.Count == 0) continue;
+            unchecked
+            {
+                dimensionSum += HashCode.Combine(id, MultisetHash(values));
+            }
+        }
+        hash.Add(dimensionSum);
+        return hash.ToHashCode();
+    }
+
+    /// <summary>Order-insensitive, duplicate-count-sensitive comparison — a multiset, not a set.</summary>
+    private static bool MultisetEqual<T>(IReadOnlyList<T> a, IReadOnlyList<T> b) where T : notnull
+    {
+        if (a.Count != b.Count) return false;
+        var counts = new Dictionary<T, int>();
+        foreach (var value in a) counts[value] = counts.GetValueOrDefault(value) + 1;
+        foreach (var value in b)
+        {
+            if (!counts.TryGetValue(value, out var count) || count == 0) return false;
+            counts[value] = count - 1;
+        }
+        return true;
+    }
+
+    /// <summary>An unchecked sum of element hashes is order-free and duplicate-count-sensitive.</summary>
+    private static int MultisetHash<T>(IReadOnlyList<T> values) where T : notnull
+    {
+        var sum = 0;
+        unchecked
+        {
+            foreach (var value in values) sum += value.GetHashCode();
+        }
+        return sum;
+    }
 }

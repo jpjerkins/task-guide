@@ -4,7 +4,6 @@ using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
-using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
 
 namespace TaskGuide.Infrastructure.Storage;
@@ -364,7 +363,7 @@ public sealed class StartupSequence(
             var swept = tasks.Select(t =>
             {
                 var newTags = RegistrySweep.Sweep(t.Tags, registry);
-                if (!TagSetsEqual(t.Tags, newTags)) changed = true;
+                if (!t.Tags.Equals(newTags)) changed = true;
                 return t with { Tags = newTags };
             }).ToArray();
 
@@ -379,14 +378,14 @@ public sealed class StartupSequence(
                 var windows = t.Windows.Select(w =>
                 {
                     var newTags = RegistrySweep.Sweep(w.Tags, registry);
-                    if (!TagSetsEqual(w.Tags, newTags)) changed = true;
+                    if (!w.Tags.Equals(newTags)) changed = true;
                     return w with { Tags = newTags };
                 }).ToArray();
 
                 var prototypes = t.EventPrototypes.Select(p =>
                 {
                     var newTags = RegistrySweep.Sweep(p.Tags, registry);
-                    if (!TagSetsEqual(p.Tags, newTags)) changed = true;
+                    if (!p.Tags.Equals(newTags)) changed = true;
                     return p with { Tags = newTags };
                 }).ToArray();
 
@@ -404,7 +403,7 @@ public sealed class StartupSequence(
                 var windows = o.Windows.Select(w =>
                 {
                     var newTags = RegistrySweep.Sweep(w.Tags, registry);
-                    if (!TagSetsEqual(w.Tags, newTags)) changed = true;
+                    if (!w.Tags.Equals(newTags)) changed = true;
                     return w with { Tags = newTags };
                 }).ToArray();
 
@@ -420,31 +419,12 @@ public sealed class StartupSequence(
             var swept = events.Select(e =>
             {
                 var newTags = RegistrySweep.Sweep(e.Tags, registry);
-                if (!TagSetsEqual(e.Tags, newTags)) changed = true;
+                if (!e.Tags.Equals(newTags)) changed = true;
                 return e with { Tags = newTags };
             }).ToArray();
 
             return (swept, changed);
         }
-    }
-
-    /// <summary>
-    /// Content equality for a <see cref="TagSet"/>. Not record equality: <see cref="RegistrySweep.Sweep"/>
-    /// always builds a fresh dictionary and list, so a reference/default record comparison would
-    /// report "changed" on every call whether or not anything actually moved.
-    /// </summary>
-    private static bool TagSetsEqual(TagSet a, TagSet b)
-    {
-        if (!a.LooseTags.Select(t => t.Value).SequenceEqual(b.LooseTags.Select(t => t.Value))) return false;
-        if (a.Dimensions.Count != b.Dimensions.Count) return false;
-
-        foreach (var (id, values) in a.Dimensions)
-        {
-            if (!b.Dimensions.TryGetValue(id, out var otherValues)) return false;
-            if (!values.Select(v => v.Value).SequenceEqual(otherValues.Select(v => v.Value))) return false;
-        }
-
-        return true;
     }
 
     private sealed record RegistrySweepPlan(
