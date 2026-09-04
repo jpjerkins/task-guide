@@ -349,6 +349,10 @@ Against `fixtures/data`, the golden store.
 - **a mutation writes the affected file(s) before the request returns**
 - a write is atomic: a killed process leaves the old file or the new one, never a partial
 - one global write lock serialises mutations
+- **a `MutateAsync` refusal decided inside the write lock writes nothing** — the on-disk file and
+  the in-memory view are unchanged, `LastWriteSucceeded` stays `null` (no write was attempted),
+  and the lock is released, not held, so the next mutation still lands
+- an applied `MutateAsync` mutation returns `Applied`
 - **a read never blocks on a write**
 - `tasks.json` round-trips with no `status` field
 - `day-templates.json` round-trips the golden store unchanged

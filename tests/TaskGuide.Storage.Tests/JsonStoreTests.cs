@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -200,6 +201,50 @@ public sealed class JsonStoreTests : IDisposable
 
         // the in-memory view was never swapped either
         Assert.Equal(5, store.Read().Tasks.Count);
+    }
+
+    /// <summary>A refusal type a test can actually construct — <see cref="Never"/> is uninhabited by design.</summary>
+    private sealed record Refused(string Why);
+
+    [Fact]
+    public async Task A_refusal_inside_the_write_lock_writes_nothing_and_leaves_the_lock_usable()
+    {
+        var originalJson = FixtureTasksJson;
+        SeedTasksJson(originalJson);
+        var store = new JsonStore(_dataDir);
+
+        var result = await store.MutateAsync<Refused>(
+            _ => OneOf<StoreMutation, Refused>.FromT1(new Refused("stale view")),
+            CancellationToken.None);
+
+        Assert.True(result.TryPickT1(out var refusal, out _));
+        Assert.Equal("stale view", refusal.Why);
+
+        var tasksPath = Path.Combine(_dataDir, "tasks.json");
+        Assert.Equal(originalJson, File.ReadAllText(tasksPath));
+        Assert.Equal(5, store.Read().Tasks.Count);
+
+        // A refusal attempts no write, so LastWriteSucceeded — observed, not probed — stays null:
+        // an unattempted write is not evidence of anything.
+        Assert.Null(store.LastWriteSucceeded);
+
+        // The write lock was released, not left held by a `return` that skipped the `finally` —
+        // an ordinary mutation right after the refusal must still land.
+        await store.MutateAsync<Never>(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "After refusal")])]), CancellationToken.None);
+        Assert.Equal(6, store.Read().Tasks.Count);
+    }
+
+    [Fact]
+    public async Task An_applied_mutation_returns_Applied()
+    {
+        SeedTasksJson("[]");
+        var store = new JsonStore(_dataDir);
+
+        var result = await store.MutateAsync<Never>(
+            view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "Water the plants")])]),
+            CancellationToken.None);
+
+        Assert.True(result.TryPickT0(out _, out _));
     }
 
     [Fact]
