@@ -80,6 +80,38 @@ The ticket's own body, the plan's Global constraints, the ADRs it points at
 (`docs/adr/README.md` first), and `CONTEXT.md` **only by the line ranges the ticket names**, via
 `CONTEXT-INDEX.md`. Never read `CONTEXT.md` whole — it's ~122 KB.
 
+## 4a. Brief the subagent from what you already read — Claude lanes only
+
+*Codex works its tickets directly; skip this step there.*
+
+Claude's `CLAUDE.md` requires implementation work to go to the `coder` subagent, so on a Claude
+lane you do step 4's reading and someone else does steps 5–7. That hand-off is where a lane
+wastes its budget, in one specific way: **you finish step 4, then tell the subagent to go read
+the same ticket and the same ADRs.** It does — from cold, with no idea which paragraphs mattered
+— and can burn a whole session limit re-deriving what you are holding. Seen on #76: the first
+subagent hit its limit during exploration, having written nothing.
+
+So the brief carries **findings, not a reading list**. Name the decision and its reason inline
+(*"`SendReceiptAsync` returns `Task<bool>` — #69: adapters return an outcome, 'logged, never
+retried' is the caller's policy"*), and cite the source as provenance the subagent can check, not
+as homework it must do first. Point it at a document only where you genuinely need it to read
+more than you did.
+
+Two properties keep the brief cheap to recover:
+
+- **Write it so it can be re-sent verbatim.** A subagent dies mid-ticket — budget, a crash, a bad
+  turn — and a self-contained brief costs one re-dispatch to retry. A brief assembled across
+  several conversational messages costs re-deriving the whole spec. Write the whole thing before
+  you send any of it.
+- **Tell it to commit each section as it lands.** Step 9's standing permission is addressed to
+  *you*, and the subagent never sees this skill — so restate it in the brief, as crash-resilience
+  rather than as permission. An interruption should then cost one section, not the run.
+
+Scope each task so it can finish without asking questions, and dispatch genuinely independent
+tasks in parallel — but never two that touch one file, which is the same hazard the plan's
+disjoint-ownership rule exists to prevent, one level down. Review the diff yourself afterwards
+and confirm the verification it claims actually ran; never take the report at face value.
+
 ## 5. Work it TDD, red first
 
 Write the test, run it, confirm it fails for the right reason — an assertion failure, not a
