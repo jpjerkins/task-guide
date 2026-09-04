@@ -55,18 +55,27 @@ public sealed record TagSet(
         return true;
     }
 
+    /// <summary>
+    /// The per-Dimension contributions are summed (not <see cref="HashCode.Add"/>ed one at a time)
+    /// because <c>Dimensions</c>' enumeration order is insertion order, and <c>HashCode.Add</c>
+    /// folds sequentially — hashing Dimensions in that order would make the hash sensitive to key
+    /// insertion order even though <see cref="Equals"/> is not, breaking the Equals/GetHashCode
+    /// contract for two Dimension-key-reordered but otherwise identical sets.
+    /// </summary>
     public override int GetHashCode()
     {
         var hash = new HashCode();
         hash.Add(MultisetHash(LooseTags));
+        var dimensionSum = 0;
         foreach (var (id, values) in Dimensions)
         {
             if (values.Count == 0) continue;
             unchecked
             {
-                hash.Add(id.GetHashCode() + MultisetHash(values));
+                dimensionSum += id.GetHashCode() + MultisetHash(values);
             }
         }
+        hash.Add(dimensionSum);
         return hash.ToHashCode();
     }
 

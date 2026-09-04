@@ -124,6 +124,9 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a Dimension mapped to an empty list equals that Dimension being absent, and hashes equal
 - a genuine difference still compares unequal: a different value on a Dimension; an extra
   Dimension; a different loose Tag; a duplicate value or loose Tag against the same one held once
+- Dimension key insertion order does not change equality or the hash — `HashCode.Add` folds
+  sequentially, so the per-Dimension hash contributions must be combined order-free too, not just
+  the per-Dimension `Equals`
 
 ### Dimension registry
 

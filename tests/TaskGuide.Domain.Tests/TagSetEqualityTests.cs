@@ -172,4 +172,26 @@ public sealed class TagSetEqualityTests
 
         Assert.False(a.Equals(b));
     }
+
+    [Fact]
+    public void Dimension_key_insertion_order_does_not_change_equality_or_the_hash()
+    {
+        var a = new TagSet(
+            new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [Effort] = new[] { new TagValue("low") },
+                [Location] = new[] { new TagValue("home") },
+            },
+            Array.Empty<LooseTag>());
+        var b = new TagSet(
+            new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [Location] = new[] { new TagValue("home") },
+                [Effort] = new[] { new TagValue("low") },
+            },
+            Array.Empty<LooseTag>());
+
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
 }
