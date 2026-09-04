@@ -1,3 +1,4 @@
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Tags;
 
 namespace TaskGuide.Domain.Dimensions;
@@ -46,6 +47,18 @@ public sealed record CategoricalDimension(
     // and the empty set already does everything a default was doing.
 
     public override ControlShape ControlShape => new ControlShape.MultiSelect();
+
+    /// <summary><see cref="DeclaredValues"/> compares as a multiset — both sides carry a set,
+    /// and matching is subset.</summary>
+    public bool Equals(CategoricalDimension? other) =>
+        other is not null
+        && Id.Equals(other.Id)
+        && Label == other.Label
+        && WindowSource == other.WindowSource
+        && StructuralEquality.MultisetEqual(DeclaredValues, other.DeclaredValues);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, Label, WindowSource, StructuralEquality.MultisetHash(DeclaredValues));
 }
 
 /// <summary>Mental energy, Duration. One value per side; the Window's is a ceiling.</summary>
@@ -77,6 +90,26 @@ public sealed record OrdinalDimension(
     /// no default (its absence <em>is</em> `Unprocessed`), so it derives no such control.
     /// </summary>
     public override ControlShape ControlShape => new ControlShape.Slider(HasLeaveAtDefault: TaskDefault is not null);
+
+    /// <summary><see cref="OrderedValues"/> compares as a sequence — <see cref="RankOf"/> returns
+    /// the index, so a reorder is a different axis.</summary>
+    public bool Equals(OrdinalDimension? other) =>
+        other is not null
+        && Id.Equals(other.Id)
+        && Label == other.Label
+        && WindowSource == other.WindowSource
+        && TaskDefault == other.TaskDefault
+        && WindowDefault == other.WindowDefault
+        && StructuralEquality.SequenceEqual(OrderedValues, other.OrderedValues);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            Id,
+            Label,
+            WindowSource,
+            TaskDefault,
+            WindowDefault,
+            StructuralEquality.SequenceHash(OrderedValues));
 }
 
 /// <summary>

@@ -1,3 +1,5 @@
+using TaskGuide.Domain.Common;
+
 namespace TaskGuide.Domain.Dimensions;
 
 /// <summary>
@@ -14,6 +16,13 @@ public sealed record DimensionRegistry(IReadOnlyList<Dimension> Dimensions)
 {
     public Dimension? Claiming(Tags.TagValue value) =>
         Dimensions.FirstOrDefault(d => d.Values.Contains(value));
+
+    /// <summary><see cref="Dimensions"/> compares as a multiset — the declared set, and
+    /// <see cref="Claiming"/> searches by value, not by position.</summary>
+    public bool Equals(DimensionRegistry? other) =>
+        other is not null && StructuralEquality.MultisetEqual(Dimensions, other.Dimensions);
+
+    public override int GetHashCode() => StructuralEquality.MultisetHash(Dimensions);
 
     /// <summary>Throws <see cref="DuplicateDimensionValueException"/>; never returns false.</summary>
     public void AssertNoDuplicateValues()
