@@ -1,3 +1,4 @@
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 
 namespace TaskGuide.Domain.Tags;
@@ -40,7 +41,7 @@ public sealed record TagSet(
     {
         if (other is null) return false;
 
-        if (!MultisetEqual(LooseTags, other.LooseTags)) return false;
+        if (!StructuralEquality.MultisetEqual(LooseTags, other.LooseTags)) return false;
 
         var mine = Dimensions.Where(kv => kv.Value.Count > 0).ToArray();
         var theirs = other.Dimensions.Where(kv => kv.Value.Count > 0).ToArray();
@@ -49,7 +50,7 @@ public sealed record TagSet(
         foreach (var (id, values) in mine)
         {
             if (!other.Dimensions.TryGetValue(id, out var otherValues)) return false;
-            if (!MultisetEqual(values, otherValues)) return false;
+            if (!StructuralEquality.MultisetEqual(values, otherValues)) return false;
         }
 
         return true;
@@ -65,42 +66,17 @@ public sealed record TagSet(
     public override int GetHashCode()
     {
         var hash = new HashCode();
-        hash.Add(MultisetHash(LooseTags));
+        hash.Add(StructuralEquality.MultisetHash(LooseTags));
         var dimensionSum = 0;
         foreach (var (id, values) in Dimensions)
         {
             if (values.Count == 0) continue;
             unchecked
             {
-                dimensionSum += HashCode.Combine(id, MultisetHash(values));
+                dimensionSum += HashCode.Combine(id, StructuralEquality.MultisetHash(values));
             }
         }
         hash.Add(dimensionSum);
         return hash.ToHashCode();
-    }
-
-    /// <summary>Order-insensitive, duplicate-count-sensitive comparison — a multiset, not a set.</summary>
-    private static bool MultisetEqual<T>(IReadOnlyList<T> a, IReadOnlyList<T> b) where T : notnull
-    {
-        if (a.Count != b.Count) return false;
-        var counts = new Dictionary<T, int>();
-        foreach (var value in a) counts[value] = counts.GetValueOrDefault(value) + 1;
-        foreach (var value in b)
-        {
-            if (!counts.TryGetValue(value, out var count) || count == 0) return false;
-            counts[value] = count - 1;
-        }
-        return true;
-    }
-
-    /// <summary>An unchecked sum of element hashes is order-free and duplicate-count-sensitive.</summary>
-    private static int MultisetHash<T>(IReadOnlyList<T> values) where T : notnull
-    {
-        var sum = 0;
-        unchecked
-        {
-            foreach (var value in values) sum += value.GetHashCode();
-        }
-        return sum;
     }
 }
