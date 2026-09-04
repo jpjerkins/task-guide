@@ -8,7 +8,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="*" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/TaskGuide.Application/TaskGuide.Application.csproj" />
+    <ProjectReference Include="../../src/TaskGuide.Infrastructure/TaskGuide.Infrastructure.csproj" />
     <ProjectReference Include="../TaskGuide.TestSupport/TaskGuide.TestSupport.csproj" />
   </ItemGroup>
 </Project>

@@ -271,6 +271,11 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Delivery
 
+**Project:** spans two. The adapter half (*a Receipt is never retried*, *every failed attempt is
+logged*) is A1 → `TaskGuide.Infrastructure.Tests`. The executor half (*`firedAt` written only when
+Pushover accepts*, *a rejected push reads as unfired next tick*, *retries stop when the span
+closes*, *a Receipt is not written to the Fire record*) is F3 → `TaskGuide.Application.Tests`.
+
 - `firedAt` is written **only when Pushover accepts**
 - a rejected push reads as unfired next tick and is retried
 - retries stop when the span closes (opportunity) or at the boundary (obligation)
@@ -279,6 +284,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a Receipt is not written to the Fire record
 
 ### Notification content
+
+**Project:** F1, `Reminder.For` in `Domain/Notifications/` → `TaskGuide.Domain.Tests`.
 
 - the title is the top-ranked Task in full, with its Duration
 - the shortlist is three, then `+N more` when N ≥ 1
@@ -298,6 +305,10 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Weather, the fetched axis
 
+**Project:** spans two. *No weather-tagged Active Task ⇒ no API call* is F6, executor state →
+`TaskGuide.Application.Tests`. The rest (current vs forecast, unknown fails closed, the
+UI-visible footer note) is A2 → `TaskGuide.Infrastructure.Tests`.
+
 - no weather-tagged Active Task ⇒ **no API call**
 - a firing uses current conditions; a future evaluation uses the forecast
 - unknown weather matches nothing (fails closed) in both headless and UI-visible cases
@@ -315,6 +326,12 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Glance
 
+**Project:** spans three tickets in two lanes — #79 the Domain rule (`GlanceState` equality,
+`ShouldSend`) → `TaskGuide.Domain.Tests`; #84 the executor's scheduling state (recomputed every
+tick, the 30-minute floor, the one retry) → `TaskGuide.Application.Tests`; #88 the renderer →
+`TaskGuide.Infrastructure.Tests`. The one-test-file-per-section rule does not hold for this
+section.
+
 - `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
   `Shortlist` instances compare equal — the reference-equality trap a positional record falls
   into on an `IReadOnlyList` member
@@ -330,6 +347,9 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Liveness
 
+**Project:** A3 → `TaskGuide.Infrastructure.Tests`, except the first bullet (*`/health` reports
+`{ ok, lastTick, storage, uptime }`*), which is the endpoint → `TaskGuide.Api.Tests`.
+
 - `/health` reports `{ ok, lastTick, storage, uptime }`
 - a stalled loop reports `ok: false` while HTTP still answers
 - **read health parses the file** — a truncated or empty file reports unreadable where `stat` would
@@ -338,11 +358,64 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a registry collision signals outbound before exiting
 - load, memory and Pushover reachability appear nowhere in the predicate
 
+### Test support (#77)
+
+**Project:** `TaskGuide.Application.Tests` — the shared doubles in `TaskGuide.TestSupport` are
+production code for every lane after Wave 0, so they carry their own tests. The `DayShapeReader`
+bullet below is `TaskGuide.Infrastructure.Tests`, which can reference `TaskGuide.Infrastructure`
+directly.
+
+- an unseeded `FakeStoreView` reads empty on every member except the default Pattern
+- **an unseeded `FakeStoreView`'s default Pattern resolves to a Day template present in
+  `DayTemplates`** — the same three steps `DayShapeReader.For` takes, so an unseeded view no
+  longer throws on the central read path every later lane exercises (#77 review finding 1)
+- a seeded `FakeStoreView` reads back exactly what it was given
+- `CompletionsFor` on an unseeded Task is an empty log, not a throw
+- `FiresOn` on an unseeded date is empty, not a throw
+- an applied mutation is recorded and returns `Applied`
+- an applied write is visible to the next `Read`
+- **the mutation lambda is handed the view as it stands at call time** — not one read earlier
+- a refused mutation returns the refusal, writes nothing, and is not recorded
+- `LastWriteSucceeded` is `null` before any write and `true` after one
+- `LastWriteSucceeded` is untouched by a refusal and by an empty write list
+- an unrecognised write payload throws `NotImplementedException`, naming its type — matching
+  `JsonStore`'s type and message shape for the same programming error (#77 review finding 6)
+- a write that throws mid-apply leaves `Mutations` empty — a mutation is recorded only once it
+  has actually applied (#77 review finding 4)
+- a `PatternsWrite`'s `Patterns` list is deep-copied, not stored by reference (#77 review finding 2)
+- a `CompletionLogWrite`'s `Entries` list is deep-copied, not stored by reference (#77 review finding 2)
+- a `FiresWrite`'s `Rows` list is deep-copied, not stored by reference (#77 review finding 2)
+- **concurrent `MutateAsync` calls serialise, so none of their writes are lost** (#77 review finding 3)
+- `MutateAsync` throws for an already-cancelled token (#77 review finding 7)
+- `FailNextWrite` makes the next write throw, reports `LastWriteSucceeded` false, and applies
+  nothing (#77 review finding 5)
+- `FailNextWrite` only fails the next write, not the one after it
+- **an unseeded `FakeStore` handed to `DayShapeReader` returns a usable `DayShape`** — the real
+  end-to-end check for #77 review finding 1, run against the actual reader rather than the proxy
+  above
+- a recording sender records what it was handed and reports success
+- a recording sender reports the failure it was configured for, without throwing
+- an unconfigured `FakeWeatherSource` is `Unavailable` on both axes
+- a configured `FakeWeatherSource` yields its known value and records the call
+- `FakeWeatherSource.CurrentAsync` throws for an already-cancelled token (#77 review finding 7)
+- `FakeWeatherSource.ForecastAsync` throws for an already-cancelled token (#77 review finding 7)
+- an unseeded date reads an empty `DayShape`, and the read is recorded
+- a recording heartbeat keeps every tick instant in order
+- a recording startup sequence keeps its phases in order
+- a written fire row survives the next unrelated mutation
+- a completion log seeded for a task absent from Tasks survives the next mutation
+- a view already built is unaffected by a later `With…` call on the same builder
+
 ---
 
 ## Sequential · `TaskGuide.Storage.Tests`
 
 Against `fixtures/data`, the golden store.
+
+*The five stamp/promote/delete bullets below (from "a date materialised mid-day..." through
+"deleting an `Unused` template corrupts no record") are uncovered between this ticket and S1,
+their tests deleted (#77) because they enacted the rule in their own bodies rather than testing
+production behaviour — accepted knowingly, since the deleted tests never detected anything.*
 
 - the whole store loads into typed objects at startup
 - every read is served from memory

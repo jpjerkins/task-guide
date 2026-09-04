@@ -6,7 +6,7 @@ using TaskGuide.Domain.Notifications;
 using TaskGuide.Infrastructure.Pushover;
 using Xunit;
 
-namespace TaskGuide.Application.Tests;
+namespace TaskGuide.Infrastructure.Tests;
 
 /// <summary>
 /// Constraints from #51/#3: two static secrets from configuration (never hardcoded), never
