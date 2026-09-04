@@ -10,5 +10,6 @@
     <Project Path="tests/TaskGuide.Application.Tests/TaskGuide.Application.Tests.csproj" />
     <Project Path="tests/TaskGuide.Domain.Tests/TaskGuide.Domain.Tests.csproj" />
     <Project Path="tests/TaskGuide.Storage.Tests/TaskGuide.Storage.Tests.csproj" />
+    <Project Path="tests/TaskGuide.TestSupport/TaskGuide.TestSupport.csproj" />
   </Folder>
 </Solution>

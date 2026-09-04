@@ -338,6 +338,30 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a registry collision signals outbound before exiting
 - load, memory and Pushover reachability appear nowhere in the predicate
 
+### Test support (#77)
+
+**Project:** `TaskGuide.Application.Tests` — the shared doubles in `TaskGuide.TestSupport` are
+production code for every lane after Wave 0, so they carry their own tests.
+
+- an unseeded `FakeStoreView` reads empty on every member
+- a seeded `FakeStoreView` reads back exactly what it was given
+- `CompletionsFor` on an unseeded Task is an empty log, not a throw
+- `FiresOn` on an unseeded date is empty, not a throw
+- an applied mutation is recorded and returns `Applied`
+- an applied write is visible to the next `Read`
+- **the mutation lambda is handed the view as it stands at call time** — not one read earlier
+- a refused mutation returns the refusal, writes nothing, and is not recorded
+- `LastWriteSucceeded` is `null` before any write and `true` after one
+- `LastWriteSucceeded` is untouched by a refusal and by an empty write list
+- an unrecognised write payload throws, naming its type
+- a recording sender records what it was handed and reports success
+- a recording sender reports the failure it was configured for, without throwing
+- an unconfigured `FakeWeatherSource` is `Unavailable` on both axes
+- a configured `FakeWeatherSource` yields its known value and records the call
+- an unseeded date reads an empty `DayShape`, and the read is recorded
+- a recording heartbeat keeps every tick instant in order
+- a recording startup sequence keeps its phases in order
+
 ---
 
 ## Sequential · `TaskGuide.Storage.Tests`
