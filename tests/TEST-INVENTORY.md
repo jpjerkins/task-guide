@@ -368,6 +368,11 @@ production code for every lane after Wave 0, so they carry their own tests.
 
 Against `fixtures/data`, the golden store.
 
+*The five stamp/promote/delete bullets below (from "a date materialised mid-day..." through
+"deleting an `Unused` template corrupts no record") are uncovered between this ticket and S1,
+their tests deleted (#77) because they enacted the rule in their own bodies rather than testing
+production behaviour — accepted knowingly, since the deleted tests never detected anything.*
+
 - the whole store loads into typed objects at startup
 - every read is served from memory
 - **a mutation writes the affected file(s) before the request returns**

@@ -3,6 +3,7 @@ using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
+using TaskGuide.Domain.Tasks;
 using TaskGuide.Infrastructure.Storage;
 using Xunit;
 
@@ -60,6 +61,9 @@ public sealed class WholeStoreTests : IDisposable
 
     private static DayTemplate NewDayTemplate(string id, string name) =>
         new(new DayTemplateId(id), name, [], []);
+
+    private static TaskItem NewTask(string id, string title) =>
+        new(new TaskId(id), title, null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
 
     /// <summary>
     /// Makes the file at <paramref name="path"/> impossible to write atomically, without
@@ -291,5 +295,57 @@ public sealed class WholeStoreTests : IDisposable
         var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
         Assert.Equal("2026-08-15", onDisk[0]!["date"]!.GetValue<string>());
         Assert.Null(onDisk[0]!["fromTheFuture"]);
+    }
+
+    /// <summary>
+    /// `tests/TEST-INVENTORY.md`: "a restore under a running service is invisible, and the next
+    /// mutation destroys it" — the one test that documents a failure mode rather than preventing
+    /// it. `CONTEXT.md` (1099-1183), "Restoring requires the service stopped": the store is
+    /// memory-authoritative, so files restored underneath a live service are invisible, and the
+    /// next mutation overwrites the restored bytes from memory. Do not "fix" this — it falls
+    /// straight out of memory-authoritative storage and is why #49's restore drill exists.
+    /// </summary>
+    [Fact]
+    public async Task A_restore_under_a_running_service_is_invisible_and_the_next_mutation_destroys_it()
+    {
+        SeedWholeFixture();
+        var store = new JsonStore(_dataDir);
+        var before = store.Read().Tasks.Count;
+        Assert.True(before > 0);
+
+        // A Backup restore performed on disk while the service is still running — the collection
+        // file is overwritten underneath the live store.
+        var tasksPath = Path.Combine(_dataDir, "tasks.json");
+        var restoredJson = "[]";
+        File.WriteAllText(tasksPath, restoredJson);
+
+        // Invisible: the memory-authoritative store still serves the pre-restore state.
+        Assert.Equal(before, store.Read().Tasks.Count);
+
+        // The next mutation writes tasks.json from memory, destroying the just-restored bytes.
+        var newTask = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "Water the plants");
+        await store.MutateAsync<Never>(view => new StoreMutation([new TasksWrite([.. view.Tasks, newTask])]), CancellationToken.None);
+
+        Assert.NotEqual(restoredJson, File.ReadAllText(tasksPath));
+        Assert.Equal(before + 1, store.Read().Tasks.Count);
+    }
+
+    /// <summary>
+    /// Beyond-inventory (ruling 2, task-lead directive): <c>JsonStore.cs:373</c> flipped
+    /// <c>LastWriteSucceeded</c> to <c>true</c> unconditionally on the success path, unlike the
+    /// symmetric failure path a few lines above which is guarded by <c>attemptedWrite</c>. An
+    /// empty <c>OrderedWrites</c> list — no caller does this today, but nothing prevented it —
+    /// would flip `null` to `true` without a byte reaching disk: a false healthy, which
+    /// `IStore.LastWriteSucceeded`'s own doc says must never happen.
+    /// </summary>
+    [Fact]
+    public async Task A_mutation_with_no_writes_leaves_LastWriteSucceeded_untouched()
+    {
+        var store = new JsonStore(_dataDir);
+        Assert.Null(store.LastWriteSucceeded);
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([]), CancellationToken.None);
+
+        Assert.Null(store.LastWriteSucceeded);
     }
 }
