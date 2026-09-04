@@ -240,8 +240,11 @@ public sealed class JsonStoreTests : IDisposable
         SeedTasksJson("[]");
         var store = new JsonStore(_dataDir);
 
-        var result = await store.MutateAsync<Never>(
-            view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "Water the plants")])]),
+        // Refused, not Never, as the type argument — Never is uninhabited, so
+        // OneOf<Applied, Never> can only ever be Applied and the assertion below would be true
+        // by type, not by behaviour. With Refused reachable, TryPickT0 is a real assertion.
+        var result = await store.MutateAsync<Refused>(
+            view => OneOf<StoreMutation, Refused>.FromT0(new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "Water the plants")])])),
             CancellationToken.None);
 
         Assert.True(result.TryPickT0(out _, out _));
