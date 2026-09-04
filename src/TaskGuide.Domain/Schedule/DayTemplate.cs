@@ -13,7 +13,34 @@ public sealed record DayTemplate(
     DayTemplateId Id,
     string Name,
     IReadOnlyList<AvailabilityWindow> Windows,
-    IReadOnlyList<EventPrototype> EventPrototypes);
+    IReadOnlyList<EventPrototype> EventPrototypes)
+{
+    /// <summary>
+    /// <see cref="Windows"/> and <see cref="EventPrototypes"/> compare as multisets — a Window is
+    /// a per-day instance, not a shared definition (`CONTEXT.md` § Availability Window), and an
+    /// EventPrototype carries the same relationship to a template — so neither collection's order
+    /// carries meaning.
+    /// </summary>
+    public bool Equals(DayTemplate? other) =>
+        other is not null
+        && Id.Equals(other.Id)
+        && Name == other.Name
+        && StructuralEquality.MultisetEqual(Windows, other.Windows)
+        && StructuralEquality.MultisetEqual(EventPrototypes, other.EventPrototypes);
+
+    /// <summary>
+    /// The two members' hashes are combined via <see cref="HashCode.Combine{T1, T2, T3, T4}"/>,
+    /// not summed — summing would let an element's contribution move from one member to the
+    /// other without changing the total, the same additive-decomposition trap #115 guards
+    /// against for a Dimension's id and its values.
+    /// </summary>
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            Id,
+            Name,
+            StructuralEquality.MultisetHash(Windows),
+            StructuralEquality.MultisetHash(EventPrototypes));
+}
 
 /// <summary>
 /// A dateless Event held by a template, instantiating into a real dated Event when the template

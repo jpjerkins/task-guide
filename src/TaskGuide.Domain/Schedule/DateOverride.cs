@@ -25,6 +25,17 @@ public sealed record DateOverride(
 {
     /// <summary>A one-off day has no use record — nothing was stamped.</summary>
     public bool IsOneOffDay => Used is null;
+
+    /// <summary><see cref="Windows"/> compares as a multiset — a Window is a per-day instance,
+    /// not a position (`CONTEXT.md` § Availability Window).</summary>
+    public bool Equals(DateOverride? other) =>
+        other is not null
+        && Date == other.Date
+        && StructuralEquality.MultisetEqual(Windows, other.Windows)
+        && Equals(Used, other.Used);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Date, StructuralEquality.MultisetHash(Windows), Used);
 }
 
 /// <summary>
