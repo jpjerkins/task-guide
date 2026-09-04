@@ -20,10 +20,20 @@ namespace TaskGuide.Infrastructure.Pushover;
 /// fields straight across without the ranking, shortlist or footer formatting a later ticket
 /// owns — that logic doesn't exist yet, so it isn't faked here.
 /// </remarks>
-public sealed class PushoverClient(HttpClient httpClient, IOptions<PushoverOptions> options, ILogger<PushoverClient> logger)
+public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOptions<PushoverOptions> options, ILogger<PushoverClient> logger)
     : IReminderSender, IReceiptSender, IGlanceSender
 {
     private const string MessagesUrl = "https://api.pushover.net/1/messages.json";
+
+    // Named client resolved via IHttpClientFactory, not stored in a field: this client is a
+    // singleton living for the process lifetime (#76), and holding one HttpClient — and so one
+    // HttpMessageHandler — that long would defeat the factory's handler rotation, which exists so
+    // a long-lived process picks up DNS changes. Pushover sits behind a CDN whose IPs move, and
+    // this process (the pi5's TickLoop) runs for months. The failure mode is silent — IHealth
+    // deliberately excludes Pushover reachability from liveness, so pushes would just stop with
+    // /health still green — which is exactly the kind of thing that gets "optimised" back into a
+    // field by someone who doesn't know why it's here. Don't.
+    public const string HttpClientName = "pushover";
 
     public async Task<bool> SendReminderAsync(Reminder reminder, CancellationToken cancellationToken) =>
         await SendAsync(reminder.Title, reminder.WindowContext, reminder.LandingPage, priority: 0, cancellationToken);
@@ -64,6 +74,7 @@ public sealed class PushoverClient(HttpClient httpClient, IOptions<PushoverOptio
 
         try
         {
+            var httpClient = httpClientFactory.CreateClient(HttpClientName);
             using var response = await httpClient.PostAsync(
                 MessagesUrl,
                 new FormUrlEncodedContent(new Dictionary<string, string>

@@ -29,6 +29,11 @@ public sealed class PushoverClientTests
         }
     }
 
+    private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => client;
+    }
+
     private static Receipt SampleReceipt() => new(
         new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
         "Fix the shelf bracket",
@@ -41,7 +46,7 @@ public sealed class PushoverClientTests
         var handler = new CapturingHandler();
         var httpClient = new HttpClient(handler);
         var options = Options.Create(new PushoverOptions { Token = "token123", UserKey = "user123" });
-        var client = new PushoverClient(httpClient, options, NullLogger<PushoverClient>.Instance);
+        var client = new PushoverClient(new StubHttpClientFactory(httpClient), options, NullLogger<PushoverClient>.Instance);
 
         await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
 
@@ -57,7 +62,7 @@ public sealed class PushoverClientTests
         var handler = new CapturingHandler();
         var httpClient = new HttpClient(handler);
         var options = Options.Create(new PushoverOptions { Token = null, UserKey = null });
-        var client = new PushoverClient(httpClient, options, NullLogger<PushoverClient>.Instance);
+        var client = new PushoverClient(new StubHttpClientFactory(httpClient), options, NullLogger<PushoverClient>.Instance);
 
         await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
 
