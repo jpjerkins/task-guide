@@ -131,6 +131,73 @@ Categorical, from `CONTEXT.md`'s table, one test each:
   guard against summing each Dimension's id hash and its values hash independently (additively
   decomposable), not a general promise that unequal `TagSet`s always hash differently
 
+### Record equality over collections (#114)
+
+The #115 trap, swept across every remaining Domain record with an `IReadOnlyList` or
+`IReadOnlyDictionary` member: a positional record's synthesised `Equals` compares such a member by
+**reference**. Preventive — none of these records is compared anywhere on `main` today. Each member's
+semantics is decided from `CONTEXT.md`, not from convenience, and every order-insensitive `Equals` is
+paired with an order-free hash (`HashCode.Add` folds sequentially, so an order-sensitive hash beside
+an order-insensitive `Equals` breaks the contract and loses the record from a `Dictionary`).
+
+**Sequence members** (order *is* the meaning): `Pattern.Days`, `OrdinalDimension.OrderedValues`,
+`Reminder.Shortlist`, `Reminder.Events`. **Multiset members** (order-insensitive,
+duplicate-count-sensitive, following `TagSet`): everything else.
+
+- every record below: two separately-constructed, structurally identical instances compare equal and
+  hash equal, and hold non-same collection instances
+- every record below: a differing element in each collection member compares unequal
+
+#### Schedule
+
+- `DayTemplate` `Windows` and `EventPrototypes` compare equal regardless of order, and hash equal —
+  a Window is a per-day instance, not a position (`CONTEXT.md` § Availability Window)
+- `DateOverride.Windows` compares equal regardless of order, and hashes equal
+- `DayShape` `Windows` and `Events` compare equal regardless of order, and hash equal
+- **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
+  and `this[DayOfWeek]` indexes them positionally
+- `PatternBook.Patterns` compares equal regardless of order, and hashes equal
+- swapping elements between `DayTemplate`'s two list members compares unequal and hashes differently
+
+#### Dimensions
+
+- `CategoricalDimension.DeclaredValues` compares equal regardless of order, and hashes equal — a
+  categorical axis carries a set, and matching is subset
+- **`OrdinalDimension.OrderedValues` compares unequal when reordered** — `RankOf` is the index, so
+  a reorder is a different axis
+- an `OrdinalDimension` differing only in `TaskDefault` or `WindowDefault` compares unequal
+- `DimensionRegistry.Dimensions` compares equal regardless of order, and hashes equal
+- a `CategoricalDimension` and an `OrdinalDimension` with the same id, label and values compare
+  unequal — the derived type is part of the identity
+
+#### Tasks
+
+- `CompletionLog.Entries` compares equal regardless of order, and hashes equal — `Latest` is a
+  `MaxBy` and `Covers` an `Any`, so nothing in the log reads a position
+- a `CompletionLog` holding one entry twice compares unequal to one holding it once
+- **`EveryNWeeksOn.Weekdays` compares equal regardless of order**, and hashes equal — a set of
+  weekdays, and `EveryNWeeksOn` is compared through `Recurrence`, whose `Rule` is a `OneOf`-style
+  closed set
+
+#### Firing
+
+- `DayFires.Rows` compares equal regardless of order, and hashes equal — the file is keyed on
+  `(date, windowId, kind)`, so append order carries nothing
+
+#### Notifications and evaluation contexts
+
+- **`Reminder.Shortlist` compares unequal when reordered** — it is the ranked shortlist, and the
+  first line is the top-ranked Task
+- **`Reminder.Events` compares unequal when reordered** — date ascending is the stated order
+- `Reminder.FailedFetches` compares equal regardless of order, and hashes equal
+- `MatchContext.Fetched` compares equal regardless of Dimension key insertion order and regardless of
+  value order within a Dimension, and hashes equal; `FailedFetches` likewise
+- `DerivedObligationContext`'s `DatedEvents`, `Overrides`, `Completions` and `DayTemplates` each
+  compare equal regardless of order, and hash equal
+- **two `DerivedObligationContext`s differing only in their `IDayShapeReader` compare unequal** — an
+  interface member has no value semantics to compare, so it stays a reference comparison, and this
+  test pins that as a decision rather than an oversight
+
 ### Dimension registry
 
 - **a registry declaring one value on two Dimensions refuses to start**, naming the value
