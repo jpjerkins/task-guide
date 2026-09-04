@@ -348,6 +348,10 @@ section.
 - `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
   `Shortlist` instances compare equal — the reference-equality trap a positional record falls
   into on an `IReadOnlyList` member
+- `GlanceState` equality (#115): the same holds when the `Shortlist`'s `TaskItem`s or the
+  `ResolvedWindow`'s `AvailabilityWindow` carry separately-constructed, structurally-equal
+  Tag-bearing `TagSet`s (not the shared `TagSet.Empty` instance), for both `InsideWindow` and
+  `NextWindow`
 - a genuine difference (a different `MatchingNow`, a different shortlist member) still compares unequal
 - recomputed every tick, sent only when the payload differs from the last one **sent**
 - not sent again inside 30 minutes
