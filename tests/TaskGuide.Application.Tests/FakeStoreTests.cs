@@ -294,4 +294,33 @@ public sealed class FakeStoreTests
             Assert.Equal(original.Id, active[weekday]);
         }
     }
+
+    /// <summary>#116 finding 2: a write that throws part-way through `OrderedWrites` — after an
+    /// earlier recognised write already landed — must report `LastWriteSucceeded` false, matching
+    /// `JsonStore`.</summary>
+    [Fact]
+    public async Task A_write_that_throws_part_way_through_OrderedWrites_reports_LastWriteSucceeded_false()
+    {
+        var store = new FakeStore();
+        var mine = new DayTemplate(new DayTemplateId("dt_mine"), "My day", [], []);
+
+        await Assert.ThrowsAsync<NotImplementedException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new DayTemplatesWrite([mine]), new UnrecognisedWrite()]), CancellationToken.None));
+
+        Assert.False(store.LastWriteSucceeded);
+    }
+
+    /// <summary>#116 finding 2: an unrecognised payload as the very first write never reaches a
+    /// real apply, so `LastWriteSucceeded` must stay untouched, matching `JsonStore` — this is
+    /// the boundary that keeps the fix a rule rather than a blanket `false`.</summary>
+    [Fact]
+    public async Task An_unrecognised_payload_as_the_very_first_write_leaves_LastWriteSucceeded_untouched()
+    {
+        var store = new FakeStore();
+
+        await Assert.ThrowsAsync<NotImplementedException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new UnrecognisedWrite()]), CancellationToken.None));
+
+        Assert.Null(store.LastWriteSucceeded);
+    }
 }

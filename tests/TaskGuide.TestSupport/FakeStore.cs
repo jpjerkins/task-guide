@@ -64,9 +64,23 @@ public sealed class FakeStore : IStore
                 }
 
                 var builder = ViewAsBuilder(_view);
-                foreach (var write in storeMutation.OrderedWrites)
+                var attemptedWrite = false;
+                try
                 {
-                    Apply(builder, write);
+                    foreach (var write in storeMutation.OrderedWrites)
+                    {
+                        Apply(builder, write);
+                        attemptedWrite = true;
+                    }
+                }
+                catch
+                {
+                    // Matches JsonStore.cs's own rule: LastWriteSucceeded documents an actual
+                    // apply, so an unrecognised payload that throws before any write in this list
+                    // has landed leaves it untouched, but once an earlier write has landed, a
+                    // later throw reports false (#116 finding 2).
+                    if (attemptedWrite) LastWriteSucceeded = false;
+                    throw;
                 }
 
                 _view = builder.Build();
