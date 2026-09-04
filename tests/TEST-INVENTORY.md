@@ -361,7 +361,9 @@ section.
 ### Test support (#77)
 
 **Project:** `TaskGuide.Application.Tests` — the shared doubles in `TaskGuide.TestSupport` are
-production code for every lane after Wave 0, so they carry their own tests.
+production code for every lane after Wave 0, so they carry their own tests. The `DayShapeReader`
+bullet below is `TaskGuide.Infrastructure.Tests`, which can reference `TaskGuide.Infrastructure`
+directly.
 
 - an unseeded `FakeStoreView` reads empty on every member except the default Pattern
 - **an unseeded `FakeStoreView`'s default Pattern resolves to a Day template present in
@@ -388,6 +390,9 @@ production code for every lane after Wave 0, so they carry their own tests.
 - `FailNextWrite` makes the next write throw, reports `LastWriteSucceeded` false, and applies
   nothing (#77 review finding 5)
 - `FailNextWrite` only fails the next write, not the one after it
+- **an unseeded `FakeStore` handed to `DayShapeReader` returns a usable `DayShape`** — the real
+  end-to-end check for #77 review finding 1, run against the actual reader rather than the proxy
+  above
 - a recording sender records what it was handed and reports success
 - a recording sender reports the failure it was configured for, without throwing
 - an unconfigured `FakeWeatherSource` is `Unavailable` on both axes
