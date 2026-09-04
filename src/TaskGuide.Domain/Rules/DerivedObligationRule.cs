@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
@@ -113,6 +114,42 @@ public sealed record DerivedObligationContext(
     public PatternBook? Patterns { get; init; }
 
     public IReadOnlyList<DayTemplate> DayTemplates { get; init; } = Array.Empty<DayTemplate>();
+
+    /// <summary>
+    /// <see cref="DatedEvents"/>, <see cref="Overrides"/>, <see cref="Completions"/>,
+    /// <see cref="DayTemplates"/> and <see cref="EventExceptions"/> — sets in the model — all
+    /// compare as multisets. <see cref="Shapes"/> is an <see cref="IDayShapeReader"/>: an
+    /// interface has no value semantics, so it stays a reference comparison — a decision, not an
+    /// oversight. <see cref="Boundary"/> is likewise a service, not a value, and stays reference-
+    /// compared (its class has no <c>Equals</c> override). <see cref="Patterns"/> and the
+    /// positional/init members not otherwise mentioned compare by value.
+    /// </summary>
+    public bool Equals(DerivedObligationContext? other) =>
+        other is not null
+        && Now.Equals(other.Now)
+        && ReferenceEquals(Shapes, other.Shapes)
+        && ReferenceEquals(Boundary, other.Boundary)
+        && Equals(Patterns, other.Patterns)
+        && StructuralEquality.MultisetEqual(DatedEvents, other.DatedEvents)
+        && StructuralEquality.MultisetEqual(Overrides, other.Overrides)
+        && StructuralEquality.MultisetEqual(Completions, other.Completions)
+        && StructuralEquality.MultisetEqual(DayTemplates, other.DayTemplates)
+        && StructuralEquality.MultisetEqual(EventExceptions, other.EventExceptions);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Now);
+        hash.Add(RuntimeHelpers.GetHashCode(Shapes));
+        hash.Add(RuntimeHelpers.GetHashCode(Boundary));
+        hash.Add(Patterns);
+        hash.Add(StructuralEquality.MultisetHash(DatedEvents));
+        hash.Add(StructuralEquality.MultisetHash(Overrides));
+        hash.Add(StructuralEquality.MultisetHash(Completions));
+        hash.Add(StructuralEquality.MultisetHash(DayTemplates));
+        hash.Add(StructuralEquality.MultisetHash(EventExceptions));
+        return hash.ToHashCode();
+    }
 
     /// <summary>
     /// The second of the exactly two ways a date's shape lacks E. Sparse and stored, like the

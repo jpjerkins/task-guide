@@ -55,4 +55,15 @@ public enum FireKind
     Fallback,
 }
 
-public sealed record DayFires(DateOnly Date, IReadOnlyList<FireRow> Rows);
+public sealed record DayFires(DateOnly Date, IReadOnlyList<FireRow> Rows)
+{
+    /// <summary><see cref="Rows"/> compares as a multiset — the file is keyed
+    /// <c>(date, windowId, kind)</c>, so append order carries nothing.</summary>
+    public bool Equals(DayFires? other) =>
+        other is not null
+        && Date == other.Date
+        && StructuralEquality.MultisetEqual(Rows, other.Rows);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Date, StructuralEquality.MultisetHash(Rows));
+}

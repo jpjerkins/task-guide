@@ -1,3 +1,4 @@
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
@@ -91,4 +92,59 @@ public sealed record MatchContext(
     AvailabilityWindow Window,
     TagValue DurationCeiling,
     IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> Fetched,
-    IReadOnlyList<DimensionId> FailedFetches);
+    IReadOnlyList<DimensionId> FailedFetches)
+{
+    /// <summary>
+    /// <see cref="Fetched"/> is the same shape as <see cref="TagSet.Dimensions"/> — a Dimension
+    /// key mapped to a value multiset — and compares the same way, including the empty-list
+    /// elision: a key mapped to an empty list equals that key being absent, matching
+    /// <see cref="Matcher.WindowCategoricalValues"/>'s own fallback to <c>Array.Empty</c> on a
+    /// missing key. <see cref="FailedFetches"/> compares as a multiset — a set of Dimension ids.
+    /// </summary>
+    public bool Equals(MatchContext? other)
+    {
+        if (other is null) return false;
+
+        if (!Window.Equals(other.Window)) return false;
+        if (!DurationCeiling.Equals(other.DurationCeiling)) return false;
+        if (!StructuralEquality.MultisetEqual(FailedFetches, other.FailedFetches)) return false;
+
+        var mine = Fetched.Where(kv => kv.Value.Count > 0).ToArray();
+        var theirs = other.Fetched.Where(kv => kv.Value.Count > 0).ToArray();
+        if (mine.Length != theirs.Length) return false;
+
+        foreach (var (id, values) in mine)
+        {
+            if (!other.Fetched.TryGetValue(id, out var otherValues)) return false;
+            if (!StructuralEquality.MultisetEqual(values, otherValues)) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The per-Dimension contributions are summed rather than <see cref="HashCode.Add"/>ed one at
+    /// a time, for the same reason as <see cref="TagSet.GetHashCode"/>: <see cref="Fetched"/>'s
+    /// enumeration order is insertion order, and <c>Equals</c> above is not sensitive to it.
+    /// </summary>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Window);
+        hash.Add(DurationCeiling);
+        hash.Add(StructuralEquality.MultisetHash(FailedFetches));
+
+        var fetchedSum = 0;
+        foreach (var (id, values) in Fetched)
+        {
+            if (values.Count == 0) continue;
+            unchecked
+            {
+                fetchedSum += HashCode.Combine(id, StructuralEquality.MultisetHash(values));
+            }
+        }
+        hash.Add(fetchedSum);
+
+        return hash.ToHashCode();
+    }
+}

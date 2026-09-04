@@ -195,6 +195,9 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - `Reminder.FailedFetches` compares equal regardless of order, and hashes equal
 - `MatchContext.Fetched` compares equal regardless of Dimension key insertion order and regardless of
   value order within a Dimension, and hashes equal; `FailedFetches` likewise
+- a `MatchContext.Fetched` Dimension key mapped to an empty list equals that key being absent, and
+  hashes equal — the same rule `TagSet.Dimensions` follows, and `FailedFetches`' own doc already
+  treats an unresolved fetch's absence as the empty set
 - `DerivedObligationContext`'s `DatedEvents`, `Overrides`, `Completions` and `DayTemplates` each
   compare equal regardless of order, and hash equal
 - **two `DerivedObligationContext`s differing only in their `IDayShapeReader` compare unequal** — an
