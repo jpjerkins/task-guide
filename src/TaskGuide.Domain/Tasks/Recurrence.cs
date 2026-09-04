@@ -1,3 +1,4 @@
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Time;
 
 namespace TaskGuide.Domain.Tasks;
@@ -104,7 +105,20 @@ public enum RecurrenceAnchor
 public abstract record RecurrenceRule;
 
 public sealed record EveryNDays(int N) : RecurrenceRule;
-public sealed record EveryNWeeksOn(int N, IReadOnlyList<DayOfWeek> Weekdays) : RecurrenceRule;
+
+public sealed record EveryNWeeksOn(int N, IReadOnlyList<DayOfWeek> Weekdays) : RecurrenceRule
+{
+    /// <summary><see cref="Weekdays"/> compares as a multiset — a set of weekdays, not a
+    /// sequence.</summary>
+    public bool Equals(EveryNWeeksOn? other) =>
+        other is not null
+        && N == other.N
+        && StructuralEquality.MultisetEqual(Weekdays, other.Weekdays);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(N, StructuralEquality.MultisetHash(Weekdays));
+}
+
 public sealed record MonthlyOnDayOfMonth(int DayOfMonth) : RecurrenceRule;
 public sealed record YearlyOn(int Month, int Day) : RecurrenceRule;
 

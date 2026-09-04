@@ -131,6 +131,86 @@ Categorical, from `CONTEXT.md`'s table, one test each:
   guard against summing each Dimension's id hash and its values hash independently (additively
   decomposable), not a general promise that unequal `TagSet`s always hash differently
 
+### Record equality over collections (#114)
+
+The #115 trap, swept across every remaining Domain record with an `IReadOnlyList` or
+`IReadOnlyDictionary` member: a positional record's synthesised `Equals` compares such a member by
+**reference**. Preventive — none of these records is compared anywhere on `main` today. Each member's
+semantics is decided from `CONTEXT.md`, not from convenience, and every order-insensitive `Equals` is
+paired with an order-free hash (`HashCode.Add` folds sequentially, so an order-sensitive hash beside
+an order-insensitive `Equals` breaks the contract and loses the record from a `Dictionary`).
+
+**Sequence members** (order *is* the meaning): `Pattern.Days`, `OrdinalDimension.OrderedValues`,
+`Reminder.Shortlist`, `Reminder.Events`. **Multiset members** (order-insensitive,
+duplicate-count-sensitive, following `TagSet`): everything else.
+
+- every record below: two separately-constructed, structurally identical instances compare equal and
+  hash equal, and hold non-same collection instances
+- every record below: a differing element in each collection member compares unequal
+
+#### Schedule
+
+- `DayTemplate` `Windows` and `EventPrototypes` compare equal regardless of order, and hash equal —
+  a Window is a per-day instance, not a position (`CONTEXT.md` § Availability Window)
+- `DateOverride.Windows` compares equal regardless of order, and hashes equal
+- `DayShape` `Windows` and `Events` compare equal regardless of order, and hash equal
+- **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
+  and `this[DayOfWeek]` indexes them positionally
+- two separately-constructed, structurally identical `Pattern`s (same `Days` order, non-same list
+  instance) compare equal and hash equal — the positive direction a reorder-only test cannot pin,
+  since reference equality also satisfies "reordered ⇒ unequal"
+- `PatternBook.Patterns` compares equal regardless of order, and hashes equal
+- a `DayTemplate` differing only in `Windows` compares unequal; one differing only in
+  `EventPrototypes` compares unequal — not a swap guard: `Windows` and `EventPrototypes` hold
+  different element types, so unlike a Dimension's id and its values (#115's swap guard), nothing
+  can migrate between the two members for an additive hash to hide
+
+#### Dimensions
+
+- `CategoricalDimension.DeclaredValues` compares equal regardless of order, and hashes equal — a
+  categorical axis carries a set, and matching is subset
+- **`OrdinalDimension.OrderedValues` compares unequal when reordered** — `RankOf` is the index, so
+  a reorder is a different axis
+- two separately-constructed, structurally identical `OrdinalDimension`s (same `OrderedValues`
+  order, non-same list instance) compare equal and hash equal
+- an `OrdinalDimension` differing only in `TaskDefault` or `WindowDefault` compares unequal
+- `DimensionRegistry.Dimensions` compares equal regardless of order, and hashes equal
+- a `CategoricalDimension` and an `OrdinalDimension` with the same id, label and values compare
+  unequal — the derived type is part of the identity
+
+#### Tasks
+
+- `CompletionLog.Entries` compares equal regardless of order, and hashes equal — `Latest` is a
+  `MaxBy` and `Covers` an `Any`, so nothing in the log reads a position
+- a `CompletionLog` holding one entry twice compares unequal to one holding it once
+- **`EveryNWeeksOn.Weekdays` compares equal regardless of order**, and hashes equal — a set of
+  weekdays, and `EveryNWeeksOn` is compared through `Recurrence`, whose `Rule` is a `OneOf`-style
+  closed set
+
+#### Firing
+
+- `DayFires.Rows` compares equal regardless of order, and hashes equal — the file is keyed on
+  `(date, windowId, kind)`, so append order carries nothing
+
+#### Notifications and evaluation contexts
+
+- **`Reminder.Shortlist` compares unequal when reordered** — it is the ranked shortlist, and the
+  first line is the top-ranked Task
+- **`Reminder.Events` compares unequal when reordered** — date ascending is the stated order
+- two separately-constructed, structurally identical `Reminder`s (same `Shortlist` and `Events`
+  order, non-empty and non-same list instances) compare equal and hash equal
+- `Reminder.FailedFetches` compares equal regardless of order, and hashes equal
+- `MatchContext.Fetched` compares equal regardless of Dimension key insertion order and regardless of
+  value order within a Dimension, and hashes equal; `FailedFetches` likewise
+- a `MatchContext.Fetched` Dimension key mapped to an empty list equals that key being absent, and
+  hashes equal — the same rule `TagSet.Dimensions` follows, and `FailedFetches`' own doc already
+  treats an unresolved fetch's absence as the empty set
+- `DerivedObligationContext`'s `DatedEvents`, `Overrides`, `Completions`, `DayTemplates` and
+  `EventExceptions` each compare equal regardless of order, and hash equal
+- **two `DerivedObligationContext`s differing only in their `IDayShapeReader` compare unequal** — an
+  interface member has no value semantics to compare, so it stays a reference comparison, and this
+  test pins that as a decision rather than an oversight
+
 ### Dimension registry
 
 - **a registry declaring one value on two Dimensions refuses to start**, naming the value

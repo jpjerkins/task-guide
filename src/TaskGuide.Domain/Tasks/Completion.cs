@@ -19,6 +19,16 @@ public sealed record CompletionLog(TaskId TaskId, IReadOnlyList<CompletionEntry>
 {
     public static CompletionLog Empty(TaskId id) => new(id, Array.Empty<CompletionEntry>());
 
+    /// <summary><see cref="Entries"/> compares as a multiset — <see cref="Latest"/> is a
+    /// <c>MaxBy</c> and <see cref="Covers"/> an <c>Any</c>, so nothing here reads a position.</summary>
+    public bool Equals(CompletionLog? other) =>
+        other is not null
+        && TaskId.Equals(other.TaskId)
+        && StructuralEquality.MultisetEqual(Entries, other.Entries);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(TaskId, StructuralEquality.MultisetHash(Entries));
+
     /// <summary>The most recently done entry, or null. Completion rules read `done`.</summary>
     public CompletionEntry? Latest => Entries.Count == 0 ? null : Entries.MaxBy(e => e.Done);
 

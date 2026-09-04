@@ -13,7 +13,36 @@ public sealed record DayTemplate(
     DayTemplateId Id,
     string Name,
     IReadOnlyList<AvailabilityWindow> Windows,
-    IReadOnlyList<EventPrototype> EventPrototypes);
+    IReadOnlyList<EventPrototype> EventPrototypes)
+{
+    /// <summary>
+    /// <see cref="Windows"/> and <see cref="EventPrototypes"/> compare as multisets — a Window is
+    /// a per-day instance, not a shared definition (`CONTEXT.md` § Availability Window), and an
+    /// EventPrototype carries the same relationship to a template — so neither collection's order
+    /// carries meaning.
+    /// </summary>
+    public bool Equals(DayTemplate? other) =>
+        other is not null
+        && Id.Equals(other.Id)
+        && Name == other.Name
+        && StructuralEquality.MultisetEqual(Windows, other.Windows)
+        && StructuralEquality.MultisetEqual(EventPrototypes, other.EventPrototypes);
+
+    /// <summary>
+    /// <see cref="Windows"/> holds <see cref="AvailabilityWindow"/>s and <see cref="EventPrototypes"/>
+    /// holds <see cref="EventPrototype"/>s — different element types, so nothing can migrate
+    /// between them and the additive-decomposition trap #115 guards against for a Dimension's id
+    /// and its values (a swappable pair of the <em>same</em> type) does not apply here. Combined
+    /// via <see cref="HashCode.Combine{T1, T2, T3, T4}"/> anyway, simply because there is no
+    /// reason to sum instead.
+    /// </summary>
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            Id,
+            Name,
+            StructuralEquality.MultisetHash(Windows),
+            StructuralEquality.MultisetHash(EventPrototypes));
+}
 
 /// <summary>
 /// A dateless Event held by a template, instantiating into a real dated Event when the template

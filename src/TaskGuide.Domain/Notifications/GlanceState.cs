@@ -1,4 +1,5 @@
 using OneOf;
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Tasks;
 using TaskGuide.Domain.Time;
 
@@ -33,20 +34,20 @@ public sealed record InsideWindow(ResolvedWindow Window, IReadOnlyList<TaskItem>
     /// <b>reference</b>, so two structurally identical states built on different list instances
     /// would compare unequal — the same watch-budget bug ADR-0011 warns about (#69: the Glance
     /// floor suppresses a redundant send by comparing states), arriving through a different door.
-    /// Sequence equality closes it.
+    /// <see cref="StructuralEquality"/>'s sequence equality closes it.
     /// </summary>
     public bool Equals(InsideWindow? other) =>
         other is not null
         && Window == other.Window
         && MatchingNow == other.MatchingNow
-        && Shortlist.SequenceEqual(other.Shortlist);
+        && StructuralEquality.SequenceEqual(Shortlist, other.Shortlist);
 
     public override int GetHashCode()
     {
         var hash = new HashCode();
         hash.Add(Window);
         hash.Add(MatchingNow);
-        foreach (var task in Shortlist) hash.Add(task);
+        hash.Add(StructuralEquality.SequenceHash(Shortlist));
         return hash.ToHashCode();
     }
 }
@@ -57,13 +58,13 @@ public sealed record NextWindow(ResolvedWindow Window, IReadOnlyList<TaskItem> S
     public bool Equals(NextWindow? other) =>
         other is not null
         && Window == other.Window
-        && Shortlist.SequenceEqual(other.Shortlist);
+        && StructuralEquality.SequenceEqual(Shortlist, other.Shortlist);
 
     public override int GetHashCode()
     {
         var hash = new HashCode();
         hash.Add(Window);
-        foreach (var task in Shortlist) hash.Add(task);
+        hash.Add(StructuralEquality.SequenceHash(Shortlist));
         return hash.ToHashCode();
     }
 }

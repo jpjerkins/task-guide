@@ -23,7 +23,46 @@ public sealed record Reminder(
     FooterCounts Footer,
     IReadOnlyList<DimensionId> FailedFetches,
     Uri LandingPage,
-    DateTimeOffset TimeToLive);
+    DateTimeOffset TimeToLive)
+{
+    /// <summary>
+    /// <see cref="Shortlist"/> and <see cref="Events"/> compare as sequences — the shortlist is
+    /// ranked and the events are date-ascending, so a reorder is a different Reminder.
+    /// <see cref="FailedFetches"/> compares as a multiset — a set of Dimension ids. This record
+    /// has the same shape <c>GlanceState</c> did (#69/ADR-0011), so this fix exists to keep a
+    /// future Reminder floor from inheriting the identical bug — <see cref="TimeToLivePolicy"/>
+    /// is still unimplemented and untouched here.
+    /// </summary>
+    public bool Equals(Reminder? other)
+    {
+        if (other is null) return false;
+
+        return Title == other.Title
+            && WindowContext == other.WindowContext
+            && MoreCount == other.MoreCount
+            && Footer.Equals(other.Footer)
+            && LandingPage.Equals(other.LandingPage)
+            && TimeToLive.Equals(other.TimeToLive)
+            && StructuralEquality.SequenceEqual(Shortlist, other.Shortlist)
+            && StructuralEquality.SequenceEqual(Events, other.Events)
+            && StructuralEquality.MultisetEqual(FailedFetches, other.FailedFetches);
+    }
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Title);
+        hash.Add(WindowContext);
+        hash.Add(MoreCount);
+        hash.Add(Footer);
+        hash.Add(LandingPage);
+        hash.Add(TimeToLive);
+        hash.Add(StructuralEquality.SequenceHash(Shortlist));
+        hash.Add(StructuralEquality.SequenceHash(Events));
+        hash.Add(StructuralEquality.MultisetHash(FailedFetches));
+        return hash.ToHashCode();
+    }
+}
 
 public sealed record EventLine(EventId Id, string Name, DayOfWeek Weekday);
 

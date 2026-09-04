@@ -20,6 +20,17 @@ public sealed record Pattern(PatternId Id, string Name, IReadOnlyList<DayTemplat
 {
     /// <summary>Indexed by <see cref="DayOfWeek"/>; always exactly seven.</summary>
     public DayTemplateId this[DayOfWeek weekday] => Days[(int)weekday];
+
+    /// <summary><see cref="Days"/> compares as a sequence — seven weekday slots indexed
+    /// positionally by <see cref="this[DayOfWeek]"/>, so order is the meaning.</summary>
+    public bool Equals(Pattern? other) =>
+        other is not null
+        && Id.Equals(other.Id)
+        && Name == other.Name
+        && StructuralEquality.SequenceEqual(Days, other.Days);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, Name, StructuralEquality.SequenceHash(Days));
 }
 
 /// <summary>
@@ -31,4 +42,14 @@ public sealed record PatternBook(PatternId ActivePatternId, IReadOnlyList<Patter
     public Pattern Active => Patterns.SingleOrDefault(p => p.Id == ActivePatternId)
         ?? throw new InvalidOperationException(
             $"Active Pattern {ActivePatternId.Value} does not match any Pattern in the store.");
+
+    /// <summary><see cref="Patterns"/> compares as a multiset — <see cref="Active"/> finds a
+    /// Pattern by id, not by position.</summary>
+    public bool Equals(PatternBook? other) =>
+        other is not null
+        && ActivePatternId.Equals(other.ActivePatternId)
+        && StructuralEquality.MultisetEqual(Patterns, other.Patterns);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(ActivePatternId, StructuralEquality.MultisetHash(Patterns));
 }
