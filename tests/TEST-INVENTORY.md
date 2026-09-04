@@ -271,6 +271,11 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Delivery
 
+**Project:** spans two. The adapter half (*a Receipt is never retried*, *every failed attempt is
+logged*) is A1 → `TaskGuide.Infrastructure.Tests`. The executor half (*`firedAt` written only when
+Pushover accepts*, *a rejected push reads as unfired next tick*, *retries stop when the span
+closes*, *a Receipt is not written to the Fire record*) is F3 → `TaskGuide.Application.Tests`.
+
 - `firedAt` is written **only when Pushover accepts**
 - a rejected push reads as unfired next tick and is retried
 - retries stop when the span closes (opportunity) or at the boundary (obligation)
@@ -279,6 +284,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a Receipt is not written to the Fire record
 
 ### Notification content
+
+**Project:** F1, `Reminder.For` in `Domain/Notifications/` → `TaskGuide.Domain.Tests`.
 
 - the title is the top-ranked Task in full, with its Duration
 - the shortlist is three, then `+N more` when N ≥ 1
@@ -298,6 +305,10 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Weather, the fetched axis
 
+**Project:** spans two. *No weather-tagged Active Task ⇒ no API call* is F6, executor state →
+`TaskGuide.Application.Tests`. The rest (current vs forecast, unknown fails closed, the
+UI-visible footer note) is A2 → `TaskGuide.Infrastructure.Tests`.
+
 - no weather-tagged Active Task ⇒ **no API call**
 - a firing uses current conditions; a future evaluation uses the forecast
 - unknown weather matches nothing (fails closed) in both headless and UI-visible cases
@@ -315,6 +326,12 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Glance
 
+**Project:** spans three tickets in two lanes — #79 the Domain rule (`GlanceState` equality,
+`ShouldSend`) → `TaskGuide.Domain.Tests`; #84 the executor's scheduling state (recomputed every
+tick, the 30-minute floor, the one retry) → `TaskGuide.Application.Tests`; #88 the renderer →
+`TaskGuide.Infrastructure.Tests`. The one-test-file-per-section rule does not hold for this
+section.
+
 - `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
   `Shortlist` instances compare equal — the reference-equality trap a positional record falls
   into on an `IReadOnlyList` member
@@ -329,6 +346,9 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - one retry at the next tick, ignoring the floor; never two
 
 ### Liveness
+
+**Project:** A3 → `TaskGuide.Infrastructure.Tests`, except the first bullet (*`/health` reports
+`{ ok, lastTick, storage, uptime }`*), which is the endpoint → `TaskGuide.Api.Tests`.
 
 - `/health` reports `{ ok, lastTick, storage, uptime }`
 - a stalled loop reports `ok: false` while HTTP still answers
