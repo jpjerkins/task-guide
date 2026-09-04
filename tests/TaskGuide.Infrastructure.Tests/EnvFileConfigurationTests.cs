@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 using TaskGuide.Infrastructure.Configuration;
 using Xunit;
 
-namespace TaskGuide.Application.Tests;
+namespace TaskGuide.Infrastructure.Tests;
 
 /// <summary>
 /// vault-t2 serves each service's envfile over FUSE at /run/vault-t2-fs/envfiles/&lt;service&gt;,

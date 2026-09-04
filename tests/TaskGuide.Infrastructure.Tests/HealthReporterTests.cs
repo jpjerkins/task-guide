@@ -7,7 +7,7 @@ using TaskGuide.Infrastructure.Health;
 using TaskGuide.Infrastructure.Storage;
 using Xunit;
 
-namespace TaskGuide.Application.Tests;
+namespace TaskGuide.Infrastructure.Tests;
 
 /// <summary>
 /// Liveness (`tests/TEST-INVENTORY.md`): <c>/health</c> reports <c>{ ok, lastTick, storage, uptime }</c>,
