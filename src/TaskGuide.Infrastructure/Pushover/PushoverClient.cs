@@ -58,8 +58,14 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
 
     // Rendering a GlanceState into a complication's three text slots is the Adapters lane's
     // renderer, which does not exist yet (#76 does not invent one). Unreachable in production
-    // today — nothing calls SendGlanceAsync; only a test fake implements IGlanceSender — which is
-    // why throwing here, rather than preserving behaviour, is acceptable for this ticket.
+    // today — nothing calls SendGlanceAsync, and nothing in the tree implements IGlanceSender any
+    // more (TickLoopTests dropped its fake) — which is why throwing here, rather than preserving
+    // behaviour, is acceptable for this ticket.
+    //
+    // The contract this throw stands in for, for whoever writes the renderer: POST
+    // https://api.pushover.net/1/glances.json (docs/research/pushover-api.md), form fields
+    // "title", "subtext", "text" and "count" — the four the Glance endpoint takes, alongside the
+    // usual "token"/"user".
     public Task<bool> SendGlanceAsync(GlanceState state, CancellationToken cancellationToken) =>
         throw new NotImplementedException("Rendering a GlanceState into Pushover's Glance fields belongs to the Adapters lane.");
 
