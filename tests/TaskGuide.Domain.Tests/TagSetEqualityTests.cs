@@ -194,4 +194,35 @@ public sealed class TagSetEqualityTests
         Assert.True(a.Equals(b));
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
+
+    /// <summary>
+    /// A hash that sums each Dimension's id hash and its values hash <em>independently</em> lets
+    /// one Dimension's id collide with another's values (here, <c>{effort:[x]}</c> vs
+    /// <c>{x:[effort]}</c>-shaped pairs via <c>{a:[x], b:[y]}</c> vs <c>{a:[y], b:[x]}</c>) even
+    /// though the sets compare unequal — legal under the Equals/GetHashCode contract (unequal
+    /// hashes are never required), but an avoidable collision on the Glance comparison path. This
+    /// only guards against that specific decomposition, not a general promise that unequal
+    /// <see cref="TagSet"/>s hash differently.
+    /// </summary>
+    [Fact]
+    public void Swapping_values_between_two_dimensions_compares_unequal_and_hashes_differently()
+    {
+        var a = new TagSet(
+            new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [Effort] = new[] { new TagValue("home") },
+                [Location] = new[] { new TagValue("low") },
+            },
+            Array.Empty<LooseTag>());
+        var b = new TagSet(
+            new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [Effort] = new[] { new TagValue("low") },
+                [Location] = new[] { new TagValue("home") },
+            },
+            Array.Empty<LooseTag>());
+
+        Assert.False(a.Equals(b));
+        Assert.NotEqual(a.GetHashCode(), b.GetHashCode());
+    }
 }

@@ -72,7 +72,7 @@ public sealed record TagSet(
             if (values.Count == 0) continue;
             unchecked
             {
-                dimensionSum += id.GetHashCode() + MultisetHash(values);
+                dimensionSum += HashCode.Combine(id, MultisetHash(values));
             }
         }
         hash.Add(dimensionSum);

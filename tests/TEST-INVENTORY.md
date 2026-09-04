@@ -127,6 +127,9 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - Dimension key insertion order does not change equality or the hash — `HashCode.Add` folds
   sequentially, so the per-Dimension hash contributions must be combined order-free too, not just
   the per-Dimension `Equals`
+- swapping values between two Dimensions compares unequal and hashes differently — a regression
+  guard against summing each Dimension's id hash and its values hash independently (additively
+  decomposable), not a general promise that unequal `TagSet`s always hash differently
 
 ### Dimension registry
 
