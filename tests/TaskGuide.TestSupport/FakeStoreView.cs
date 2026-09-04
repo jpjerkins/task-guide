@@ -27,6 +27,7 @@ public sealed class FakeStoreView : IStoreView
         IReadOnlyList<DerivedCompletionEntry> derivedCompletions,
         IReadOnlyList<DayTemplate> dayTemplates,
         PatternBook patterns,
+        bool patternsAreCallerSupplied,
         IReadOnlyList<DateOverride> overrides,
         IReadOnlyList<Event> events,
         IReadOnlyList<EventException> eventExceptions,
@@ -37,6 +38,7 @@ public sealed class FakeStoreView : IStoreView
         DerivedCompletions = derivedCompletions;
         DayTemplates = dayTemplates;
         _patterns = patterns;
+        PatternsAreCallerSupplied = patternsAreCallerSupplied;
         Overrides = overrides;
         Events = events;
         EventExceptions = eventExceptions;
@@ -51,6 +53,13 @@ public sealed class FakeStoreView : IStoreView
     public IReadOnlyList<EventException> EventExceptions { get; }
 
     public PatternBook Patterns => _patterns;
+
+    /// <summary>Set by <see cref="FakeStoreViewBuilder.Build"/> when the Pattern book came from an
+    /// explicit <c>WithPatterns</c> call rather than the builder's own derived default. <see
+    /// cref="FakeStore.ViewAsBuilder"/> reads this to decide whether replaying <see
+    /// cref="Patterns"/> onto a fresh builder would pin a caller-supplied book, or fight the
+    /// builder's own re-derivation of its default (#116 finding 1).</summary>
+    internal bool PatternsAreCallerSupplied { get; }
 
     /// <summary>Everything seeded via <c>WithCompletions</c>/<c>CompletionLogWrite</c>, for
     /// <see cref="FakeStore"/> to carry forward across a mutation without walking <see cref="Tasks"/>.</summary>

@@ -112,4 +112,40 @@ public sealed class FakeStoreViewTests
         Assert.Equal(date, fires.Date);
         Assert.Empty(fires.Rows);
     }
+
+    /// <summary>
+    /// #116 finding 1: <c>WithDayTemplates</c> used to leave the builder's default Pattern book
+    /// naming the old default Day template, orphaning it. The builder's own default now re-points
+    /// itself at the first seeded template, so a view seeded with templates alone still resolves.
+    /// </summary>
+    [Fact]
+    public void WithDayTemplates_re_points_the_builders_default_Pattern_at_the_first_seeded_template()
+    {
+        var mine = new DayTemplate(new DayTemplateId("dt_mine"), "My day", [], []);
+        var other = new DayTemplate(new DayTemplateId("dt_other"), "Other day", [], []);
+
+        var view = new FakeStoreViewBuilder().WithDayTemplates([mine, other]).Build();
+
+        var active = view.Patterns.Active;
+        foreach (DayOfWeek weekday in Enum.GetValues<DayOfWeek>())
+        {
+            Assert.Equal(mine.Id, active[weekday]);
+        }
+    }
+
+    /// <summary>#116 finding 1: an explicit `WithPatterns` wins over the builder's re-pointing,
+    /// regardless of which `With…` call came first.</summary>
+    [Fact]
+    public void An_explicit_WithPatterns_wins_over_that_re_pointing_in_either_call_order()
+    {
+        var mine = new DayTemplate(new DayTemplateId("dt_mine"), "My day", [], []);
+        var pattern = new Pattern(new PatternId("p_mine"), "Mine", Enumerable.Repeat(mine.Id, 7).ToArray());
+        var book = new PatternBook(pattern.Id, [pattern]);
+
+        var patternsThenTemplates = new FakeStoreViewBuilder().WithPatterns(book).WithDayTemplates([mine]).Build();
+        var templatesThenPatterns = new FakeStoreViewBuilder().WithDayTemplates([mine]).WithPatterns(book).Build();
+
+        Assert.Same(book, patternsThenTemplates.Patterns);
+        Assert.Same(book, templatesThenPatterns.Patterns);
+    }
 }

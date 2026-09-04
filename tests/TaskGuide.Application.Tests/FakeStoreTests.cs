@@ -272,4 +272,26 @@ public sealed class FakeStoreTests
 
         Assert.Empty(view.CompletionsFor(otherTaskId).Entries);
     }
+
+    /// <summary>#116 finding 1: once the Pattern book is caller-supplied — by seeding or by a
+    /// `PatternsWrite` — a later `DayTemplatesWrite` leaves it exactly as it was, orphan and all,
+    /// matching `JsonStore`, which does no fix-up.</summary>
+    [Fact]
+    public async Task A_DayTemplatesWrite_leaves_a_caller_supplied_Pattern_book_exactly_as_it_was()
+    {
+        var original = new DayTemplate(new DayTemplateId("dt_original"), "Original day", [], []);
+        var pattern = new Pattern(new PatternId("p_mine"), "Mine", Enumerable.Repeat(original.Id, 7).ToArray());
+        var book = new PatternBook(pattern.Id, [pattern]);
+        var store = new FakeStore();
+        await store.MutateAsync<Never>(_ => new StoreMutation([new PatternsWrite(book)]), CancellationToken.None);
+
+        var mine = new DayTemplate(new DayTemplateId("dt_mine"), "My day", [], []);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([mine])]), CancellationToken.None);
+
+        var active = store.Read().Patterns.Active;
+        foreach (DayOfWeek weekday in Enum.GetValues<DayOfWeek>())
+        {
+            Assert.Equal(original.Id, active[weekday]);
+        }
+    }
 }

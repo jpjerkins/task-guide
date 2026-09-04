@@ -92,17 +92,27 @@ public sealed class FakeStore : IStore
     /// assert a refusal happened without a write, alongside <see cref="Mutations"/> staying put.</summary>
     public int RefusalCount { get; private set; }
 
-    private static FakeStoreViewBuilder ViewAsBuilder(FakeStoreView view) =>
-        new FakeStoreViewBuilder()
+    private static FakeStoreViewBuilder ViewAsBuilder(FakeStoreView view)
+    {
+        var builder = new FakeStoreViewBuilder()
             .WithTasks(view.Tasks)
             .WithDayTemplates(view.DayTemplates)
-            .WithPatterns(view.Patterns)
             .WithOverrides(view.Overrides)
             .WithEvents(view.Events)
             .WithEventExceptions(view.EventExceptions)
             .WithDerivedCompletions(view.DerivedCompletions)
             .WithAllCompletions(view.AllCompletions)
             .WithAllFires(view.AllFires);
+
+        // Replaying WithPatterns unconditionally would pin a caller-supplied book forever (fine)
+        // but would also pin the builder's own derived default at its old day template, orphaning
+        // it the moment DayTemplatesWrite replaces DayTemplates underneath it. Only replay when
+        // the book actually came from a caller, so the builder's own default keeps re-deriving
+        // itself in Build() (#116 finding 1).
+        if (view.PatternsAreCallerSupplied) builder.WithPatterns(view.Patterns);
+
+        return builder;
+    }
 
     private static void Apply(FakeStoreViewBuilder builder, object write)
     {
