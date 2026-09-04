@@ -26,24 +26,16 @@ public static class FiringPolicy
 
     public static readonly int EventRunwayDays = 3;
 
-    public static bool IsDue(AvailabilityWindow window, DateTimeOffset start, DateTimeOffset now) =>
+    public static bool IsWindowDue(AvailabilityWindow window, DateTimeOffset start, DateTimeOffset now) =>
         start <= now;
 
-    public static bool IsAlive(AvailabilityWindow window, DateTimeOffset end, DateTimeOffset now) =>
+    public static bool IsWindowAlive(AvailabilityWindow window, DateTimeOffset end, DateTimeOffset now) =>
         now < end;
-}
 
-/// <summary>
-/// One loop, recomputing on a ~30-second tick. No timers, no scheduled jobs, no startup catch-up
-/// sweep — every rule is a predicate about a moment, so recomputation is the natural shape.
-/// Downtime is therefore indistinguishable from a slow tick, and the missed-fire policy <em>is</em>
-/// the normal path: no catch-up code, and no second implementation to fall out of agreement.
-/// </summary>
-public interface ITickLoop
-{
     /// <summary>
-    /// One pass: fire due Windows, drain pending Snoozes, evaluate the fallback push, and run the
-    /// retention sweep unguarded. The sweep's outcome doubles as the store's write health.
+    /// A Window whose resolved span collapses to zero or negative length — the spring-gap case —
+    /// is no opportunity at all. Names the rule the inventory already states: <em>"a Window lying
+    /// entirely inside the spring gap has zero length and does not fire."</em>
     /// </summary>
-    Task TickAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    public static bool IsWindowSpanEmpty(DateTimeOffset start, DateTimeOffset end) => end <= start;
 }

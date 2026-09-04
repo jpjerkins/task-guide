@@ -34,7 +34,7 @@ public static class SnoozePolicy
     /// and the rejection renders as the same line the disabled state would have shown — a
     /// rejection is just a slow tick, read onto a button. There is no client-side clock.
     /// </remarks>
-    public static bool IsOffered(DateTimeOffset now, TimeSpan interval, DateTimeOffset reminderDayBoundary) =>
+    public static bool IsSnoozeOffered(DateTimeOffset now, TimeSpan interval, DateTimeOffset reminderDayBoundary) =>
         now + interval < reminderDayBoundary;
 
     /// <summary>
@@ -43,7 +43,7 @@ public static class SnoozePolicy
     /// once the span is spent, which keeps the rule stateless and independent of when the user
     /// happened to snooze. An empty re-fire pushes once, then ends the chain.
     /// </summary>
-    public static TimeSpan RemainingIn(AvailabilityWindow window, DateTimeOffset end, DateTimeOffset now) =>
+    public static TimeSpan RemainingIn(DateTimeOffset end, DateTimeOffset now) =>
         end - now;
 
     /// <summary>

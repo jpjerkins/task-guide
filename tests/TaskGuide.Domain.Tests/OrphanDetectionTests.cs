@@ -116,8 +116,8 @@ public sealed class OrphanDetectionTests
         Assert.Equal(0, patternWeekCount);
         Assert.Equal(Status.Active, StatusOf(task));
 
-        Assert.True(OrphanDetection.IsOrphan(task, Status.Active, patternWeekCount));
-        Assert.Equal(ZeroKind.Orphan, OrphanDetection.KindOfZero(task, Status.Active, 0, patternWeekCount));
+        Assert.True(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
+        Assert.Equal(ZeroKind.Orphan, OrphanDetection.KindOfZero(Status.Active, 0, patternWeekCount));
     }
 
     [Fact]
@@ -134,8 +134,8 @@ public sealed class OrphanDetectionTests
 
         // The two zeroes look identical on the surface and mean opposite things. Nothing is
         // wrong with this one; it simply should not be ranked as though this were its big chance.
-        Assert.False(OrphanDetection.IsOrphan(task, Status.Active, patternWeekCount));
-        Assert.Equal(ZeroKind.NoneInThisStretch, OrphanDetection.KindOfZero(task, Status.Active, 0, patternWeekCount));
+        Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
+        Assert.Equal(ZeroKind.NoneInThisStretch, OrphanDetection.KindOfZero(Status.Active, 0, patternWeekCount));
     }
 
     [Fact]
@@ -150,15 +150,15 @@ public sealed class OrphanDetectionTests
         // 0 is what the reflex that treats a missing Duration as matching *nothing* would hand
         // in — the false-Orphan defect ADR-0007 records as already made once. The gate refuses
         // the claim whatever the count says.
-        Assert.False(OrphanDetection.IsOrphan(unprocessed, StatusOf(unprocessed), 0));
-        Assert.Null(OrphanDetection.KindOfZero(unprocessed, StatusOf(unprocessed), 0, 0));
+        Assert.False(OrphanDetection.IsTaskOrphan(StatusOf(unprocessed), 0));
+        Assert.Null(OrphanDetection.KindOfZero(StatusOf(unprocessed), 0, 0));
 
         // Supply the Duration and the question becomes meaningful — so it is the Status gate,
         // not the shape of this Task, that decided the lines above.
         var processed = unprocessed with { Tags = Tags((KnownDimensions.Duration, "30"), (KnownDimensions.Location, "garage")) };
         Assert.Equal(Status.Active, StatusOf(processed));
         Assert.Equal(0, PatternWeekCount(processed, Workday));
-        Assert.True(OrphanDetection.IsOrphan(processed, StatusOf(processed), PatternWeekCount(processed, Workday)));
+        Assert.True(OrphanDetection.IsTaskOrphan(StatusOf(processed), PatternWeekCount(processed, Workday)));
     }
 
     [Fact]
@@ -169,13 +169,13 @@ public sealed class OrphanDetectionTests
         var stale = GarageTask(createdAt: Now.AddDays(-40));
         Assert.Equal(Status.Stale, StatusOf(stale));
 
-        Assert.False(OrphanDetection.IsOrphan(stale, StatusOf(stale), PatternWeekCount(stale, Workday)));
-        Assert.Null(OrphanDetection.KindOfZero(stale, StatusOf(stale), 0, PatternWeekCount(stale, Workday)));
+        Assert.False(OrphanDetection.IsTaskOrphan(StatusOf(stale), PatternWeekCount(stale, Workday)));
+        Assert.Null(OrphanDetection.KindOfZero(StatusOf(stale), 0, PatternWeekCount(stale, Workday)));
 
         // The same Task a day short of the threshold is an Orphan, so the age is what decided it.
         var fresh = GarageTask(createdAt: Now.AddDays(-29));
         Assert.Equal(Status.Active, StatusOf(fresh));
-        Assert.True(OrphanDetection.IsOrphan(fresh, StatusOf(fresh), PatternWeekCount(fresh, Workday)));
+        Assert.True(OrphanDetection.IsTaskOrphan(StatusOf(fresh), PatternWeekCount(fresh, Workday)));
     }
 
     [Fact]
@@ -188,7 +188,7 @@ public sealed class OrphanDetectionTests
 
         Assert.False(Eligible(deferred));
         Assert.Equal(Status.Active, StatusOf(deferred));
-        Assert.True(OrphanDetection.IsOrphan(deferred, StatusOf(deferred), PatternWeekCount(deferred, Workday)));
+        Assert.True(OrphanDetection.IsTaskOrphan(StatusOf(deferred), PatternWeekCount(deferred, Workday)));
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class OrphanDetectionTests
 
         Assert.False(Eligible(postponed));
         Assert.Equal(Status.Active, StatusOf(postponed));
-        Assert.True(OrphanDetection.IsOrphan(postponed, StatusOf(postponed), PatternWeekCount(postponed, Workday)));
+        Assert.True(OrphanDetection.IsTaskOrphan(StatusOf(postponed), PatternWeekCount(postponed, Workday)));
     }
 
     [Fact]
@@ -210,12 +210,12 @@ public sealed class OrphanDetectionTests
 
         Assert.NotNull(derived.Provenance);
         Assert.Equal(Status.Active, StatusOf(derived));
-        Assert.True(OrphanDetection.IsOrphan(derived, StatusOf(derived), PatternWeekCount(derived, Workday)));
+        Assert.True(OrphanDetection.IsTaskOrphan(StatusOf(derived), PatternWeekCount(derived, Workday)));
 
         // And a well-formed derived Task is not one, so provenance is inert to the question
         // in both directions.
         var fits = Item("t_derived", provenance: derived.Provenance);
-        Assert.False(OrphanDetection.IsOrphan(fits, StatusOf(fits), PatternWeekCount(fits, Workday)));
+        Assert.False(OrphanDetection.IsTaskOrphan(StatusOf(fits), PatternWeekCount(fits, Workday)));
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public sealed class OrphanDetectionTests
         // keeps it out of the third pile.
         bool IsOrphan(TaskItem task) =>
             StatusOf(task) is not Status.Unprocessed
-            && OrphanDetection.IsOrphan(task, StatusOf(task), PatternWeekCount(task, Workday));
+            && OrphanDetection.IsTaskOrphan(StatusOf(task), PatternWeekCount(task, Workday));
 
         var footer = new FooterCounts(
             tasks.Count(task => StatusOf(task) == Status.Unprocessed),
@@ -290,10 +290,10 @@ public sealed class OrphanDetectionTests
         var patternWeekCount = PatternWeekCount(task, Workday);
 
         Assert.Equal(1, counter.CountAhead(task, Now));
-        Assert.False(OrphanDetection.IsOrphan(task, Status.Active, patternWeekCount));
+        Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
 
         // One is not a zero at all, so neither kind of zero is being claimed.
-        Assert.Null(OrphanDetection.KindOfZero(task, Status.Active, 1, patternWeekCount));
+        Assert.Null(OrphanDetection.KindOfZero(Status.Active, 1, patternWeekCount));
     }
 
     [Fact]
@@ -309,7 +309,32 @@ public sealed class OrphanDetectionTests
         Assert.Equal(0, counter.CountAhead(sunny, Now));
         Assert.Equal(7, patternWeekCount);
 
-        Assert.False(OrphanDetection.IsOrphan(sunny, Status.Active, patternWeekCount));
-        Assert.Equal(ZeroKind.NoneInThisStretch, OrphanDetection.KindOfZero(sunny, Status.Active, 0, patternWeekCount));
+        Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
+        Assert.Equal(ZeroKind.NoneInThisStretch, OrphanDetection.KindOfZero(Status.Active, 0, patternWeekCount));
+    }
+
+    [Fact]
+    public void An_unknown_Opportunity_count_is_a_third_ZeroKind_not_a_zero_and_not_an_absence()
+    {
+        // ADR-0004's amendment: a failed Opportunity fetch must not read as 0 (the Scarcity key's
+        // floor, which would wrongly lift the Task to the top of its band) and must not read as
+        // null either — a genuine absence means the count was never asked for. `null` here stands
+        // for "asked, but the fetch failed."
+        var task = GarageTask();
+        var patternWeekCount = PatternWeekCount(task, Workday);
+
+        Assert.Equal(ZeroKind.Unknown, OrphanDetection.KindOfZero(Status.Active, null, patternWeekCount));
+    }
+
+    [Fact]
+    public void The_Status_gate_still_wins_over_an_unknown_count()
+    {
+        // A Task the Status gate excludes has no Opportunities value at all, whether or not the
+        // fetch that would have produced it failed — so a non-Active Status still reads as a
+        // plain absence, never as Unknown.
+        var unprocessed = Item(tags: Tags((KnownDimensions.Location, "garage")));
+        Assert.Equal(Status.Unprocessed, StatusOf(unprocessed));
+
+        Assert.Null(OrphanDetection.KindOfZero(StatusOf(unprocessed), null, 0));
     }
 }

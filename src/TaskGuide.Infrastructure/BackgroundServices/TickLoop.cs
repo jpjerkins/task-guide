@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Hosting;
+using TaskGuide.Application.Firing;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Firing;
 using TaskGuide.Domain.Notifications;
-using TaskGuide.Infrastructure.Health;
 
 namespace TaskGuide.Infrastructure.BackgroundServices;
 
@@ -21,20 +21,20 @@ namespace TaskGuide.Infrastructure.BackgroundServices;
 /// pass this skeleton doesn't do. A later ticket should implement it for real, or fold this into
 /// it once that becomes possible.
 /// </remarks>
-public sealed class TickLoop(IStore store, IPushoverClient pushover, HealthReporter health) : BackgroundService
+public sealed class TickLoop(IStore store, IReceiptSender receipts, ITickHeartbeat heartbeat) : BackgroundService
 {
     public static readonly TimeSpan Interval = FiringPolicy.TickInterval;
 
     // 0/1 instead of bool so the "attempt exactly once" decision is a single atomic operation —
-    // SendReceiptAsync is fire-and-forget by IPushoverClient's own contract (one attempt, failure
-    // logged, never retried), so the flag flips the moment the attempt is made, not on success.
+    // "one attempt, failure logged, never retried" beyond IReceiptSender's own up-to-three is now
+    // this caller's policy (#76), so the flag flips the moment the attempt is made, not on success.
     private int _hasAttemptedPush;
 
     /// <summary>One pass: record the tick, then push at most once, ever. Exposed so tests can
     /// drive it directly instead of waiting on the real ~30s cadence.</summary>
     public async Task TickOnceAsync(CancellationToken cancellationToken)
     {
-        health.RecordTick(DateTimeOffset.UtcNow);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
 
         if (Interlocked.CompareExchange(ref _hasAttemptedPush, 0, 0) == 1) return;
 
@@ -47,7 +47,9 @@ public sealed class TickLoop(IStore store, IPushoverClient pushover, HealthRepor
         var duration = task.Tags.SingleOn(KnownDimensions.Duration)?.Value ?? "";
         var receipt = new Receipt(task.Id, task.Title, duration, new Uri("https://task-guide.example.ts.net/"));
 
-        await pushover.SendReceiptAsync(receipt, cancellationToken);
+        // Fire-and-forget policy is ours now, not IReceiptSender's: one attempt, the result
+        // discarded, never retried beyond what SendReceiptAsync already tried internally.
+        _ = await receipts.SendReceiptAsync(receipt, cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

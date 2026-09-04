@@ -105,6 +105,33 @@ public sealed class DayBoundaryTests
     }
 
     [Theory]
+    [InlineData("2026-01-15", -6)] // winter, CST
+    [InlineData("2026-07-15", -5)] // summer, CDT
+    public void StartOf_is_the_given_dates_own_local_midnight(string dateText, int expectedOffsetHours)
+    {
+        var boundary = new DayBoundary(Chicago);
+        var date = DateOnly.Parse(dateText);
+
+        var startOfDay = boundary.StartOf(date);
+
+        var expected = new DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, TimeSpan.FromHours(expectedOffsetHours));
+        Assert.Equal(expected, startOfDay);
+        Assert.Equal(date, boundary.DateOf(startOfDay));
+    }
+
+    [Theory]
+    [InlineData("2026-01-15")] // ordinary winter day
+    [InlineData("2026-03-08")] // spring transition day
+    [InlineData("2026-11-01")] // fall transition day
+    public void StartOf_the_next_day_is_the_same_instant_as_EndOf_this_one(string dateText)
+    {
+        var boundary = new DayBoundary(Chicago);
+        var date = DateOnly.Parse(dateText);
+
+        Assert.Equal(boundary.EndOf(date), boundary.StartOf(date.AddDays(1)));
+    }
+
+    [Theory]
     [InlineData("2026-01-16")] // ordinary winter day
     [InlineData("2026-03-09")] // day after the spring transition
     [InlineData("2026-11-02")] // day after the fall transition

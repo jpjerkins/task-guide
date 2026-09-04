@@ -1,3 +1,4 @@
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Firing;
@@ -270,7 +271,7 @@ public sealed class DayShapeReaderTests
     {
         public IStoreView Read() => view;
 
-        public Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken) =>
+        public Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("DayShapeReader must not write.");
 
         public bool? LastWriteSucceeded => null;

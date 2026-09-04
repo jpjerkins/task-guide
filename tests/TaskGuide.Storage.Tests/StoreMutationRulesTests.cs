@@ -74,21 +74,21 @@ public sealed class StoreMutationRulesTests : IDisposable
         var templateWindow = Window("w_evening", "Evening", 18, 19);
         var template = new DayTemplate(new DayTemplateId("dt_volleyball"), "Volleyball Tuesday", [templateWindow], []);
 
-        await store.MutateAsync(_ => new StoreMutation([new DayTemplatesWrite([template])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([template])]), CancellationToken.None);
 
         // The Window already fired via the Pattern's template, before any Override existed for
         // this date.
         var firedRow = new FireRow(
             templateWindow.Id, FireKind.Window, templateWindow.Name, templateWindow.Start, templateWindow.End,
             DueAt: null, FiredAt: new DateTimeOffset(2026, 8, 31, 18, 5, 0, TimeSpan.Zero), Matched: 1, Carried: null);
-        await store.MutateAsync(_ => new StoreMutation([new FiresWrite(new DayFires(date, [firedRow]))]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new FiresWrite(new DayFires(date, [firedRow]))]), CancellationToken.None);
 
         // Mid-day, the template is stamped onto the date. A stamp copies the Windows — a real
         // copy, constructed field-by-field, but preserving the source Window's id.
         var copiedWindow = new AvailabilityWindow(
             templateWindow.Id, templateWindow.Name, templateWindow.Start, templateWindow.End, templateWindow.Tags);
         var stampedOverride = new DateOverride(date, [copiedWindow], new DayTemplateUse(template.Id, template.Name));
-        await store.MutateAsync(_ => new StoreMutation([new OverridesWrite([stampedOverride])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([stampedOverride])]), CancellationToken.None);
 
         var view = store.Read();
         var materialisedWindow = Assert.Single(view.Overrides.Single(o => o.Date == date).Windows);
@@ -112,11 +112,11 @@ public sealed class StoreMutationRulesTests : IDisposable
         var used = new DayTemplateUse(new DayTemplateId("dt_christmas"), "Christmas");
         var stampedWindow = Window("w_family", "Family time", 10, 20);
 
-        await store.MutateAsync(_ => new StoreMutation([new OverridesWrite([new DateOverride(date, [stampedWindow], used)])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([new DateOverride(date, [stampedWindow], used)])]), CancellationToken.None);
 
         // A plain edit to the date's Windows — the use record is carried forward, not cleared.
         var nudgedWindow = stampedWindow with { End = new TimeOnly(21, 0) };
-        await store.MutateAsync(
+        await store.MutateAsync<Never>(
             view => new StoreMutation([new OverridesWrite([.. view.Overrides.Where(o => o.Date != date), new DateOverride(date, [nudgedWindow], used)])]),
             CancellationToken.None);
 
@@ -143,10 +143,10 @@ public sealed class StoreMutationRulesTests : IDisposable
         var windowA = Window("w_a", "A", 9, 10);
         var windowB = Window("w_b", "B", 11, 12);
 
-        await store.MutateAsync(_ => new StoreMutation([new OverridesWrite([new DateOverride(date, [windowA], templateA)])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([new DateOverride(date, [windowA], templateA)])]), CancellationToken.None);
 
         // Re-stamping: the caller replaces the date's Override rather than appending a second one.
-        await store.MutateAsync(
+        await store.MutateAsync<Never>(
             view => new StoreMutation([new OverridesWrite([.. view.Overrides.Where(o => o.Date != date), new DateOverride(date, [windowB], templateB)])]),
             CancellationToken.None);
 
@@ -173,14 +173,14 @@ public sealed class StoreMutationRulesTests : IDisposable
         var originalWindow = Window("w_family", "Family time", 10, 20);
 
         // A one-off day: no use record, nothing stamped.
-        await store.MutateAsync(_ => new StoreMutation([new OverridesWrite([new DateOverride(sourceDate, [originalWindow], null)])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([new DateOverride(sourceDate, [originalWindow], null)])]), CancellationToken.None);
 
         var newTemplate = new DayTemplate(new DayTemplateId("dt_christmas"), "Christmas", [originalWindow], []);
 
         // Promotion: writes the new template (the source date's shape, copied outward) and writes
         // the source date's use record in the same gesture. It does not touch the source date's
         // own Windows — no re-link.
-        await store.MutateAsync(view => new StoreMutation(
+        await store.MutateAsync<Never>(view => new StoreMutation(
         [
             new DayTemplatesWrite([.. view.DayTemplates, newTemplate]),
             new OverridesWrite(
@@ -197,7 +197,7 @@ public sealed class StoreMutationRulesTests : IDisposable
 
         // A later edit to the new template does not reach the source date.
         var editedTemplate = newTemplate with { Windows = [originalWindow with { Name = "Edited elsewhere" }] };
-        await store.MutateAsync(
+        await store.MutateAsync<Never>(
             view => new StoreMutation([new DayTemplatesWrite([.. view.DayTemplates.Where(t => t.Id != newTemplate.Id), editedTemplate])]),
             CancellationToken.None);
 
@@ -233,7 +233,7 @@ public sealed class StoreMutationRulesTests : IDisposable
 
         // The next mutation writes tasks.json from memory, destroying the just-restored bytes.
         var newTask = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5NEW", "Water the plants");
-        await store.MutateAsync(view => new StoreMutation([new TasksWrite([.. view.Tasks, newTask])]), CancellationToken.None);
+        await store.MutateAsync<Never>(view => new StoreMutation([new TasksWrite([.. view.Tasks, newTask])]), CancellationToken.None);
 
         Assert.NotEqual(restoredJson, File.ReadAllText(tasksPath));
         Assert.Equal(before + 1, store.Read().Tasks.Count);
@@ -253,7 +253,7 @@ public sealed class StoreMutationRulesTests : IDisposable
         var store = new JsonStore(_dataDir);
         Assert.Null(store.LastWriteSucceeded);
 
-        await store.MutateAsync(_ => new StoreMutation([]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([]), CancellationToken.None);
 
         Assert.Null(store.LastWriteSucceeded);
     }
@@ -274,7 +274,7 @@ public sealed class StoreMutationRulesTests : IDisposable
         var keep = new DayTemplateId("dt_workday");
         var sharedWindow = Window("w_evening", "Evening", 18, 19);
 
-        await store.MutateAsync(_ => new StoreMutation(
+        await store.MutateAsync<Never>(_ => new StoreMutation(
         [
             new DayTemplatesWrite(
             [
@@ -285,13 +285,13 @@ public sealed class StoreMutationRulesTests : IDisposable
 
         var stampedFromUnused = new DateOverride(new DateOnly(2026, 8, 15), [sharedWindow], new DayTemplateUse(unused, "Volleyball Tuesday"));
         var oneOffDay = new DateOverride(new DateOnly(2026, 8, 20), [sharedWindow], null);
-        await store.MutateAsync(_ => new StoreMutation([new OverridesWrite([stampedFromUnused, oneOffDay])]), CancellationToken.None);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([stampedFromUnused, oneOffDay])]), CancellationToken.None);
 
         var windowsBefore = store.Read().Overrides.ToDictionary(o => o.Date, o => o.Windows);
 
         // "Deleting" is dropping the id from the caller's templates list and writing it back —
         // there is no re-link to sever, since every Override already holds its own copy.
-        await store.MutateAsync(
+        await store.MutateAsync<Never>(
             view => new StoreMutation([new DayTemplatesWrite([.. view.DayTemplates.Where(t => t.Id != unused)])]),
             CancellationToken.None);
 

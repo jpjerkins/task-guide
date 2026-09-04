@@ -1,3 +1,5 @@
+using OneOf;
+
 namespace TaskGuide.Application.Ports;
 
 /// <summary>
@@ -38,3 +40,34 @@ public interface IStartupSequence
     /// </summary>
     Task SweepRegistryAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// ADR-0009's phase split, made structural: the plan phase sees the store only through
+/// <see cref="IStoreReader"/> over a disposable bootstrap snapshot, raises every conscious
+/// refusal, and returns an immutable plan — it writes nothing. A separate apply phase (not this
+/// interface) then applies an already-valid plan, making no conscious refusal of its own; only IO
+/// may stop it there.
+/// </summary>
+/// <remarks>
+/// <b>Declaration only — #78 owns the contents and the implementation behind this port.</b> The
+/// minimum that compiles is here so #76's mechanical signature pass has something to hand a
+/// planner; #78 may reshape <see cref="StartupPlan"/> and <see cref="StartupRefusal"/> freely.
+/// </remarks>
+public interface IStartupPlanner
+{
+    OneOf<StartupPlan, StartupRefusal> Plan(IStoreReader bootstrap);
+}
+
+/// <summary>
+/// Declaration only — #78 owns the contents. <see cref="OrderedSteps"/> is the minimum that
+/// compiles: the ordered writes the apply phase should carry out.
+/// </summary>
+public sealed record StartupPlan(IReadOnlyList<StoreMutation> OrderedSteps);
+
+/// <summary>
+/// Declaration only — #78 owns the contents. <see cref="Reason"/> is the minimum that compiles;
+/// #78 should weigh whether the refusal wants to be a union of its own (a version ahead of this
+/// binary, a duplicate registry key, …) rather than a shared string, per #70 decision 3's
+/// rejection of shared string-coded refusals — this is on that same fault line.
+/// </summary>
+public sealed record StartupRefusal(string Reason);

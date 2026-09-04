@@ -33,8 +33,9 @@ public sealed class HealthReporterTests : IDisposable
     public void Ok_is_true_with_a_fresh_tick_and_a_readable_store()
     {
         var store = new JsonStore(_dataDir);
-        var reporter = new HealthReporter(store, _dataDir);
-        reporter.RecordTick(DateTimeOffset.UtcNow);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
 
         var report = reporter.Current();
 
@@ -47,7 +48,8 @@ public sealed class HealthReporterTests : IDisposable
     public void Ok_is_false_before_any_tick_has_been_recorded()
     {
         var store = new JsonStore(_dataDir);
-        var reporter = new HealthReporter(store, _dataDir);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
 
         var report = reporter.Current();
 
@@ -59,8 +61,9 @@ public sealed class HealthReporterTests : IDisposable
     public void A_stalled_loop_reports_ok_false_while_the_reporter_itself_still_answers()
     {
         var store = new JsonStore(_dataDir);
-        var reporter = new HealthReporter(store, _dataDir);
-        reporter.RecordTick(DateTimeOffset.UtcNow - HealthReporter.StalenessThreshold - TimeSpan.FromSeconds(1));
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow - HealthReporter.StalenessThreshold - TimeSpan.FromSeconds(1));
 
         var report = reporter.Current();
 
@@ -74,9 +77,10 @@ public sealed class HealthReporterTests : IDisposable
         // cached in-memory view regardless (memory-authoritative), but HealthReporter's own
         // re-parse must still catch the corruption, independent of the store ever noticing.
         var store = new JsonStore(_dataDir);
-        var reporter = new HealthReporter(store, _dataDir);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
         File.WriteAllText(Path.Combine(_dataDir, "tasks.json"), "{ not valid json, truncated mid-w");
-        reporter.RecordTick(DateTimeOffset.UtcNow);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
 
         var report = reporter.Current();
 
@@ -88,8 +92,9 @@ public sealed class HealthReporterTests : IDisposable
     public void Writable_is_null_and_does_not_force_ok_false_before_any_write_has_happened()
     {
         var store = new JsonStore(_dataDir);
-        var reporter = new HealthReporter(store, _dataDir);
-        reporter.RecordTick(DateTimeOffset.UtcNow);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
 
         var report = reporter.Current();
 
@@ -113,13 +118,14 @@ public sealed class HealthReporterTests : IDisposable
         }
 
         var store = new JsonStore(_dataDir);
-        var reporter = new HealthReporter(store, _dataDir);
-        reporter.RecordTick(DateTimeOffset.UtcNow);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
 
         Chmod(_dataDir, 0b101_000_000); // 500: r-x for the owner, no write — even for the owner, not root
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            store.MutateAsync(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("should fail")])]), CancellationToken.None));
+            store.MutateAsync<Never>(view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks, NewTask("should fail")])]), CancellationToken.None));
 
         var report = reporter.Current();
 

@@ -97,14 +97,14 @@ public sealed class SnoozeTests
         var midnight = Boundary.EndOf(Date);
         var interval = SnoozePolicy.IntervalFor(TimeSpan.FromMinutes(60)); // 15 minutes
 
-        Assert.True(SnoozePolicy.IsOffered(At(20, 0), interval, midnight));
+        Assert.True(SnoozePolicy.IsSnoozeOffered(At(20, 0), interval, midnight));
 
         // The biconditional's other half: land past the boundary and it is refused.
-        Assert.False(SnoozePolicy.IsOffered(At(23, 50), interval, midnight));
+        Assert.False(SnoozePolicy.IsSnoozeOffered(At(23, 50), interval, midnight));
 
         // Landing exactly on the boundary is not "inside the Reminder's own day" — `<`, not `<=`.
-        Assert.False(SnoozePolicy.IsOffered(midnight - interval, interval, midnight));
-        Assert.True(SnoozePolicy.IsOffered(midnight - interval - TimeSpan.FromMinutes(1), interval, midnight));
+        Assert.False(SnoozePolicy.IsSnoozeOffered(midnight - interval, interval, midnight));
+        Assert.True(SnoozePolicy.IsSnoozeOffered(midnight - interval - TimeSpan.FromMinutes(1), interval, midnight));
     }
 
     [Fact]
@@ -116,15 +116,15 @@ public sealed class SnoozeTests
         Assert.Equal(TimeSpan.FromMinutes(5), interval);
 
         // A re-fire at 11:55p would land inside the day, but the tap comes at the fire...
-        Assert.True(SnoozePolicy.IsOffered(At(23, 50), interval, Boundary.EndOf(Date)));
+        Assert.True(SnoozePolicy.IsSnoozeOffered(At(23, 50), interval, Boundary.EndOf(Date)));
 
         // ...and by 11:56p there is nowhere for it to land. No "near midnight" constant is invented:
         // the interval is a known number at the instant of the tap.
-        Assert.False(SnoozePolicy.IsOffered(At(23, 56), interval, Boundary.EndOf(Date)));
+        Assert.False(SnoozePolicy.IsSnoozeOffered(At(23, 56), interval, Boundary.EndOf(Date)));
 
         // A Window whose own length pushes the interval to 30 minutes is refused from its start.
         var longWindow = Window(new TimeOnly(21, 50), new TimeOnly(23, 59));
-        Assert.False(SnoozePolicy.IsOffered(
+        Assert.False(SnoozePolicy.IsSnoozeOffered(
             At(23, 50), SnoozePolicy.IntervalFor(LengthOf(longWindow)), Boundary.EndOf(Date)));
     }
 
@@ -140,12 +140,12 @@ public sealed class SnoozeTests
         // The boundary is the *Reminder's* own — the day it fired on, not the day of the tap.
         var reminderBoundary = Boundary.EndOf(Boundary.DateOf(firedAt));
 
-        Assert.True(SnoozePolicy.IsOffered(firedAt, interval, reminderBoundary));
-        Assert.False(SnoozePolicy.IsOffered(tappedAt, interval, reminderBoundary));
+        Assert.True(SnoozePolicy.IsSnoozeOffered(firedAt, interval, reminderBoundary));
+        Assert.False(SnoozePolicy.IsSnoozeOffered(tappedAt, interval, reminderBoundary));
 
         // Tonight's boundary would have accepted it — which is exactly the bug the rule refuses.
         var tonightsBoundary = Boundary.EndOf(Boundary.DateOf(tappedAt));
-        Assert.True(SnoozePolicy.IsOffered(tappedAt, interval, tonightsBoundary));
+        Assert.True(SnoozePolicy.IsSnoozeOffered(tappedAt, interval, tonightsBoundary));
     }
 
     [Fact]
@@ -158,17 +158,17 @@ public sealed class SnoozeTests
         // 2:00p fire — 60 minutes left → ceiling 60.
         Assert.Equal(
             new TagValue("60"),
-            SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(window, end, At(14, 0)), Buckets));
+            SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(end, At(14, 0)), Buckets));
 
         // 2:45p re-fire — 15 minutes left → ceiling 10, not the 60 it started at.
         Assert.Equal(
             new TagValue("10"),
-            SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(window, end, At(14, 45)), Buckets));
+            SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(end, At(14, 45)), Buckets));
 
         // 2:20p — 40 minutes left → 30. Every step reads the clock, never a stored previous ceiling.
         Assert.Equal(
             new TagValue("30"),
-            SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(window, end, At(14, 20)), Buckets));
+            SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(end, At(14, 20)), Buckets));
     }
 
     [Fact]
@@ -179,15 +179,15 @@ public sealed class SnoozeTests
         var smallest = new TagValue("2");
 
         // 3:05p and 3:25p re-fires: past end → the smallest bucket, not the 10 last derived at 2:45p.
-        Assert.Equal(smallest, SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(window, end, At(15, 5)), Buckets));
-        Assert.Equal(smallest, SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(window, end, At(15, 25)), Buckets));
+        Assert.Equal(smallest, SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(end, At(15, 5)), Buckets));
+        Assert.Equal(smallest, SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(end, At(15, 25)), Buckets));
 
         // Exactly at the end: nothing remains, so it has already floored.
         Assert.Equal(smallest, SnoozePolicy.CeilingFor(TimeSpan.Zero, Buckets));
 
         // Stateless: hours past the end is the same answer as a minute past it, and the answer does
         // not depend on how the user got there. Nothing accumulates.
-        Assert.Equal(smallest, SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(window, end, At(22, 0)), Buckets));
+        Assert.Equal(smallest, SnoozePolicy.CeilingFor(SnoozePolicy.RemainingIn(end, At(22, 0)), Buckets));
         Assert.NotEqual(new TagValue("10"), SnoozePolicy.CeilingFor(TimeSpan.FromMinutes(-1), Buckets));
     }
 
@@ -203,7 +203,7 @@ public sealed class SnoozeTests
 
         var context = SnoozePolicy.ReFireContext(
             window,
-            SnoozePolicy.RemainingIn(window, end, At(14, 45)),
+            SnoozePolicy.RemainingIn(end, At(14, 45)),
             Buckets,
             NoFetched,
             Array.Empty<DimensionId>());

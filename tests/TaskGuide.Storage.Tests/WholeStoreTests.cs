@@ -90,7 +90,7 @@ public sealed class WholeStoreTests : IDisposable
         var newEvent = NewEvent("evt_01ARZ3NDEKTSV4RRFFQ69G5N00", new DateOnly(2026, 9, 5), "Band concert");
         var newOverride = NewOverride(new DateOnly(2026, 9, 5));
 
-        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync<Never>(
             _ => new StoreMutation([new EventsWrite([newEvent]), new OverridesWrite([newOverride])]),
             CancellationToken.None));
 
@@ -115,7 +115,7 @@ public sealed class WholeStoreTests : IDisposable
         var newEvent = NewEvent("evt_01ARZ3NDEKTSV4RRFFQ69G5N01", new DateOnly(2026, 9, 6), "Dentist");
         var newOverride = NewOverride(new DateOnly(2026, 9, 6));
 
-        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync<Never>(
             _ => new StoreMutation([new EventsWrite([newEvent]), new OverridesWrite([newOverride])]),
             CancellationToken.None));
 
@@ -145,7 +145,7 @@ public sealed class WholeStoreTests : IDisposable
         var newTemplates = (IReadOnlyList<DayTemplate>)[.. view.DayTemplates, NewDayTemplate("dt_01ARZ3NDEKTSV4RRFFQ69G5N02", "New template")];
         var newOverrides = (IReadOnlyList<DateOverride>)[.. view.Overrides, NewOverride(new DateOnly(2026, 9, 7))];
 
-        await store.MutateAsync(
+        await store.MutateAsync<Never>(
             _ => new StoreMutation([new DayTemplatesWrite(newTemplates), new OverridesWrite(newOverrides)]),
             CancellationToken.None);
 
@@ -172,7 +172,7 @@ public sealed class WholeStoreTests : IDisposable
             .. store.Read().Tasks,
             new TaskGuide.Domain.Tasks.TaskItem(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5P00"), "New", null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow)];
 
-        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync<Never>(
             _ => new StoreMutation([new TasksWrite(newTasks), new PatternsWrite(store.Read().Patterns)]),
             CancellationToken.None));
 
@@ -199,7 +199,7 @@ public sealed class WholeStoreTests : IDisposable
         var beforeCompletions = before.CompletionsFor(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FB0"));
         var beforeFires = before.FiresOn(new DateOnly(2026, 8, 15));
 
-        await store.MutateAsync(
+        await store.MutateAsync<Never>(
             view => new StoreMutation([new TasksWrite((IReadOnlyList<TaskGuide.Domain.Tasks.TaskItem>)[
                 .. view.Tasks,
                 new TaskGuide.Domain.Tasks.TaskItem(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5P01"), "Another", null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow)])]),
@@ -234,7 +234,7 @@ public sealed class WholeStoreTests : IDisposable
         var store = new JsonStore(_dataDir);
         Assert.Null(store.LastWriteSucceeded); // nothing attempted yet — the baseline this test guards
 
-        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync<Never>(
             _ => new StoreMutation([new UnrecognisedWrite()]),
             CancellationToken.None));
 
@@ -252,7 +252,7 @@ public sealed class WholeStoreTests : IDisposable
         var newTask = new TaskGuide.Domain.Tasks.TaskItem(
             new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5P02"), "Landed before the bug", null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
 
-        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync(
+        await Assert.ThrowsAnyAsync<Exception>(() => store.MutateAsync<Never>(
             view => new StoreMutation([
                 new TasksWrite((IReadOnlyList<TaskGuide.Domain.Tasks.TaskItem>)[.. view.Tasks, newTask]),
                 new UnrecognisedWrite()]),
@@ -286,7 +286,7 @@ public sealed class WholeStoreTests : IDisposable
         var store = new JsonStore(_dataDir);
 
         // A no-op mutation: write the exact Overrides list back out unchanged.
-        await store.MutateAsync(view => new StoreMutation([new OverridesWrite(view.Overrides)]), CancellationToken.None);
+        await store.MutateAsync<Never>(view => new StoreMutation([new OverridesWrite(view.Overrides)]), CancellationToken.None);
 
         var onDisk = JsonNode.Parse(File.ReadAllText(Path.Combine(_dataDir, "overrides.json")))!.AsArray();
         Assert.Equal("2026-08-15", onDisk[0]!["date"]!.GetValue<string>());

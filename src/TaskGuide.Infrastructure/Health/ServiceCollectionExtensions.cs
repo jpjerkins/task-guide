@@ -7,18 +7,22 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class HealthReporterServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the concrete <see cref="HealthReporter"/> as a singleton, exposed both as
-    /// itself (so <c>TickLoop</c> can record ticks on it) and as <see cref="IHealthReporter"/>
-    /// (so the <c>/health</c> endpoint can read it) — the same instance either way. Call after
-    /// <c>AddJsonStore</c> so <see cref="IStore"/> is already registered. This factory isn't the
-    /// deferred-construction problem <c>AddJsonStore</c>'s own remarks warn about:
-    /// <see cref="HealthReporter"/>'s constructor does no I/O of its own, it only reaches for the
-    /// already-constructed <see cref="IStore"/> singleton.
+    /// Registers <see cref="TickHeartbeat"/> as a singleton, exposed both as itself (so
+    /// <see cref="HealthReporter"/> can take it concretely — #69: two Infrastructure classes need
+    /// no port between them) and as <see cref="ITickHeartbeat"/> (so <c>TickLoop</c>, which is
+    /// Application-side, can record ticks on it) — the same instance either way. Registers
+    /// <see cref="HealthReporter"/> as <see cref="IHealthReporter"/> only, since nothing outside
+    /// this project needs the concrete type any more. Call after <c>AddJsonStore</c> so
+    /// <see cref="IStore"/> is already registered. Neither factory is the deferred-construction
+    /// problem <c>AddJsonStore</c>'s own remarks warn about: neither constructor does I/O of its
+    /// own, they only reach for already-constructed singletons.
     /// </summary>
     public static IServiceCollection AddHealthReporter(this IServiceCollection services, string dataDir)
     {
-        services.AddSingleton(sp => new HealthReporter(sp.GetRequiredService<IStore>(), dataDir));
-        services.AddSingleton<IHealthReporter>(sp => sp.GetRequiredService<HealthReporter>());
+        services.AddSingleton<TickHeartbeat>();
+        services.AddSingleton<ITickHeartbeat>(sp => sp.GetRequiredService<TickHeartbeat>());
+        services.AddSingleton<IHealthReporter>(sp =>
+            new HealthReporter(sp.GetRequiredService<IStore>(), sp.GetRequiredService<TickHeartbeat>(), dataDir));
         return services;
     }
 }

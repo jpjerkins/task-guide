@@ -1,3 +1,4 @@
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Notifications;
@@ -34,23 +35,20 @@ public sealed class TickLoopTests : IDisposable
         public List<TaskItem> Tasks { get; } = [];
 
         public IStoreView Read() => new View(Tasks);
-        public Task MutateAsync(Func<IStoreView, StoreMutation> mutation, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken) => throw new NotImplementedException();
         public bool? LastWriteSucceeded => null;
     }
 
-    private sealed class CapturingPushoverClient : IPushoverClient
+    /// <summary>TickLoop only sends Receipts (#76) — this fake implements just the port it uses.</summary>
+    private sealed class CapturingPushoverClient : IReceiptSender
     {
         public List<Receipt> Receipts { get; } = [];
 
-        public Task<bool> SendReminderAsync(Reminder reminder, CancellationToken cancellationToken) => Task.FromResult(true);
-
-        public Task SendReceiptAsync(Receipt receipt, CancellationToken cancellationToken)
+        public Task<bool> SendReceiptAsync(Receipt receipt, CancellationToken cancellationToken)
         {
             Receipts.Add(receipt);
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
-
-        public Task<bool> SendGlanceAsync(Glance glance, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private readonly string _dataDir = Directory.CreateTempSubdirectory("taskguide-tickloop-tests-").FullName;
@@ -65,8 +63,9 @@ public sealed class TickLoopTests : IDisposable
     {
         var store = new FakeStore();
         var pushover = new CapturingPushoverClient();
-        var health = new HealthReporter(store, _dataDir);
-        var loop = new TickLoop(store, pushover, health);
+        var heartbeat = new TickHeartbeat();
+        var health = new HealthReporter(store, heartbeat, _dataDir);
+        var loop = new TickLoop(store, pushover, heartbeat);
 
         await loop.TickOnceAsync(CancellationToken.None);
 
@@ -79,8 +78,8 @@ public sealed class TickLoopTests : IDisposable
     {
         var store = new FakeStore();
         var pushover = new CapturingPushoverClient();
-        var health = new HealthReporter(store, _dataDir);
-        var loop = new TickLoop(store, pushover, health);
+        var heartbeat = new TickHeartbeat();
+        var loop = new TickLoop(store, pushover, heartbeat);
         store.Tasks.Add(NewTask("Fix the shelf bracket"));
 
         for (var i = 0; i < 5; i++)

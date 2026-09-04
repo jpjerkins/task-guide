@@ -174,6 +174,8 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - Orphan is never counted in the process/stale footer counts — the three are disjoint
 - `Opportunities = 1` gets no badge
 - a fetched axis never makes a zero read as an Orphan — the Pattern-week count is counterfactual
+- an unknown Opportunity count is a third `ZeroKind`, not a zero and not an absence
+- the Status gate still wins over an unknown count
 
 ### Day boundary and clock-time resolution
 
@@ -185,6 +187,12 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - a span crossing the fall-back transition is honestly an hour longer
 - **a Window lying entirely inside the spring gap has zero length and does not fire**
 - Deadline, Defer and Postpone resolve at the day boundary
+- `StartOf` is the given date's own local midnight
+- `StartOf` the next day is the same instant as `EndOf` this one, across both DST transitions
+- a Window span is empty when the end equals or precedes the start; not empty otherwise
+- `ResolveWindow` resolves an ordinary Window to the same two instants `Resolve` would give
+- `ResolveWindow` returns `null` for a Window entirely inside the spring gap
+- `ResolveWindow` on a Window merely crossing the spring transition still resolves, an hour shorter
 
 ### Snooze arithmetic
 
@@ -283,6 +291,11 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 - `ttl` runs to the day boundary for a snooze past the span, an unconditional fire and a fallback
 - a Receipt's `ttl` is 24 hours **from sending**
 
+### FetchOutcome (#76)
+
+- a `Known` outcome matches to the known arm and yields its value
+- an `Unavailable` outcome matches to the unavailable arm and yields its reason
+
 ### Weather, the fetched axis
 
 - no weather-tagged Active Task ⇒ **no API call**
@@ -302,6 +315,10 @@ Categorical, from `CONTEXT.md`'s table, one test each:
 
 ### Glance
 
+- `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
+  `Shortlist` instances compare equal — the reference-equality trap a positional record falls
+  into on an `IReadOnlyList` member
+- a genuine difference (a different `MatchingNow`, a different shortlist member) still compares unequal
 - recomputed every tick, sent only when the payload differs from the last one **sent**
 - not sent again inside 30 minutes
 - **a Window start preempts the floor**
@@ -332,6 +349,10 @@ Against `fixtures/data`, the golden store.
 - **a mutation writes the affected file(s) before the request returns**
 - a write is atomic: a killed process leaves the old file or the new one, never a partial
 - one global write lock serialises mutations
+- **a `MutateAsync` refusal decided inside the write lock writes nothing** — the on-disk file and
+  the in-memory view are unchanged, `LastWriteSucceeded` stays `null` (no write was attempted),
+  and the lock is released, not held, so the next mutation still lands
+- an applied `MutateAsync` mutation returns `Applied`
 - **a read never blocks on a write**
 - `tasks.json` round-trips with no `status` field
 - `day-templates.json` round-trips the golden store unchanged
