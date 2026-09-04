@@ -110,7 +110,8 @@ Two properties keep the brief cheap to recover:
 Scope each task so it can finish without asking questions, and dispatch genuinely independent
 tasks in parallel — but never two that touch one file, which is the same hazard the plan's
 disjoint-ownership rule exists to prevent, one level down. Review the diff yourself afterwards
-and confirm the verification it claims actually ran; never take the report at face value.
+and confirm the verification it claims actually ran; never take the report at face value. That
+review runs under step 7a's gate, same as any other.
 
 ## 5. Work it TDD, red first
 
@@ -144,7 +145,60 @@ green from the repo root. Web lanes additionally:
 cd src/TaskGuide.Web && npm test
 ```
 
-Then run `/code-review` on the branch and fix what it finds.
+**Write down what Phil settled in-session, before review runs.** A decision that lives only in the
+conversation — an `AskUserQuestion` answer, an accepted consequence, a "yes, do it that way" — is
+invisible to every reviewer, and comes back as a finding. Put it in a ticket comment, or in the body
+of the commit it justifies, while it is still fresh. The merge commit is too late: review has
+already run by then.
+
+**Confirm the review target.** `/code-review` on an empty diff does not fail — it silently
+substitutes the last merge and reviews already-merged code. That produced six findings against
+`main` on #115.
+
+```sh
+git diff origin/main --stat
+```
+
+From inside the worktree, non-empty, and the paths are the ones the ticket owns. Otherwise the
+target is wrong; fix that before launching anything.
+
+Then run `/code-review` on the branch and fix what it finds — under the gate in 7a.
+
+## 7a. The review gate — binds every reviewer
+
+Applies to `/code-review`, to any subagent you dispatch to review, and to you reviewing the
+subagent's diff.
+
+A reviewer that consults only the code cannot tell a deliberate design choice from a defect, because
+the mechanism is real in both cases: the closure genuinely does capture a stale view, the discarded
+`bool` genuinely is discarded. **A real mechanism is not evidence of a defect.** Only a document
+settles that, and the call site does not point at one — a 12-line comment at
+`PushoverClient.SendGlanceAsync` naming its owning lane and ticket did not stop that stub being
+reported as a finding.
+
+So every finding carries one line of provenance before it is reported:
+
+> _Not settled: no ADR covers `Infrastructure/Pushover/`; `gh issue list --search "Pushover"
+> --state open` returns nothing._
+
+Reach that line in this order. The order **is** the gate — reading code first is what manufactures
+the false finding.
+
+1. `gh issue list --state open --search "<file or area>"`. An open ticket that owns the file has
+   already claimed the behaviour, and a finding inside it is that ticket's work, not a new one.
+2. `docs/adr/README.md` — its "Read it before touching" column resolves an area in one read.
+3. The plan's **Departures from the resolutions** and **Global constraints**; knowing departures are
+   declared there, and `tests/TEST-INVENTORY.md` records accepted coverage gaps the same way.
+4. Then the code.
+
+One search covers a batch of findings in the same area, which is cheap beside a single false
+finding's round trip. A finding that survives all four is reported with its provenance line. A
+finding that does not survive is dropped — and when the justification was hard to find, say where it
+finally turned up, so the next reviewer reaches it sooner.
+
+**Restate this gate in the brief of any subagent you dispatch to review.** The subagent never sees
+this skill, and step 4a applies here too: hand it the decisions you already hold as findings, not as
+a reading list.
 
 ## 8. PR into `main`
 
