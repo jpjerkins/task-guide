@@ -79,22 +79,27 @@ public sealed record TagSet(
         return hash.ToHashCode();
     }
 
-    /// <summary>Order-insensitive, duplicate-count-sensitive comparison — a multiset, not a set.</summary>
-    private static bool MultisetEqual<T>(IReadOnlyList<T> a, IReadOnlyList<T> b)
+    /// <summary>
+    /// Order-insensitive, duplicate-count-sensitive comparison — a multiset, not a set. Sorts by
+    /// <c>ToString()</c> but compares with <typeparamref name="T"/>'s own equality; that's sound
+    /// here because both callers pass <see cref="TagValue"/> or <see cref="LooseTag"/>, whose
+    /// <c>ToString()</c> returns the same normalised <c>Value</c> their equality is defined on.
+    /// </summary>
+    private static bool MultisetEqual<T>(IReadOnlyList<T> a, IReadOnlyList<T> b) where T : notnull
     {
         if (a.Count != b.Count) return false;
-        var sortedA = a.OrderBy(v => v!.ToString(), StringComparer.Ordinal).ToArray();
-        var sortedB = b.OrderBy(v => v!.ToString(), StringComparer.Ordinal).ToArray();
+        var sortedA = a.OrderBy(v => v.ToString(), StringComparer.Ordinal).ToArray();
+        var sortedB = b.OrderBy(v => v.ToString(), StringComparer.Ordinal).ToArray();
         return sortedA.SequenceEqual(sortedB);
     }
 
     /// <summary>An unchecked sum of element hashes is order-free and duplicate-count-sensitive.</summary>
-    private static int MultisetHash<T>(IReadOnlyList<T> values)
+    private static int MultisetHash<T>(IReadOnlyList<T> values) where T : notnull
     {
         var sum = 0;
         unchecked
         {
-            foreach (var value in values) sum += value!.GetHashCode();
+            foreach (var value in values) sum += value.GetHashCode();
         }
         return sum;
     }
