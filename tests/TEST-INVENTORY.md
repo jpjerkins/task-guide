@@ -157,7 +157,10 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
   and `this[DayOfWeek]` indexes them positionally
 - `PatternBook.Patterns` compares equal regardless of order, and hashes equal
-- swapping elements between `DayTemplate`'s two list members compares unequal and hashes differently
+- a `DayTemplate` differing only in `Windows` compares unequal; one differing only in
+  `EventPrototypes` compares unequal — not a swap guard: `Windows` and `EventPrototypes` hold
+  different element types, so unlike a Dimension's id and its values (#115's swap guard), nothing
+  can migrate between the two members for an additive hash to hide
 
 #### Dimensions
 

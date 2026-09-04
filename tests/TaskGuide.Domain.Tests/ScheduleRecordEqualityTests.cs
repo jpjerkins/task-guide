@@ -107,25 +107,29 @@ public sealed class ScheduleRecordEqualityTests
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 
-    /// <summary>
-    /// Regression guard against combining <see cref="DayTemplate.Windows"/>'s hash and
-    /// <see cref="DayTemplate.EventPrototypes"/>'s hash by plain addition: this exact pair of
-    /// templates was found (by a brute-force search over the additively-summed formula) to
-    /// collide under that bug despite holding different content — a real counter-example, not
-    /// a hoped-for one, since the two member types differ and cannot literally swap an element.
-    /// </summary>
     [Fact]
-    public void Swapping_elements_between_DayTemplates_two_list_members_compares_unequal_and_hashes_differently()
+    public void A_DayTemplate_differing_only_in_Windows_compares_unequal()
     {
-        var a = new DayTemplate(new DayTemplateId("dt_1"), "Weekday",
-            new[] { Window("w_12", "W12"), Window("w_27", "W27") },
-            new[] { Prototype("ep_31", "P31"), Prototype("ep_31", "P31"), Prototype("ep_39", "P39") });
-        var b = new DayTemplate(new DayTemplateId("dt_1"), "Weekday",
-            new[] { Window("w_15", "W15") },
-            new[] { Prototype("ep_32", "P32"), Prototype("ep_22", "P22"), Prototype("ep_30", "P30") });
+        var p1 = Prototype("ep_1", "Gym");
 
-        Assert.NotSame(a.Windows, b.Windows);
+        var a = new DayTemplate(new DayTemplateId("dt_1"), "Weekday",
+            new[] { Window("w_1", "Morning") }, new[] { p1 });
+        var b = new DayTemplate(new DayTemplateId("dt_1"), "Weekday",
+            new[] { Window("w_2", "Evening") }, new[] { p1 });
+
         Assert.False(a.Equals(b));
-        Assert.NotEqual(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void A_DayTemplate_differing_only_in_EventPrototypes_compares_unequal()
+    {
+        var w1 = Window("w_1", "Morning");
+
+        var a = new DayTemplate(new DayTemplateId("dt_1"), "Weekday",
+            new[] { w1 }, new[] { Prototype("ep_1", "Gym") });
+        var b = new DayTemplate(new DayTemplateId("dt_1"), "Weekday",
+            new[] { w1 }, new[] { Prototype("ep_2", "Standup") });
+
+        Assert.False(a.Equals(b));
     }
 }

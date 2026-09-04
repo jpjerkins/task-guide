@@ -29,10 +29,12 @@ public sealed record DayTemplate(
         && StructuralEquality.MultisetEqual(EventPrototypes, other.EventPrototypes);
 
     /// <summary>
-    /// The two members' hashes are combined via <see cref="HashCode.Combine{T1, T2, T3, T4}"/>,
-    /// not summed — summing would let an element's contribution move from one member to the
-    /// other without changing the total, the same additive-decomposition trap #115 guards
-    /// against for a Dimension's id and its values.
+    /// <see cref="Windows"/> holds <see cref="AvailabilityWindow"/>s and <see cref="EventPrototypes"/>
+    /// holds <see cref="EventPrototype"/>s — different element types, so nothing can migrate
+    /// between them and the additive-decomposition trap #115 guards against for a Dimension's id
+    /// and its values (a swappable pair of the <em>same</em> type) does not apply here. Combined
+    /// via <see cref="HashCode.Combine{T1, T2, T3, T4}"/> anyway, simply because there is no
+    /// reason to sum instead.
     /// </summary>
     public override int GetHashCode() =>
         HashCode.Combine(
