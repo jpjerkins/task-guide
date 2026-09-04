@@ -112,6 +112,19 @@ Categorical, from `CONTEXT.md`'s table, one test each:
   (the boundary must not drift)
 - a `longer` Task fits a long Window and still fails one at the largest sized bucket
 
+### Tag equality
+
+- `TagSet` equality (#115): two separately-constructed, structurally identical tag-bearing sets
+  compare equal, and hash equal — the reference-equality trap a positional record falls into on
+  a dictionary and a list member, the same #69/ADR-0011 watch-budget bug arriving through
+  `TagSet` instead of `GlanceState`
+- two separately-constructed empty sets compare equal, and equal `TagSet.Empty`
+- a Dimension's values compare equal regardless of order, and hash equal
+- loose Tags compare equal regardless of order, and hash equal
+- a Dimension mapped to an empty list equals that Dimension being absent, and hashes equal
+- a genuine difference still compares unequal: a different value on a Dimension; an extra
+  Dimension; a different loose Tag; a duplicate value or loose Tag against the same one held once
+
 ### Dimension registry
 
 - **a registry declaring one value on two Dimensions refuses to start**, naming the value
