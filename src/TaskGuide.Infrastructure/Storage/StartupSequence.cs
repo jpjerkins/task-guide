@@ -4,7 +4,6 @@ using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
-using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
 
 namespace TaskGuide.Infrastructure.Storage;
