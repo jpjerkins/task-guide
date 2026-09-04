@@ -93,6 +93,22 @@ public sealed class ScheduleRecordEqualityTests
     }
 
     [Fact]
+    public void Two_separately_constructed_structurally_identical_Patterns_compare_equal()
+    {
+        var mon = new DayTemplateId("dt_mon");
+        var tue = new DayTemplateId("dt_tue");
+        var days = new List<DayTemplateId> { mon, tue, mon, mon, mon, mon, mon };
+        var sameOrderDays = new List<DayTemplateId> { mon, tue, mon, mon, mon, mon, mon };
+
+        var a = new Pattern(new PatternId("p_1"), "Standard", days);
+        var b = new Pattern(new PatternId("p_1"), "Standard", sameOrderDays);
+
+        Assert.NotSame(a.Days, b.Days);
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
     public void PatternBook_Patterns_compares_equal_regardless_of_order()
     {
         var days = Enumerable.Repeat(new DayTemplateId("dt_1"), 7).ToList();

@@ -156,6 +156,9 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - `DayShape` `Windows` and `Events` compare equal regardless of order, and hash equal
 - **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
   and `this[DayOfWeek]` indexes them positionally
+- two separately-constructed, structurally identical `Pattern`s (same `Days` order, non-same list
+  instance) compare equal and hash equal — the positive direction a reorder-only test cannot pin,
+  since reference equality also satisfies "reordered ⇒ unequal"
 - `PatternBook.Patterns` compares equal regardless of order, and hashes equal
 - a `DayTemplate` differing only in `Windows` compares unequal; one differing only in
   `EventPrototypes` compares unequal — not a swap guard: `Windows` and `EventPrototypes` hold
@@ -168,6 +171,8 @@ duplicate-count-sensitive, following `TagSet`): everything else.
   categorical axis carries a set, and matching is subset
 - **`OrdinalDimension.OrderedValues` compares unequal when reordered** — `RankOf` is the index, so
   a reorder is a different axis
+- two separately-constructed, structurally identical `OrdinalDimension`s (same `OrderedValues`
+  order, non-same list instance) compare equal and hash equal
 - an `OrdinalDimension` differing only in `TaskDefault` or `WindowDefault` compares unequal
 - `DimensionRegistry.Dimensions` compares equal regardless of order, and hashes equal
 - a `CategoricalDimension` and an `OrdinalDimension` with the same id, label and values compare
@@ -192,14 +197,16 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - **`Reminder.Shortlist` compares unequal when reordered** — it is the ranked shortlist, and the
   first line is the top-ranked Task
 - **`Reminder.Events` compares unequal when reordered** — date ascending is the stated order
+- two separately-constructed, structurally identical `Reminder`s (same `Shortlist` and `Events`
+  order, non-empty and non-same list instances) compare equal and hash equal
 - `Reminder.FailedFetches` compares equal regardless of order, and hashes equal
 - `MatchContext.Fetched` compares equal regardless of Dimension key insertion order and regardless of
   value order within a Dimension, and hashes equal; `FailedFetches` likewise
 - a `MatchContext.Fetched` Dimension key mapped to an empty list equals that key being absent, and
   hashes equal — the same rule `TagSet.Dimensions` follows, and `FailedFetches`' own doc already
   treats an unresolved fetch's absence as the empty set
-- `DerivedObligationContext`'s `DatedEvents`, `Overrides`, `Completions` and `DayTemplates` each
-  compare equal regardless of order, and hash equal
+- `DerivedObligationContext`'s `DatedEvents`, `Overrides`, `Completions`, `DayTemplates` and
+  `EventExceptions` each compare equal regardless of order, and hash equal
 - **two `DerivedObligationContext`s differing only in their `IDayShapeReader` compare unequal** — an
   interface member has no value semantics to compare, so it stays a reference comparison, and this
   test pins that as a decision rather than an oversight

@@ -90,6 +90,24 @@ public sealed class FiringAndNotificationRecordEqualityTests
     }
 
     [Fact]
+    public void Two_separately_constructed_structurally_identical_Reminders_compare_equal()
+    {
+        var t1 = Task("t_1", "First");
+        var t2 = Task("t_2", "Second");
+        var e1 = Line("evt_1", "Concert", DayOfWeek.Monday);
+        var e2 = Line("evt_2", "Dentist", DayOfWeek.Tuesday);
+        var weather = new DimensionId("weather");
+
+        var a = MakeReminder(new[] { t1, t2 }, new[] { e1, e2 }, new[] { weather });
+        var b = MakeReminder(new[] { t1, t2 }, new[] { e1, e2 }, new[] { weather });
+
+        Assert.NotSame(a.Shortlist, b.Shortlist);
+        Assert.NotSame(a.Events, b.Events);
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
     public void Reminder_FailedFetches_compares_equal_regardless_of_order()
     {
         var weather = new DimensionId("weather");
@@ -185,10 +203,12 @@ public sealed class FiringAndNotificationRecordEqualityTests
         IReadOnlyList<DateOverride> overrides,
         IReadOnlyList<DerivedCompletionEntry> completions,
         IReadOnlyList<DayTemplate> dayTemplates,
-        IDayShapeReader shapes) =>
+        IDayShapeReader shapes,
+        IReadOnlyList<EventException>? eventExceptions = null) =>
         new(DateTimeOffset.UnixEpoch, datedEvents, overrides, shapes, completions, Boundary)
         {
             DayTemplates = dayTemplates,
+            EventExceptions = eventExceptions ?? Array.Empty<EventException>(),
         };
 
     private sealed class StubDayShapeReader : IDayShapeReader
@@ -197,7 +217,7 @@ public sealed class FiringAndNotificationRecordEqualityTests
     }
 
     [Fact]
-    public void DerivedObligationContexts_DatedEvents_Overrides_Completions_and_DayTemplates_each_compare_equal_regardless_of_order()
+    public void DerivedObligationContexts_DatedEvents_Overrides_Completions_DayTemplates_and_EventExceptions_each_compare_equal_regardless_of_order()
     {
         var shapes = new StubDayShapeReader();
         var e1 = new Event(new EventId("evt_1"), new DateOnly(2026, 1, 1), "Concert", new TimeOnly(9, 0), new TimeOnly(10, 0), TagSet.Empty, null);
@@ -208,14 +228,17 @@ public sealed class FiringAndNotificationRecordEqualityTests
         var c2 = new DerivedCompletionEntry(new RuleId("r_2"), "trigger-2", new DateOnly(2026, 1, 2), DateTimeOffset.UnixEpoch);
         var t1 = new DayTemplate(new DayTemplateId("dt_1"), "Weekday", Array.Empty<AvailabilityWindow>(), Array.Empty<EventPrototype>());
         var t2 = new DayTemplate(new DayTemplateId("dt_2"), "Weekend", Array.Empty<AvailabilityWindow>(), Array.Empty<EventPrototype>());
+        var x1 = new EventException(new DateOnly(2026, 1, 1), new EventPrototypeId("ep_1"), false, "Moved", new TimeOnly(9, 0), null);
+        var x2 = new EventException(new DateOnly(2026, 1, 2), new EventPrototypeId("ep_2"), true, null, null, null);
 
-        var a = Context(new[] { e1, e2 }, new[] { o1, o2 }, new[] { c1, c2 }, new[] { t1, t2 }, shapes);
-        var b = Context(new[] { e2, e1 }, new[] { o2, o1 }, new[] { c2, c1 }, new[] { t2, t1 }, shapes);
+        var a = Context(new[] { e1, e2 }, new[] { o1, o2 }, new[] { c1, c2 }, new[] { t1, t2 }, shapes, new[] { x1, x2 });
+        var b = Context(new[] { e2, e1 }, new[] { o2, o1 }, new[] { c2, c1 }, new[] { t2, t1 }, shapes, new[] { x2, x1 });
 
         Assert.NotSame(a.DatedEvents, b.DatedEvents);
         Assert.NotSame(a.Overrides, b.Overrides);
         Assert.NotSame(a.Completions, b.Completions);
         Assert.NotSame(a.DayTemplates, b.DayTemplates);
+        Assert.NotSame(a.EventExceptions, b.EventExceptions);
         Assert.True(a.Equals(b));
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }

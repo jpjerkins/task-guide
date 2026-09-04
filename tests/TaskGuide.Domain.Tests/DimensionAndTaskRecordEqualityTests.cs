@@ -46,6 +46,17 @@ public sealed class DimensionAndTaskRecordEqualityTests
     }
 
     [Fact]
+    public void Two_separately_constructed_structurally_identical_OrdinalDimensions_compare_equal()
+    {
+        var a = new OrdinalDimension(Effort, "Effort", new[] { Low, Medium, High }, Low, null);
+        var b = new OrdinalDimension(Effort, "Effort", new[] { Low, Medium, High }, Low, null);
+
+        Assert.NotSame(a.OrderedValues, b.OrderedValues);
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
     public void An_OrdinalDimension_differing_only_in_TaskDefault_or_WindowDefault_compares_unequal()
     {
         var baseline = new OrdinalDimension(Effort, "Effort", new[] { Low, Medium }, Low, Medium);
