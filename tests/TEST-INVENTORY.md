@@ -556,6 +556,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - an applied `MutateAsync` mutation returns `Applied`
 - **a read never blocks on a write**
 - `tasks.json` round-trips with no `status` field
+- every `RecurrenceRule` kind round-trips through its own JSON string (#72 review finding 1 —
+  `TaskCodec`'s `WriteRule` binds its arms to the union's type arguments by position)
 - `day-templates.json` round-trips the golden store unchanged
 - a Window's start and end round-trip as authored clock times, never as instants
 - an Event prototype's `absenceNotice` Offset round-trips, and a null one stays null
