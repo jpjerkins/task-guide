@@ -28,6 +28,7 @@ public sealed class RankingTests
     /// the <em>direction</em> of the key, not a bucket list that lives elsewhere.
     /// </summary>
     private static OrdinalDimension DurationAxis => Registry.Dimensions
+        .Select(dimension => dimension.Value)
         .OfType<OrdinalDimension>()
         .Single(dimension => dimension.Id == KnownDimensions.Duration);
 

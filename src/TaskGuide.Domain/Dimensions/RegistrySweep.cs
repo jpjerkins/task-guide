@@ -46,7 +46,7 @@ public static class RegistrySweep
                 continue;
             }
 
-            if (claimant is OrdinalDimension && dimensions.TryGetValue(claimant.Id, out var existing) && existing.Count > 0)
+            if (claimant.IsT1 && dimensions.TryGetValue(claimant.Id, out var existing) && existing.Count > 0)
             {
                 loose.Add(tag);
                 continue;

@@ -64,8 +64,8 @@ public sealed class DimensionRegistryTests
             [new("low"), new("medium"), new("high")],
             TaskDefault: new("low"), WindowDefault: new("low"));
 
-        Assert.IsType<ControlShape.MultiSelect>(categorical.ControlShape);
-        Assert.IsType<ControlShape.Slider>(ordinal.ControlShape);
+        Assert.IsType<MultiSelect>(((Dimension)categorical).ControlShape.Value);
+        Assert.IsType<Slider>(((Dimension)ordinal).ControlShape.Value);
     }
 
     [Fact]
@@ -79,8 +79,8 @@ public sealed class DimensionRegistryTests
             TaskDefault: null, WindowDefault: null,
             WindowSource: WindowValueSource.Derived);
 
-        var withDefaultSlider = Assert.IsType<ControlShape.Slider>(withDefault.ControlShape);
-        var durationSlider = Assert.IsType<ControlShape.Slider>(duration.ControlShape);
+        var withDefaultSlider = Assert.IsType<Slider>(((Dimension)withDefault).ControlShape.Value);
+        var durationSlider = Assert.IsType<Slider>(((Dimension)duration).ControlShape.Value);
 
         Assert.True(withDefaultSlider.HasLeaveAtDefault);
         Assert.False(durationSlider.HasLeaveAtDefault);

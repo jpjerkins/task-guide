@@ -40,17 +40,14 @@ public static class Matcher
         TaskItem task,
         MatchContext window,
         DimensionRegistry registry) =>
-        registry.Dimensions.All(dimension => dimension switch
-        {
-            CategoricalDimension categorical => CategoricalFits(
+        registry.Dimensions.All(dimension => dimension.Match(
+            categorical => CategoricalFits(
                 task.Tags.On(categorical.Id),
                 WindowCategoricalValues(categorical, window)),
-            OrdinalDimension ordinal => OrdinalFits(
+            ordinal => OrdinalFits(
                 ordinal,
                 task.Tags.SingleOn(ordinal.Id),
-                WindowOrdinalValue(ordinal, window)),
-            _ => throw new NotSupportedException($"Unknown Dimension algebra: {dimension.GetType()}"),
-        });
+                WindowOrdinalValue(ordinal, window))));
 
     /// <summary>
     /// A categorical axis reads its Window-side set from wherever that axis's values live:

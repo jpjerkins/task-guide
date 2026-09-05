@@ -127,6 +127,7 @@ public sealed class OpportunityCounter(
     /// </summary>
     private IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> EveryFetchedValue =>
         _registry.Dimensions
+            .Select(dimension => dimension.Value)
             .OfType<CategoricalDimension>()
             .Where(dimension => dimension.WindowSource == WindowValueSource.Fetched)
             .ToDictionary(dimension => dimension.Id, dimension => dimension.DeclaredValues);
@@ -136,6 +137,7 @@ public sealed class OpportunityCounter(
     /// the registry's algebra, the same discriminator <c>Matcher</c> uses, never off a static.
     /// </summary>
     private IReadOnlyList<TagValue> DurationBuckets => _registry.Dimensions
+        .Select(dimension => dimension.Value)
         .OfType<OrdinalDimension>()
         .SingleOrDefault(dimension => dimension.WindowSource == WindowValueSource.Derived)
         ?.OrderedValues ?? Array.Empty<TagValue>();

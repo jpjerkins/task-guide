@@ -1,3 +1,4 @@
+using OneOf;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Tags;
 
@@ -8,16 +9,30 @@ namespace TaskGuide.Domain.Dimensions;
 /// matching looks at. Declared in code; there is no UI for managing Dimensions.
 /// Identity and label are separate, so a rename touches no stored data.
 /// </summary>
-public abstract record Dimension(DimensionId Id, string Label)
+[GenerateOneOf]
+public partial class Dimension : OneOfBase<CategoricalDimension, OrdinalDimension>
 {
-    public abstract IReadOnlyList<TagValue> Values { get; }
+    public DimensionId Id => Match(c => c.Id, o => o.Id);
+
+    public string Label => Match(c => c.Label, o => o.Label);
+
+    public IReadOnlyList<TagValue> Values => Match(c => c.DeclaredValues, o => o.OrderedValues);
 
     /// <summary>
     /// The editor control this Dimension derives, from its algebra alone — never authored.
     /// Categorical axes offer a multi-select; ordinal axes offer a slider, with a
     /// "leave at the default" control only when the axis actually declares a default.
+    /// Categorical axes declare NO defaults on either side — absence is the empty set, and the
+    /// empty set already does everything a default was doing — so they always get a plain
+    /// multi-select. An ordinal axis's "leave at the default" control appears only when that
+    /// axis actually declares a default — a slider has no position for "unset", so the picker
+    /// needs an explicit control to distinguish it from "deliberately set to the default".
+    /// Duration declares no default (its absence <em>is</em> `Unprocessed`), so it derives no
+    /// such control.
     /// </summary>
-    public abstract ControlShape ControlShape { get; }
+    public ControlShape ControlShape => Match<ControlShape>(
+        _ => new MultiSelect(),
+        o => new Slider(HasLeaveAtDefault: o.TaskDefault is not null));
 }
 
 /// <summary>
@@ -26,12 +41,12 @@ public abstract record Dimension(DimensionId Id, string Label)
 /// a slider, one that additionally exposes a "leave at the default" control when — and only
 /// when — the axis declares a default on that side. Duration declares none, so it has none.
 /// </summary>
-public abstract record ControlShape
-{
-    public sealed record MultiSelect : ControlShape;
+[GenerateOneOf]
+public partial class ControlShape : OneOfBase<MultiSelect, Slider>;
 
-    public sealed record Slider(bool HasLeaveAtDefault) : ControlShape;
-}
+public sealed record MultiSelect;
+
+public sealed record Slider(bool HasLeaveAtDefault);
 
 /// <summary>Location, With whom, Weather. Both sides carry a set; matching is subset.</summary>
 public sealed record CategoricalDimension(
@@ -39,15 +54,7 @@ public sealed record CategoricalDimension(
     string Label,
     IReadOnlyList<TagValue> DeclaredValues,
     WindowValueSource WindowSource = WindowValueSource.Authored)
-    : Dimension(Id, Label)
 {
-    public override IReadOnlyList<TagValue> Values => DeclaredValues;
-
-    // Categorical axes declare NO defaults on either side. Absence is the empty set,
-    // and the empty set already does everything a default was doing.
-
-    public override ControlShape ControlShape => new ControlShape.MultiSelect();
-
     /// <summary><see cref="DeclaredValues"/> compares as a multiset — both sides carry a set,
     /// and matching is subset.</summary>
     public bool Equals(CategoricalDimension? other) =>
@@ -69,10 +76,7 @@ public sealed record OrdinalDimension(
     TagValue? TaskDefault,
     TagValue? WindowDefault,
     WindowValueSource WindowSource = WindowValueSource.Authored)
-    : Dimension(Id, Label)
 {
-    public override IReadOnlyList<TagValue> Values => OrderedValues;
-
     public int RankOf(TagValue value)
     {
         for (var i = 0; i < OrderedValues.Count; i++)
@@ -82,14 +86,6 @@ public sealed record OrdinalDimension(
 
         return -1;
     }
-
-    /// <summary>
-    /// A "leave at the default" control appears only when this axis actually declares a
-    /// default — a slider has no position for "unset", so the picker needs an explicit
-    /// control to distinguish it from "deliberately set to the default". Duration declares
-    /// no default (its absence <em>is</em> `Unprocessed`), so it derives no such control.
-    /// </summary>
-    public override ControlShape ControlShape => new ControlShape.Slider(HasLeaveAtDefault: TaskDefault is not null);
 
     /// <summary><see cref="OrderedValues"/> compares as a sequence — <see cref="RankOf"/> returns
     /// the index, so a reorder is a different axis.</summary>

@@ -128,7 +128,7 @@ public static class CodecPrimitives
     }
 
     private static bool IsOrdinal(DimensionId dimensionId) =>
-        KnownDimensions.Default.Dimensions.FirstOrDefault(d => d.Id == dimensionId) is OrdinalDimension;
+        KnownDimensions.Default.Dimensions.FirstOrDefault(d => d.Id == dimensionId) is { } d && d.IsT1;
 
     // ---- Offset ----
 
