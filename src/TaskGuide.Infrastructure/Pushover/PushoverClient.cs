@@ -35,25 +35,37 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
     // field by someone who doesn't know why it's here. Don't.
     public const string HttpClientName = "pushover";
 
-    public async Task<bool> SendReminderAsync(Reminder reminder, CancellationToken cancellationToken) =>
-        await SendAsync(reminder.Title, reminder.WindowContext, reminder.LandingPage, priority: 0, cancellationToken);
+    /// <summary>
+    /// One attempt only — a failed push reads as still-unfired next tick, and it's the tick loop
+    /// that retries it (<see cref="IReminderSender.SendReminderAsync"/>'s own doc comment).
+    /// Retrying here too would double-notify.
+    /// </summary>
+    public async Task<bool> SendReminderAsync(Reminder reminder, CancellationToken cancellationToken)
+    {
+        if (!EnsureConfigured())
+        {
+            return false;
+        }
+
+        var attempt = await SendAsync(reminder.Title, reminder.WindowContext, reminder.LandingPage, priority: 0, cancellationToken);
+        return attempt.Match(accepted => true, refused => false, rejected => false);
+    }
 
     /// <summary>
-    /// Adapters never throw for expected failures; they return an outcome (#69) — "logged, never
-    /// retried" beyond what <see cref="SendAsync"/> already attempts is the caller's policy now,
-    /// not something this adapter hides.
+    /// <see cref="IReceiptSender"/>'s own doc comment carries the contract in full. Each attempt's
+    /// outcome, and the swallow of whatever exception produced it, is <see cref="SendAsync"/>'s
+    /// job (#69: adapters return an outcome, they don't throw for expected failures) — this
+    /// method only ever sees the resulting <see cref="PushoverAttempt"/>.
     /// </summary>
     public async Task<bool> SendReceiptAsync(Receipt receipt, CancellationToken cancellationToken)
     {
-        try
+        if (!EnsureConfigured())
         {
-            return await SendAsync(Receipt.FixedTitle, receipt.TaskTitle, receipt.DetailPage, priority: 0, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Pushover Receipt send failed for Task {TaskId}; not retried", receipt.TaskId);
             return false;
         }
+
+        var attempt = await SendAsync(Receipt.FixedTitle, receipt.TaskTitle, receipt.DetailPage, priority: 0, cancellationToken);
+        return attempt.Match(accepted => true, refused => false, rejected => false);
     }
 
     // Rendering a GlanceState into a complication's three text slots is the Adapters lane's
@@ -69,14 +81,24 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
     public Task<bool> SendGlanceAsync(GlanceState state, CancellationToken cancellationToken) =>
         throw new NotImplementedException("Rendering a GlanceState into Pushover's Glance fields belongs to the Adapters lane.");
 
-    private async Task<bool> SendAsync(string title, string message, Uri url, int priority, CancellationToken cancellationToken)
+    /// <summary>
+    /// Not an attempt at all — a missing Token/UserKey never reaches the network, so it can't be
+    /// Accepted, Refused or Rejected.
+    /// </summary>
+    private bool EnsureConfigured()
+    {
+        if (options.Value.IsConfigured)
+        {
+            return true;
+        }
+
+        logger.LogWarning("Pushover is not configured (missing Token or UserKey); skipping send");
+        return false;
+    }
+
+    private async Task<PushoverAttempt> SendAsync(string title, string message, Uri url, int priority, CancellationToken cancellationToken)
     {
         var pushoverOptions = options.Value;
-        if (!pushoverOptions.IsConfigured)
-        {
-            logger.LogWarning("Pushover is not configured (missing Token or UserKey); skipping send");
-            return false;
-        }
 
         try
         {
@@ -94,18 +116,31 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
                 }),
                 cancellationToken);
 
-            if (!response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
             {
-                logger.LogError("Pushover send failed with status {StatusCode}", response.StatusCode);
-                return false;
+                return new PushoverAccepted();
             }
 
-            return true;
+            logger.LogError("Pushover send failed with status {StatusCode}", response.StatusCode);
+
+            var statusCode = (int)response.StatusCode;
+            return statusCode is >= 400 and < 500
+                ? new PushoverRejected(statusCode)
+                : new PushoverRefused($"HTTP {statusCode}");
         }
-        catch (Exception ex)
+        // A TaskCanceledException whose token is the *caller's* cancellationToken is a genuine
+        // cancellation, not a send failure — the `when` guard excludes that case, so it
+        // propagates instead of being swallowed into a retry. What reaches this catch is a
+        // client-side timeout.
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Pushover send timed out");
+            return new PushoverRefused("timeout");
+        }
+        catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Pushover send failed");
-            return false;
+            return new PushoverRefused(ex.Message);
         }
     }
 }
