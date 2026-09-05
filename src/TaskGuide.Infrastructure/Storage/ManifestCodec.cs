@@ -4,7 +4,7 @@ namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
 /// `manifest.json` — the store-wide version: <c>{ "version": 1 }</c>, nothing else. Per ADR-0001
-/// this is the one file a restore cannot omit; per <see cref="Application.Ports.IStartupSequence"/>
+/// this is the one file a restore cannot omit; per <see cref="Application.Ports.IStartupPlanner"/>
 /// it is what the migration steps read and advance.
 /// </summary>
 public static class ManifestCodec

@@ -522,7 +522,6 @@ directly.
 - `FakeWeatherSource.ForecastAsync` throws for an already-cancelled token (#77 review finding 7)
 - an unseeded date reads an empty `DayShape`, and the read is recorded
 - a recording heartbeat keeps every tick instant in order
-- a recording startup sequence keeps its phases in order
 - a written fire row survives the next unrelated mutation
 - a completion log seeded for a task absent from Tasks survives the next mutation
 - a view already built is unaffected by a later `With…` call on the same builder
