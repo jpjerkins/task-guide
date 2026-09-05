@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { PlaceholderScreen } from './components/PlaceholderScreen'
 import { TabBar, type Tab } from './components/TabBar'
 import { screensFor } from './components/shared/screenRegistry'
+import { ScreenNav } from './components/shared/ScreenNav'
 
 // Each file under ./screens registers itself as a module side effect (registerScreen). This is
 // the ONLY place that needs to know the directory exists — a new Web ticket adds its own
@@ -35,21 +36,15 @@ export default function App() {
     const selected = screens.find((s) => s.id === selectedId)
     if (selected) {
       content = (
-        <div className="nav">
-          <div className="nav-main">
-            <button className="icon" onClick={() => setSelectedId(null)}>
-              ← Back
-            </button>
-          </div>
+        <>
+          <ScreenNav title={selected.title} back={{ onBack: () => setSelectedId(null) }} />
           <div className="scroll">{selected.render()}</div>
-        </div>
+        </>
       )
     } else {
       content = (
-        <div className="nav">
-          <div className="nav-main">
-            <h1>{TAB_TITLES[tab]}</h1>
-          </div>
+        <>
+          <ScreenNav title={TAB_TITLES[tab]} />
           <div className="scroll">
             <div className="list">
               {screens.map((s) => (
@@ -59,7 +54,7 @@ export default function App() {
               ))}
             </div>
           </div>
-        </div>
+        </>
       )
     }
   }

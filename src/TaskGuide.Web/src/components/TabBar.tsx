@@ -1,8 +1,8 @@
-import { quickAction, type Tab } from './shared/screenRegistry'
+import type { Tab } from './shared/screenRegistry'
 
 // Re-exported so existing `import { type Tab } from './TabBar'` call sites keep working — the
-// type itself lives in screenRegistry.ts to avoid an import cycle (TabBar reads the registry's
-// quick-action slot; the registry must not import TabBar).
+// type itself lives in screenRegistry.ts to avoid an import cycle (screens import registerScreen
+// from there without needing TabBar).
 export type { Tab }
 
 const TABS: { key: Tab; glyph: string; label: string }[] = [
@@ -17,9 +17,9 @@ interface TabBarProps {
   onChange: (tab: Tab) => void
 }
 
+// Four equal tabs, nothing else — the prototype's tabbar() (docs/prototypes/ui-screens.prototype.html
+// ~788). The accent circle lives in ScreenNav's nav-main right slot, not here.
 export function TabBar({ active, onChange }: TabBarProps) {
-  const renderQuickAction = quickAction()
-
   return (
     <div className="tabbar">
       {TABS.map((t) => (
@@ -32,10 +32,6 @@ export function TabBar({ active, onChange }: TabBarProps) {
           {t.label}
         </button>
       ))}
-      {/* The accent circle's slot, present on every screen (#111); #103 fills it by calling
-          registerQuickAction from its own registration file, without editing this component.
-          Holds its width even when empty so the bar doesn't reflow once something registers. */}
-      <div className="tabbar-quick-action">{renderQuickAction && renderQuickAction()}</div>
     </div>
   )
 }
