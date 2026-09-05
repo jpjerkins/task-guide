@@ -69,8 +69,7 @@ public sealed class FakeStore : IStore
                 {
                     foreach (var write in storeMutation.OrderedWrites)
                     {
-                        Apply(builder, write);
-                        attemptedWrite = true;
+                        Apply(builder, write, ref attemptedWrite);
                     }
                 }
                 catch
@@ -132,17 +131,20 @@ public sealed class FakeStore : IStore
         return builder;
     }
 
-    private static void Apply(FakeStoreViewBuilder builder, object write)
+    private static void Apply(FakeStoreViewBuilder builder, object write, ref bool attemptedWrite)
     {
         switch (write)
         {
             case TasksWrite w:
+                attemptedWrite = true;
                 builder.WithTasks(w.Tasks);
                 break;
             case DayTemplatesWrite w:
+                attemptedWrite = true;
                 builder.WithDayTemplates(w.Templates);
                 break;
             case PatternsWrite w:
+                attemptedWrite = true;
                 // A defensive copy, matching JsonStore.cs: the store must own its storage, and
                 // IReadOnlyList<T> is not a promise of immutability — a caller that keeps its own
                 // reference and mutates it later must not be able to reach a view any concurrent
@@ -152,26 +154,33 @@ public sealed class FakeStore : IStore
                 builder.WithPatterns(w.Book with { Patterns = w.Book.Patterns.ToArray() });
                 break;
             case OverridesWrite w:
+                attemptedWrite = true;
                 builder.WithOverrides(w.Overrides);
                 break;
             case EventsWrite w:
+                attemptedWrite = true;
                 builder.WithEvents(w.Events);
                 break;
             case EventExceptionsWrite w:
+                attemptedWrite = true;
                 builder.WithEventExceptions(w.Exceptions);
                 break;
             case CompletionLogWrite w:
+                attemptedWrite = true;
                 builder.WithCompletions(w.Log.TaskId, w.Log with { Entries = w.Log.Entries.ToArray() });
                 break;
             case DerivedCompletionsWrite w:
+                attemptedWrite = true;
                 builder.WithDerivedCompletions(w.Entries);
                 break;
             case FiresWrite w:
+                attemptedWrite = true;
                 builder.WithFires(w.Fires.Date, w.Fires with { Rows = w.Fires.Rows.ToArray() });
                 break;
             default:
-                // Matches JsonStore.cs's type and message shape for the same programming error
-                // (#77 review finding 6).
+                // An unrecognised payload never applies, so it must not flip attemptedWrite —
+                // matching JsonStore.cs, whose default: case is the only one that doesn't assign
+                // it either (#116 finding 2).
                 throw new NotImplementedException($"FakeStore does not know how to write a {write.GetType().Name}.");
         }
     }
