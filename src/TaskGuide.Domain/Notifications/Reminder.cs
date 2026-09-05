@@ -85,10 +85,12 @@ public static class TimeToLivePolicy
     public static DateTimeOffset For(
         Firing.FireKind kind,
         DateTimeOffset windowEnd,
-        DateTimeOffset dayBoundary) => kind switch
+        DateTimeOffset dayBoundary,
+        DateTimeOffset now) => kind switch
         {
             Firing.FireKind.Window => windowEnd,
-            Firing.FireKind.Snooze => windowEnd,
+            Firing.FireKind.Snooze when now < windowEnd => windowEnd,
+            Firing.FireKind.Snooze => dayBoundary,
             Firing.FireKind.Unconditional => dayBoundary,
             Firing.FireKind.Fallback => dayBoundary,
             var unexpected => throw new ArgumentOutOfRangeException(nameof(kind), unexpected, null),

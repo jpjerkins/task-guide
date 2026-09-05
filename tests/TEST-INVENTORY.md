@@ -412,6 +412,8 @@ F3 → `TaskGuide.Application.Tests`.
 - **the same failure is silent when headless**
 - an unconditional fire with no matches leads with the **Event**, not the Window
 - `ttl` runs to the Window's end for a window fire and a late one
+- `ttl` runs to the Window's end for a Snooze re-fire still inside the span
+- `ttl` runs to the Day boundary for a Snooze re-fire past the span
 - `ttl` runs to the day boundary for a snooze past the span, an unconditional fire and a fallback
 - a Receipt's `ttl` is 24 hours **from sending**
 
