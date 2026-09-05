@@ -386,6 +386,8 @@ F3 → `TaskGuide.Application.Tests`.
 - a short backoff separates the attempts
 - a Reminder is never retried by the adapter
 - a caller's own cancellation is not swallowed into a retry
+- a Receipt attempt that exceeds its budget is refused and retried
+- a 4xx names the Task in the log
 - a Receipt is not written to the Fire record
 
 ### Notification content

@@ -35,8 +35,12 @@ public sealed class PushoverClientTests
 
         public static Func<HttpResponseMessage> Throws(Exception ex) => () => throw ex;
 
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            // A real handler observes its token; this one must too, or a test can't tell an
+            // attempt that was cut short by its own timeout from one that was answered.
+            cancellationToken.ThrowIfCancellationRequested();
             Requests.Add(request);
             // Clamp to the last scripted response so a caller that scripts fewer responses than
             // attempts still gets a defined (repeated) answer rather than an index-out-of-range.
@@ -53,29 +57,44 @@ public sealed class PushoverClientTests
     /// <summary>Records every log entry instead of writing anywhere, so a test can assert one happened.</summary>
     private sealed class CapturingLogger : ILogger<PushoverClient>
     {
-        public List<LogLevel> Entries { get; } = [];
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
         public void Log<TState>(LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Add(logLevel);
+            Entries.Add((logLevel, formatter(state, exception)));
     }
 
     /// <summary>
-    /// A <see cref="TimeProvider"/> whose timers fire synchronously and immediately, so a test
-    /// exercising backoff never actually sleeps — while still recording every delay requested of
-    /// it, so a test can assert a backoff was asked for.
+    /// A <see cref="TimeProvider"/> whose timers fire synchronously and immediately when their
+    /// due time is at or below <paramref name="fireUpTo"/> (default 1 second), so a test
+    /// exercising the Receipt's backoff (500ms) never actually sleeps, while the Receipt's
+    /// per-attempt timeout (3s, fix 1 of #85's review) does NOT fire on its own — a plain Receipt
+    /// round-trip test would otherwise have every attempt preempted by its own timeout before the
+    /// scripted HTTP response is ever read. A test exercising the timeout itself passes a larger
+    /// <paramref name="fireUpTo"/>. Every requested delay lands in <see cref="RequestedDelays"/>
+    /// regardless of whether it fired; only the ones that actually fired land in
+    /// <see cref="FiredDelays"/>.
     /// </summary>
-    private sealed class ImmediateTimeProvider : TimeProvider
+    private sealed class ImmediateTimeProvider(TimeSpan? fireUpTo = null) : TimeProvider
     {
+        private readonly TimeSpan _fireUpTo = fireUpTo ?? TimeSpan.FromSeconds(1);
+
         public List<TimeSpan> RequestedDelays { get; } = [];
+
+        public List<TimeSpan> FiredDelays { get; } = [];
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
             RequestedDelays.Add(dueTime);
-            callback(state);
+            if (dueTime <= _fireUpTo)
+            {
+                FiredDelays.Add(dueTime);
+                callback(state);
+            }
+
             return new NoOpTimer();
         }
 
@@ -151,7 +170,7 @@ public sealed class PushoverClientTests
 
         await client.SendReminderAsync(SampleReminder(), CancellationToken.None);
 
-        Assert.Contains(LogLevel.Error, logger.Entries);
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error);
     }
 
     [Fact]
@@ -195,7 +214,7 @@ public sealed class PushoverClientTests
 
         Assert.True(sent);
         Assert.Single(handler.Requests);
-        Assert.Empty(timeProvider.RequestedDelays);
+        Assert.Empty(timeProvider.FiredDelays);
     }
 
     [Fact]
@@ -225,9 +244,10 @@ public sealed class PushoverClientTests
 
         await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
 
-        // 3 attempts, backoff between each: 2 delays, one per gap.
-        Assert.Equal(2, timeProvider.RequestedDelays.Count);
-        Assert.All(timeProvider.RequestedDelays, delay => Assert.True(delay > TimeSpan.Zero));
+        // 3 attempts, backoff between each: 2 elapsed delays, one per gap. (RequestedDelays also
+        // holds each attempt's 3s timeout, armed but never reached.)
+        Assert.Equal(2, timeProvider.FiredDelays.Count);
+        Assert.All(timeProvider.FiredDelays, delay => Assert.True(delay > TimeSpan.Zero));
     }
 
     [Fact]
@@ -239,5 +259,36 @@ public sealed class PushoverClientTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SendReceiptAsync(SampleReceipt(), cts.Token));
+    }
+
+    [Fact]
+    public async Task A_receipt_attempt_that_exceeds_its_budget_is_refused_and_retried()
+    {
+        // fireUpTo is raised past the 3s budget so the fake clock actually fires each attempt's
+        // timeout. The handler would answer 200 if it were ever reached — so a pass here means
+        // the budget, not the response, decided the outcome.
+        var handler = new CapturingHandler();
+        var timeProvider = new ImmediateTimeProvider(TimeSpan.FromSeconds(5));
+        var client = MakeClient(handler, timeProvider);
+
+        var sent = await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
+
+        Assert.False(sent);
+        Assert.Empty(handler.Requests);
+        Assert.Equal(3, timeProvider.FiredDelays.Count(d => d == TimeSpan.FromSeconds(3)));
+    }
+
+    [Fact]
+    public async Task A_4xx_names_the_task_in_the_log()
+    {
+        var handler = new CapturingHandler(CapturingHandler.Status(HttpStatusCode.BadRequest));
+        var logger = new CapturingLogger();
+        var client = MakeClient(handler, logger: logger);
+
+        await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
+
+        Assert.Contains(
+            logger.Entries,
+            e => e.Level == LogLevel.Error && e.Message.Contains(SampleReceipt().TaskId.Value));
     }
 }

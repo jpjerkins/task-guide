@@ -39,12 +39,15 @@ public sealed class PushoverClient(
     // field by someone who doesn't know why it's here. Don't.
     public const string HttpClientName = "pushover";
 
-    // "Up to three attempts" — CONTEXT.md § Receipt (lines 1319-1367). The per-request timeout
-    // ("roughly 3 seconds per attempt") lives on the named HttpClient itself
-    // (ServiceCollectionExtensions.AddPushover), not here — this class doesn't own the client's
-    // lifetime. This constant is the "short backoff between" the three attempts.
+    // "Up to three attempts", "roughly 3 seconds per attempt with a short backoff between" —
+    // CONTEXT.md § Receipt (lines 1319-1367). All three constants are the *Receipt's*, and the
+    // timeout is applied per Receipt attempt rather than on the named HttpClient, which all three
+    // senders share: a 3s ceiling on SendReminderAsync would make Pushover-is-slow look like
+    // Pushover-refused, leave firedAt unwritten, and re-fire the same Reminder next tick — a
+    // duplicate push on a path that never asked for a budget.
     private const int MaxReceiptAttempts = 3;
     private static readonly TimeSpan ReceiptBackoff = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan ReceiptAttemptTimeout = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// One attempt only — a failed push reads as still-unfired next tick, and it's the tick loop
@@ -53,12 +56,15 @@ public sealed class PushoverClient(
     /// </summary>
     public async Task<bool> SendReminderAsync(Reminder reminder, CancellationToken cancellationToken)
     {
-        if (!EnsureConfigured())
+        if (Credentials() is not { } credentials)
         {
             return false;
         }
 
-        var attempt = await SendAsync(reminder.Title, reminder.WindowContext, reminder.LandingPage, priority: 0, cancellationToken);
+        // No per-attempt timeout: that budget is the Receipt's, and the tick loop is this
+        // sender's retry. See the constants above.
+        var attempt = await SendAsync(
+            credentials, reminder.Title, reminder.WindowContext, reminder.LandingPage, priority: 0, cancellationToken, cancellationToken);
         return attempt.Match(accepted => true, refused => false, rejected => false);
     }
 
@@ -67,23 +73,37 @@ public sealed class PushoverClient(
     /// own doc comment carries the contract in full. Each attempt's outcome, and the swallow of
     /// whatever exception produced it, is <see cref="SendAsync"/>'s job (#69: adapters return an
     /// outcome, they don't throw for expected failures); this loop only ever sees the resulting
-    /// <see cref="PushoverAttempt"/>. The one diagnostic naming the Task fires once, here, if
-    /// every attempt is spent without Pushover ever accepting.
+    /// <see cref="PushoverAttempt"/>. Both diagnostics naming the Task live here: one when a 4xx
+    /// ends it early, one when all three attempts are spent. Every way a Receipt can fail for
+    /// good is traceable back to its Task — the defect #118 was filed about.
     /// </summary>
     public async Task<bool> SendReceiptAsync(Receipt receipt, CancellationToken cancellationToken)
     {
-        if (!EnsureConfigured())
+        if (Credentials() is not { } credentials)
         {
             return false;
         }
 
         for (var attemptNumber = 1; attemptNumber <= MaxReceiptAttempts; attemptNumber++)
         {
-            var attempt = await SendAsync(Receipt.FixedTitle, receipt.TaskTitle, receipt.DetailPage, priority: 0, cancellationToken);
+            // Roughly 3s per attempt: a linked source, so the timeout cancels this attempt alone
+            // while the caller's own token still cancels the whole send.
+            using var timeout = new CancellationTokenSource(ReceiptAttemptTimeout, timeProvider);
+            using var attemptTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+
+            var attempt = await SendAsync(
+                credentials, Receipt.FixedTitle, receipt.TaskTitle, receipt.DetailPage, priority: 0, attemptTokenSource.Token, cancellationToken);
             var outcome = attempt.Match(
                 accepted => (bool?)true,
                 refused => null, // not accepted yet — worth another attempt
-                rejected => (bool?)false);
+                rejected =>
+                {
+                    logger.LogError(
+                        "Pushover rejected the Receipt for Task {TaskId} with status {StatusCode}; not retried",
+                        receipt.TaskId,
+                        rejected.StatusCode);
+                    return (bool?)false;
+                });
 
             if (outcome is { } done)
             {
@@ -113,26 +133,44 @@ public sealed class PushoverClient(
     public Task<bool> SendGlanceAsync(GlanceState state, CancellationToken cancellationToken) =>
         throw new NotImplementedException("Rendering a GlanceState into Pushover's Glance fields belongs to the Adapters lane.");
 
+    /// <summary>The two static secrets, once checked — so <see cref="SendAsync"/> holds two
+    /// non-nullable strings and needs no null-forgiving operator to use them.</summary>
+    private sealed record PushoverCredentials(string Token, string UserKey);
+
     /// <summary>
     /// Not an attempt at all — a missing Token/UserKey never reaches the network, so it can't be
     /// Accepted, Refused or Rejected. Checked before either caller's loop starts, so it never
-    /// consumes one of the Receipt's three attempts.
+    /// consumes one of the Receipt's three attempts. Returns the credentials rather than a bool
+    /// so the check and the use stay in one place: a guard hoisted away from the code it protects
+    /// is exactly what turns a <c>!</c> into an unjustifiable one.
     /// </summary>
-    private bool EnsureConfigured()
+    private PushoverCredentials? Credentials()
     {
-        if (options.Value.IsConfigured)
+        var pushoverOptions = options.Value;
+        if (pushoverOptions.IsConfigured)
         {
-            return true;
+            // IsConfigured is precisely "neither is null or whitespace", checked one line above.
+            return new PushoverCredentials(pushoverOptions.Token!, pushoverOptions.UserKey!);
         }
 
         logger.LogWarning("Pushover is not configured (missing Token or UserKey); skipping send");
-        return false;
+        return null;
     }
 
-    private async Task<PushoverAttempt> SendAsync(string title, string message, Uri url, int priority, CancellationToken cancellationToken)
+    /// <param name="attemptToken">Cancels this one attempt — for a Receipt, the caller's token
+    /// linked with that attempt's own timeout.</param>
+    /// <param name="callerToken">The caller's token alone. The timeout guard below must test
+    /// this one: <paramref name="attemptToken"/> is cancelled by the timeout itself, so guarding
+    /// on it would turn every timeout into a propagating cancellation.</param>
+    private async Task<PushoverAttempt> SendAsync(
+        PushoverCredentials credentials,
+        string title,
+        string message,
+        Uri url,
+        int priority,
+        CancellationToken attemptToken,
+        CancellationToken callerToken)
     {
-        var pushoverOptions = options.Value;
-
         try
         {
             var httpClient = httpClientFactory.CreateClient(HttpClientName);
@@ -140,14 +178,14 @@ public sealed class PushoverClient(
                 MessagesUrl,
                 new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    ["token"] = pushoverOptions.Token!,
-                    ["user"] = pushoverOptions.UserKey!,
+                    ["token"] = credentials.Token,
+                    ["user"] = credentials.UserKey,
                     ["title"] = title,
                     ["message"] = message,
                     ["url"] = url.ToString(),
                     ["priority"] = priority.ToString(),
                 }),
-                cancellationToken);
+                attemptToken);
 
             if (response.IsSuccessStatusCode)
             {
@@ -161,11 +199,13 @@ public sealed class PushoverClient(
                 ? new PushoverRejected(statusCode)
                 : new PushoverRefused($"HTTP {statusCode}");
         }
-        // A TaskCanceledException whose token is the *caller's* cancellationToken is a genuine
-        // cancellation, not a send failure — the `when` guard excludes that case, so it
-        // propagates instead of being swallowed into a retry. What reaches this catch is the
-        // per-request timeout set on the named HttpClient (ServiceCollectionExtensions.AddPushover).
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        // A TaskCanceledException raised because the *caller* cancelled is a genuine cancellation,
+        // not a send failure — the `when` guard excludes that case, so it propagates instead of
+        // being swallowed into a retry. What reaches this catch is this attempt's own timeout
+        // (ReceiptAttemptTimeout), which cancels attemptToken but never callerToken.
+        // OperationCanceledException, not just its TaskCanceledException subclass: which of the
+        // two surfaces depends on where the token was observed, and both mean the same thing here.
+        catch (OperationCanceledException ex) when (!callerToken.IsCancellationRequested)
         {
             logger.LogError(ex, "Pushover send timed out");
             return new PushoverRefused("timeout");
