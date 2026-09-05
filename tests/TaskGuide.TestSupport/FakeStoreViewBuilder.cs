@@ -34,7 +34,7 @@ public sealed class FakeStoreViewBuilder
     /// <summary><c>null</c> means the builder still owns the default Day templates list and <see
     /// cref="Build"/> falls back to <see cref="DefaultDayTemplate"/>; a caller-supplied list (via
     /// <see cref="WithDayTemplates"/>) is held here as-is, even when empty — emptying a caller's
-    /// own templates is a deliberate act, not an unseeded store (#116 finding 3).</summary>
+    /// own templates is a deliberate act, not an unseeded store (#116 review finding 1).</summary>
     private IReadOnlyList<DayTemplate>? _dayTemplates;
 
     /// <summary><c>null</c> means the builder still owns the default Pattern book and <see
@@ -132,7 +132,7 @@ public sealed class FakeStoreViewBuilder
             // The builder's own default: derives a book naming the first seeded template, or —
             // when DayTemplates is empty — an empty book that resolves nothing, matching a fresh
             // JsonStore rather than resurrecting a template nobody wrote. An emptied store is a
-            // deliberate act, not an unseeded one (#116 finding 3).
+            // deliberate act, not an unseeded one (#116 review finding 1).
             patterns = dayTemplates.Count == 0
                 ? new PatternBook(DefaultPatternId, [])
                 : new PatternBook(DefaultPatternId, [new Pattern(

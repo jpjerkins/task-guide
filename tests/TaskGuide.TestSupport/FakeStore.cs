@@ -121,7 +121,7 @@ public sealed class FakeStore : IStore
         // DayTemplatesWrite replaces DayTemplates underneath it. Only replay — both together,
         // never just one — once the pair has actually stopped being the builder's own default:
         // replaying just one would mark that half caller-supplied and destroy intactness on the
-        // very next unrelated write, breaking the re-pointing this fix exists for (#116 finding 1).
+        // very next unrelated write, breaking the re-pointing this fix exists for (#116 finding 1, narrowed by review finding 2).
         if (!view.DefaultPairIntact)
         {
             builder.WithDayTemplates(view.DayTemplates);
@@ -180,7 +180,7 @@ public sealed class FakeStore : IStore
             default:
                 // An unrecognised payload never applies, so it must not flip attemptedWrite —
                 // matching JsonStore.cs, whose default: case is the only one that doesn't assign
-                // it either (#116 finding 2).
+                // it either (#116 review finding 3).
                 throw new NotImplementedException($"FakeStore does not know how to write a {write.GetType().Name}.");
         }
     }
