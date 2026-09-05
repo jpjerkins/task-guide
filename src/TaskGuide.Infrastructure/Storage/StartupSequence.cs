@@ -436,17 +436,3 @@ public sealed class StartupSequence(
         public bool HasChanges => TasksChanged || DayTemplatesChanged || OverridesChanged || EventsChanged;
     }
 }
-
-/// <summary>
-/// `manifest.json`'s version is ahead of this binary's <see cref="ManifestCodec.CurrentVersion"/>
-/// — an older binary was installed over newer data. Refusing rather than guessing is what keeps a
-/// rollback from silently down-migrating already-migrated data.
-/// </summary>
-public sealed class StoreVersionAheadException(int storedVersion, int currentVersion)
-    : Exception(
-        $"manifest.json is at version {storedVersion}, ahead of this binary's version {currentVersion}. " +
-        "Refusing to start rather than silently down-migrate.")
-{
-    public int StoredVersion { get; } = storedVersion;
-    public int CurrentVersion { get; } = currentVersion;
-}
