@@ -742,14 +742,20 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   screens
 - registering a duplicate screen id throws
 - the quick-action slot is `null` until something registers, then returns that renderer
+- registering a second quick action throws
 - the tab bar renders all four tabs
-- the tab bar's quick-action slot renders nothing when nothing is registered
-- the tab bar's quick-action slot renders the registered action on every tab
+- `ScreenNav` renders the title, and the back control only when `back` is given
+- `ScreenNav` renders the registered quick action in the nav's right slot; renders nothing there
+  when nothing is registered
+- `PlaceholderScreen` renders its title and the not-built-yet message, and the registered quick
+  action — a placeholder tab is a screen too
 - a tab with no registered screen renders the placeholder
 - a tab with exactly one registered screen renders it directly
 - a tab with more than one registered screen renders an index of titles, and selecting one shows
   it with a working back affordance
 - a freshly registered screen appears with zero changes to `App.tsx`
+- the registered quick action appears in the multi-screen index, in a selected screen, and on a
+  placeholder tab
 - a non-OK response throws an error naming the method, path, and status
 - a 204 response is treated as absence, not a parse error
 - a 200 response parses as JSON
@@ -761,13 +767,18 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - changing the N field on an N-based rule updates only `n`
 - a completion-anchored rule renders the first-due date entry
 - `RecurrenceEditor`'s kind `<select>` survives its own change, and survives a sub-field's change
-- `OrdinalSlider` renders the current value's label
+- `OrdinalSlider` renders a labelled tick for every value, in order, and a hint naming the set
+  value
 - `OrdinalSlider` reports the value at the new slider index on change
-- `OrdinalSlider` shows a "leave at the default" control when a default is declared, and choosing
-  it clears the value to `null`
+- `OrdinalSlider` shows a "leave at the default" toggle when a default is declared, pressed while
+  unset, and choosing it clears the value to `null`
 - `OrdinalSlider` has no "leave at the default" control when no default is declared
-- `OrdinalSlider` renders read-only with the same control structure, input disabled
-- `OrdinalSlider`'s range input survives its own input event — same DOM node before and after
+- `OrdinalSlider` dims the slider with a class (never inline style) and shows index 0 while unset,
+  with a hint explaining the default; touching the slider while unset still commits a value
+- `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
+  included — every control disabled
+- `OrdinalSlider`'s range input survives its own input event and a press of the default toggle —
+  same DOM node throughout
 
 ## `TaskGuide.E2E`
 
