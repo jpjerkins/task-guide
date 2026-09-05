@@ -36,6 +36,15 @@ public sealed class StartupWriter(IStore store, string dataDir, SnapshotWriter s
             await WriteManifestAsync(version, cancellationToken);
         }
 
+        // The callback discards the view MutateAsync hands it (`_ =>`), where the pre-split
+        // StartupSequence.SweepRegistryAsync deliberately recomputed its plan *inside* that
+        // callback and documented that as load-bearing. That is not a lost guard here: the
+        // two-phase split means `plan` was computed in the plan phase by construction (ADR-0009 —
+        // "a storage-owned writer applies that already-valid plan"), and startup is
+        // single-threaded and runs before the host serves any request, so there is no concurrent
+        // writer for a fresh view to reveal. This is a reachability argument, not a structural
+        // one — a future caller invoking StartupWriter after the host is already serving would
+        // break it.
         foreach (var mutation in plan.OrderedWrites)
         {
             await store.MutateAsync<Never>(_ => OneOf<StoreMutation, Never>.FromT0(mutation), cancellationToken);

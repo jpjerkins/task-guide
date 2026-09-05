@@ -103,6 +103,17 @@ public sealed class StartupPlanner(
     /// plus the new template — never from an empty list, so a store with templates but no Pattern
     /// does not have them erased.
     /// </summary>
+    /// <remarks>
+    /// <b>Known residual, not fixed here — ADR-0009's Consequences records it explicitly for the
+    /// sweep, and it now covers the seed too:</b> the seed's writes land in <see cref="Plan"/>'s
+    /// <c>orderedWrites</c>, which <see cref="StartupWriter.ApplyAsync"/> applies <em>after</em> the
+    /// migration steps run — where the pre-split `StartupSequence` seeded before migrating. Both
+    /// the seed and the sweep are planned from the same pre-migration <paramref name="view"/>, so
+    /// once a real migration step rewrites `day-templates.json`, that step's output would be
+    /// overwritten by this pre-migration template list. Latent today because
+    /// <see cref="StoreMigrations.Ordered"/> is empty; closed by #53's store-reload question. The
+    /// next person widening <see cref="StoreMigrations.Ordered"/> needs to see this.
+    /// </remarks>
     private (DayTemplate? Template, IReadOnlyList<DayTemplate> DayTemplates, PatternBook? Pattern) PlanSeed(IStoreView view)
     {
         if (view.Patterns.Patterns.Count > 0) return (null, view.DayTemplates, null);
