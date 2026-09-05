@@ -110,7 +110,6 @@ public sealed class FakeStore : IStore
     {
         var builder = new FakeStoreViewBuilder()
             .WithTasks(view.Tasks)
-            .WithDayTemplates(view.DayTemplates)
             .WithOverrides(view.Overrides)
             .WithEvents(view.Events)
             .WithEventExceptions(view.EventExceptions)
@@ -118,12 +117,17 @@ public sealed class FakeStore : IStore
             .WithAllCompletions(view.AllCompletions)
             .WithAllFires(view.AllFires);
 
-        // Replaying WithPatterns unconditionally would pin a caller-supplied book forever (fine)
-        // but would also pin the builder's own derived default at its old day template, orphaning
-        // it the moment DayTemplatesWrite replaces DayTemplates underneath it. Only replay when
-        // the book actually came from a caller, so the builder's own default keeps re-deriving
-        // itself in Build() (#116 finding 1).
-        if (view.PatternsAreCallerSupplied) builder.WithPatterns(view.Patterns);
+        // Replaying WithDayTemplates/WithPatterns unconditionally would pin the builder's own
+        // derived default at its old day template, orphaning it the moment a later
+        // DayTemplatesWrite replaces DayTemplates underneath it. Only replay — both together,
+        // never just one — once the pair has actually stopped being the builder's own default:
+        // replaying just one would mark that half caller-supplied and destroy intactness on the
+        // very next unrelated write, breaking the re-pointing this fix exists for (#116 finding 1).
+        if (!view.DefaultPairIntact)
+        {
+            builder.WithDayTemplates(view.DayTemplates);
+            builder.WithPatterns(view.Patterns);
+        }
 
         return builder;
     }

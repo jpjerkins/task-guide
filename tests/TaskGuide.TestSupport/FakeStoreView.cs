@@ -27,7 +27,7 @@ public sealed class FakeStoreView : IStoreView
         IReadOnlyList<DerivedCompletionEntry> derivedCompletions,
         IReadOnlyList<DayTemplate> dayTemplates,
         PatternBook patterns,
-        bool patternsAreCallerSupplied,
+        bool defaultPairIntact,
         IReadOnlyList<DateOverride> overrides,
         IReadOnlyList<Event> events,
         IReadOnlyList<EventException> eventExceptions,
@@ -38,7 +38,7 @@ public sealed class FakeStoreView : IStoreView
         DerivedCompletions = derivedCompletions;
         DayTemplates = dayTemplates;
         _patterns = patterns;
-        PatternsAreCallerSupplied = patternsAreCallerSupplied;
+        DefaultPairIntact = defaultPairIntact;
         Overrides = overrides;
         Events = events;
         EventExceptions = eventExceptions;
@@ -54,12 +54,14 @@ public sealed class FakeStoreView : IStoreView
 
     public PatternBook Patterns => _patterns;
 
-    /// <summary>Set by <see cref="FakeStoreViewBuilder.Build"/> when the Pattern book came from an
-    /// explicit <c>WithPatterns</c> call rather than the builder's own derived default. <see
-    /// cref="FakeStore.ViewAsBuilder"/> reads this to decide whether replaying <see
-    /// cref="Patterns"/> onto a fresh builder would pin a caller-supplied book, or fight the
-    /// builder's own re-derivation of its default (#116 finding 1).</summary>
-    internal bool PatternsAreCallerSupplied { get; }
+    /// <summary>Set by <see cref="FakeStoreViewBuilder.Build"/> to <c>true</c> only when
+    /// <em>neither</em> <see cref="DayTemplates"/> nor <see cref="Patterns"/> has ever been
+    /// caller-supplied — the builder still owns both halves of its synthetic default pair. <see
+    /// cref="FakeStore.ViewAsBuilder"/> reads this to decide whether to skip replaying both
+    /// <c>WithDayTemplates</c> and <c>WithPatterns</c> onto a fresh builder, so the pair keeps
+    /// re-deriving itself, or to replay both — because once either half is caller-supplied, every
+    /// write must behave exactly like <c>JsonStore</c>: no fix-up, orphans surface (#116 finding 1).</summary>
+    internal bool DefaultPairIntact { get; }
 
     /// <summary>Everything seeded via <c>WithCompletions</c>/<c>CompletionLogWrite</c>, for
     /// <see cref="FakeStore"/> to carry forward across a mutation without walking <see cref="Tasks"/>.</summary>

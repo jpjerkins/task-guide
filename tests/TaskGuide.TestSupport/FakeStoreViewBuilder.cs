@@ -30,7 +30,12 @@ public sealed class FakeStoreViewBuilder
     private IReadOnlyList<TaskItem> _tasks = [];
     private readonly Dictionary<TaskId, CompletionLog> _completions = [];
     private IReadOnlyList<DerivedCompletionEntry> _derivedCompletions = [];
-    private IReadOnlyList<DayTemplate> _dayTemplates = [DefaultDayTemplate];
+
+    /// <summary><c>null</c> means the builder still owns the default Day templates list and <see
+    /// cref="Build"/> falls back to <see cref="DefaultDayTemplate"/>; a caller-supplied list (via
+    /// <see cref="WithDayTemplates"/>) is held here as-is, even when empty — emptying a caller's
+    /// own templates is a deliberate act, not an unseeded store (#116 finding 3).</summary>
+    private IReadOnlyList<DayTemplate>? _dayTemplates;
 
     /// <summary><c>null</c> means the builder still owns the default Pattern book and <see
     /// cref="Build"/> must derive one that stays coherent with <see cref="_dayTemplates"/>; a
@@ -113,8 +118,13 @@ public sealed class FakeStoreViewBuilder
 
     public FakeStoreView Build()
     {
-        var callerSupplied = _patterns is not null;
-        var dayTemplates = _dayTemplates;
+        // True only while *neither* half of the synthetic default pair has ever been written by
+        // a caller. FakeStore.ViewAsBuilder reads this to decide whether to fix up the pair on a
+        // write — once either half is caller-supplied, every write behaves exactly like
+        // JsonStore, no fix-up, orphans surface (#116 finding 1).
+        var defaultPairIntact = _dayTemplates is null && _patterns is null;
+
+        var dayTemplates = _dayTemplates ?? [DefaultDayTemplate];
         var patterns = _patterns;
 
         if (patterns is null)
@@ -131,6 +141,6 @@ public sealed class FakeStoreViewBuilder
 
         return new(
             _tasks, new Dictionary<TaskId, CompletionLog>(_completions), _derivedCompletions, dayTemplates, patterns,
-            callerSupplied, _overrides, _events, _eventExceptions, new Dictionary<DateOnly, DayFires>(_fires));
+            defaultPairIntact, _overrides, _events, _eventExceptions, new Dictionary<DateOnly, DayFires>(_fires));
     }
 }
