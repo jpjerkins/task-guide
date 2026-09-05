@@ -457,6 +457,9 @@ section.
   Tag-bearing `TagSet`s (not the shared `TagSet.Empty` instance), for both `InsideWindow` and
   `NextWindow`
 - a genuine difference (a different `MatchingNow`, a different shortlist member) still compares unequal
+- a first Glance is sent without a previously sent payload
+- a changed Glance sends at the floor's exact boundary, but not one tick before it
+- an unchanged Glance remains suppressed after the floor
 - recomputed every tick, sent only when the payload differs from the last one **sent**
 - not sent again inside 30 minutes
 - **a Window start preempts the floor**

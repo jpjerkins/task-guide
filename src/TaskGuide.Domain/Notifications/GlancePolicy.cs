@@ -15,5 +15,6 @@ public static class GlancePolicy
     /// platform fact (watchOS's 50-updates-a-day budget) that belongs to the adapter that knows it.
     /// </summary>
     public static bool ShouldSend(GlanceState next, GlanceState? lastSent, TimeSpan sinceLastSend, bool windowJustStarted, TimeSpan floor) =>
-        throw new NotImplementedException();
+        lastSent is null
+        || (!next.Equals(lastSent) && (windowJustStarted || sinceLastSend >= floor));
 }
