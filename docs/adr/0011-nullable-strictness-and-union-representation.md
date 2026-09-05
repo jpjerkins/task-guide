@@ -1,6 +1,7 @@
 # ADR-0011 — Nullable strictness, and unions as `OneOf` until C# ships its own
 
-**Status:** Accepted · **Source:** [#69](https://github.com/jpjerkins/task-guide/issues/69) · **Decided** 2026-09-01
+**Status:** Accepted · **Source:** [#69](https://github.com/jpjerkins/task-guide/issues/69) · **Decided** 2026-09-01  
+**Amended** 2026-09-05 — the five existing hierarchies are retrofitted and the scope is no longer "new, non-persisted", from [#72](https://github.com/jpjerkins/task-guide/issues/72).
 
 ## Context
 
