@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { PlaceholderScreen } from './components/PlaceholderScreen'
 import { TabBar, type Tab } from './components/TabBar'
 import { screensFor } from './components/shared/screenRegistry'
-import { ScreenNav } from './components/shared/ScreenNav'
+import { BackProvider, ScreenNav } from './components/shared/ScreenNav'
 
 // Each file under ./screens registers itself as a module side effect (registerScreen). This is
 // the ONLY place that needs to know the directory exists — a new Web ticket adds its own
@@ -35,12 +35,11 @@ export default function App() {
   } else {
     const selected = screens.find((s) => s.id === selectedId)
     if (selected) {
-      content = (
-        <>
-          <ScreenNav title={selected.title} back={{ onBack: () => setSelectedId(null) }} />
-          <div className="scroll">{selected.render()}</div>
-        </>
-      )
+      // Every screen renders its own ScreenNav (the prototype's nav() is called by each screen,
+      // never by the shell — docs/prototypes/ui-screens.prototype.html), so the shell must not
+      // wrap it in a second one. The back action still needs to reach that screen's ScreenNav
+      // without it knowing it was reached via an index, so it travels through context instead.
+      content = <BackProvider value={{ onBack: () => setSelectedId(null) }}>{selected.render()}</BackProvider>
     } else {
       content = (
         <>
