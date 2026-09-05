@@ -7,7 +7,10 @@
 A brand-new `/data` has no `patterns.json`. `PatternBook.Active` calls `Patterns.Single(...)`, which
 throws on an empty list — so without intervention the first day-shape read of a fresh install crashes
 the app. `StartupSequence.SeedDefaultPatternAsync` fixes that by writing one vanilla weekly Pattern
-("Default", seven days of one "Ordinary day" template) before anything reads.
+("Default", seven days of one "Ordinary day" template) before anything reads. *(That seed now
+lives in `StartupPlanner`'s plan phase, which computes it without writing; `StartupWriter` applies it.
+`StartupSequence` was retired by [#78](https://github.com/jpjerkins/task-guide/issues/78) on
+2026-09-05 — the guarantee below is unchanged.)*
 
 That seed is now two things at once: a **mechanism** that prevents the crash, and a **sample** of what
 a Pattern looks like. Only the first is a promise.

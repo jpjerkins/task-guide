@@ -5,6 +5,12 @@
 
 ## Context
 
+> **`StartupSequence` no longer exists.** [#78](https://github.com/jpjerkins/task-guide/issues/78)
+> retired it on 2026-09-05, implementing the amendment below: its work is now split across
+> `StartupPlanner` (plans, may refuse, cannot write), `StartupWriter` (applies, refuses nothing) and
+> `StartupBootstrap` (wires the two, then opens the runtime store). The Context below is kept as
+> written — it is the history this decision was made against, not a description of today's code.
+
 `StartupSequence.RunAsync` is the composition root's entry point, and it is the only place in the
 system that makes several decisions and several writes in one sequence: assert the registry, plan
 the migration, seed an empty store, snapshot, migrate, sweep. Every other write path is a single
