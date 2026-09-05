@@ -89,6 +89,32 @@ public sealed class DimensionAndTaskRecordEqualityTests
         var ordinal = new OrdinalDimension(Effort, "Effort", new[] { Low, Medium }, null, null);
 
         Assert.False(categorical.Equals(ordinal));
+
+        // The property lives on the Dimension union now — OneOfBase.Equals compares the case
+        // index as well as the payload, so this is the assertion that actually exercises it.
+        // (object.Equals on the two unrelated records above can never return true, so it no
+        // longer proves anything on its own.)
+        Assert.False(((Dimension)categorical).Equals((Dimension)ordinal));
+    }
+
+    [Fact]
+    public void Two_separately_constructed_structurally_identical_Dimensions_compare_equal()
+    {
+        Dimension a = new CategoricalDimension(Effort, "Effort", new[] { Low, Medium });
+        Dimension b = new CategoricalDimension(Effort, "Effort", new[] { Low, Medium });
+
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void Two_separately_constructed_structurally_identical_ControlShapes_compare_equal()
+    {
+        ControlShape a = new Slider(HasLeaveAtDefault: true);
+        ControlShape b = new Slider(HasLeaveAtDefault: true);
+
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 
     [Fact]
@@ -133,5 +159,25 @@ public sealed class DimensionAndTaskRecordEqualityTests
         Assert.NotSame(((EveryNWeeksOn)a.Rule).Weekdays, ((EveryNWeeksOn)b.Rule).Weekdays);
         Assert.True(a.Rule.Equals(b.Rule));
         Assert.Equal(a.Rule.GetHashCode(), b.Rule.GetHashCode());
+    }
+
+    [Fact]
+    public void Two_separately_constructed_structurally_identical_Defers_compare_equal()
+    {
+        Defer a = new AbsoluteDefer(new DateOnly(2026, 8, 20));
+        Defer b = new AbsoluteDefer(new DateOnly(2026, 8, 20));
+
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void Two_separately_constructed_structurally_identical_Offsets_compare_equal()
+    {
+        Offset a = new BeforeOffset(1, OffsetUnit.Days);
+        Offset b = new BeforeOffset(1, OffsetUnit.Days);
+
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 }

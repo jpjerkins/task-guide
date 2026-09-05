@@ -176,7 +176,13 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - an `OrdinalDimension` differing only in `TaskDefault` or `WindowDefault` compares unequal
 - `DimensionRegistry.Dimensions` compares equal regardless of order, and hashes equal
 - a `CategoricalDimension` and an `OrdinalDimension` with the same id, label and values compare
-  unequal — the derived type is part of the identity
+  unequal — the derived type is part of the identity, asserted both on the bare records and
+  through the `Dimension` union itself (#72 review finding 2 — the bare-record assertion alone
+  binds to `object.Equals` post-retrofit and can never fail)
+- two separately-constructed, structurally identical `Dimension`s (via `CategoricalDimension`)
+  compare equal and hash equal through the union (ADR-0011)
+- two separately-constructed, structurally identical `ControlShape`s (via `Slider`) compare equal
+  and hash equal through the union (ADR-0011)
 
 #### Tasks
 
@@ -186,6 +192,10 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - **`EveryNWeeksOn.Weekdays` compares equal regardless of order**, and hashes equal — a set of
   weekdays, and `EveryNWeeksOn` is compared through `Recurrence`, whose `Rule` is a `OneOf`-style
   closed set
+- two separately-constructed, structurally identical `Defer`s (via `AbsoluteDefer`) compare equal
+  and hash equal through the union (ADR-0011)
+- two separately-constructed, structurally identical `Offset`s (via `BeforeOffset`) compare equal
+  and hash equal through the union (ADR-0011)
 
 #### Firing
 
