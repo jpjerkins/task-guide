@@ -116,6 +116,21 @@ describe('OrdinalSlider', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  // Review finding 6: a value that isn't in `values` gives indexOf === -1. React would then write
+  // value="-1" on the input, the browser clamps the visible thumb to values[0], but `unset` wasn't
+  // set — the control showed one value (whisper, via the clamp) while the hint claimed "Set to
+  // <the missing value>." A value not found in the set must fall back to the unset presentation.
+  it('falls back to the unset presentation when the value is not in the set', () => {
+    const { container } = render(
+      <OrdinalSlider label="Volume" values={VALUES} value="deafening" defaultValue="normal" onChange={() => {}} />,
+    )
+
+    const el = screen.getByLabelText('Volume')
+    expect(el).toHaveClass('unset')
+    expect(el).toHaveValue('0')
+    expect(container.querySelector('.hint')?.textContent).not.toContain('deafening')
+  })
+
   it('renders read-only with the same control structure, input disabled', () => {
     const { container } = render(
       <OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={() => {}} readOnly />,

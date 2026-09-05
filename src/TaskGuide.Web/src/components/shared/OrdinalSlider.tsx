@@ -23,8 +23,13 @@ interface OrdinalSliderProps {
 // style) and shows index 0. Duration declares no default, so that control is simply absent.
 export function OrdinalSlider({ label, values, value, onChange, defaultValue, readOnly, id }: OrdinalSliderProps) {
   const hasDefault = defaultValue !== undefined && defaultValue !== null
-  const unset = value === null
-  const index = unset ? 0 : values.indexOf(value)
+  // A value not present in `values` (indexOf === -1) falls back to the unset presentation too —
+  // otherwise React writes value="-1" on the input, the browser clamps the visible thumb to
+  // index 0, but the dimming/hint logic below (keyed on `value === null`) wouldn't know that
+  // happened and would claim "Set to <the missing value>" over a control showing something else.
+  const rawIndex = value === null ? -1 : values.indexOf(value)
+  const unset = rawIndex === -1
+  const index = unset ? 0 : rawIndex
 
   let hint: string
   if (unset) {
