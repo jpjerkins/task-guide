@@ -1,8 +1,13 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskGuide.Api.Endpoints;
+using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
+using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Schedule;
 using TaskGuide.Infrastructure.BackgroundServices;
 using TaskGuide.Infrastructure.Configuration;
 using TaskGuide.Infrastructure.Ids;
+using TaskGuide.Infrastructure.Storage;
 
 // One container: API + SPA + the ~30s tick loop (#5, #6). Host-mode port 8007, tailnet-only,
 // TLS via Tailscale Serve, no auth — single user, gated at the network layer.
@@ -24,17 +29,34 @@ builder.Configuration.AddEnvFile(
 // Configurable so tests (and a local run) aren't forced to write to a root path; "/data" is only
 // the container's bind-mount default.
 var dataDir = builder.Configuration["Storage:DataDir"] ?? "/data";
-builder.Services.AddJsonStore(dataDir);      // memory-authoritative, one global write lock
+
+// ADR-0009: plan (may refuse, cannot write) → apply (cannot refuse) → open the runtime store.
+// Awaited here, before Build(), so the *completed* store is what gets registered — no temporary
+// service provider, no holder filled in later, and the bootstrap view is never registered at all.
+var store = await StartupBootstrap.BootstrapAndOpenStoreAsync(
+    dataDir,
+    KnownDimensions.Default,
+    StoreMigrations.Ordered,
+    new UlidIdMinter(),
+    TimeProvider.System,
+    signalRegistryCollision: (_, _) => Task.CompletedTask,   // nothing outbound wired yet
+    CancellationToken.None);
+
+builder.Services.AddSingleton<IStore>(store);
+builder.Services.AddSingleton<IStoreReader>(store);
+builder.Services.AddSingleton(KnownDimensions.Default);
+// AddPushover below also TryAddSingleton(TimeProvider.System); kept here instead because this is
+// where the process-wide clock is first needed (the bootstrap call above), and a reader shouldn't
+// have to look inside AddPushover to find where the clock they depend on comes from.
+builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IIdMinter, UlidIdMinter>();
+builder.Services.AddSingleton<IDayShapeReader, DayShapeReader>();
 builder.Services.AddPushover(builder.Configuration);
 builder.Services.AddHealthReporter(dataDir);
 builder.Services.AddHostedService<TickLoop>();
 builder.Services.AddOpenApi();               // TS types are generated from this output (openapi-typescript)
 
 var app = builder.Build();
-
-// assert → snapshot → migrate → sweep → serve. A registry collision refuses to start.
-// await app.Services.GetRequiredService<IStartupSequence>().RunAsync();
 
 app.MapOpenApi();
 app.UseDefaultFiles();

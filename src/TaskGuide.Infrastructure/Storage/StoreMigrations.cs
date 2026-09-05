@@ -1,7 +1,7 @@
 namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
-/// The ordered N→N+1 steps <see cref="StartupSequence"/> walks when `manifest.json`'s version is
+/// The ordered N→N+1 steps <see cref="StartupPlanner"/> walks when `manifest.json`'s version is
 /// behind <see cref="ManifestCodec.CurrentVersion"/>. Per-file versions were rejected (#23) — the
 /// version is store-wide, so a step here operates over the whole <paramref name="dataDir"/>, not
 /// one collection.
@@ -11,7 +11,7 @@ public static class StoreMigrations
     /// <summary>
     /// Empty today — version 1 is the only version that has existed, so there is nothing to walk.
     /// Do not invent a step to have something to run; the walk logic is exercised in
-    /// <c>StartupSequenceTests</c> against a fake list supplied through <see cref="StartupSequence"/>'s
+    /// <c>StartupSequenceTests</c> against a fake list supplied through <see cref="StartupPlanner"/>'s
     /// constructor.
     /// </summary>
     public static IReadOnlyList<StoreMigration> Ordered { get; } = [];
@@ -24,7 +24,7 @@ public static class StoreMigrations
 /// </summary>
 /// <remarks>
 /// <b>Moving strictly forward is an invariant of the step, enforced here (ADR-0009).</b> A step
-/// that does not advance the version lets <see cref="StartupSequence"/>'s walk cycle — an infinite
+/// that does not advance the version lets <see cref="StartupPlanner"/>'s walk cycle — an infinite
 /// hang at startup, which is worse than any exception. That is a property of the step alone, so it
 /// is checked where the step is built rather than rediscovered mid-walk: no walk, in production or
 /// under a test's fake list, can ever be handed one.

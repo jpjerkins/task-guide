@@ -522,7 +522,6 @@ directly.
 - `FakeWeatherSource.ForecastAsync` throws for an already-cancelled token (#77 review finding 7)
 - an unseeded date reads an empty `DayShape`, and the read is recorded
 - a recording heartbeat keeps every tick instant in order
-- a recording startup sequence keeps its phases in order
 - a written fire row survives the next unrelated mutation
 - a completion log seeded for a task absent from Tasks survives the next mutation
 - a view already built is unaffected by a later `With…` call on the same builder
@@ -611,6 +610,11 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - a fresh `/data` seeds one vanilla weekly Pattern of a single plain Day template
 - the default Pattern seed takes no snapshot
 - a store that already has a Pattern is never reseeded
+- the plan phase returns its refusal rather than throwing, and writes nothing (#78)
+- a valid plan snapshots, migrates, stamps the manifest, then writes, in that order (#78)
+- the runtime store opened after the write phase reads what the write phase landed (#78)
+- an empty `/data` bootstraps and `IDayShapeReader` returns a usable `DayShape` (#78)
+- a registry collision's outbound signal and its thrown exception carry the same, unnested message (#78)
 - `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
@@ -733,6 +737,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `DELETE /api/event-exceptions/{date}/{prototypeId}` on an instance the active Pattern no longer
   assumes matches nothing and is not an error
 - `/health` is reachable without traversing `/api`
+- host creation refuses a future-version store, before any endpoint or the tick loop can start (#78)
 
 ## `TaskGuide.Web` (vitest)
 

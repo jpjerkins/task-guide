@@ -6,7 +6,7 @@ namespace TaskGuide.Storage.Tests;
 /// <summary>
 /// Against `tests/TEST-INVENTORY.md`'s "a migration step must move the store version strictly
 /// forward". Per ADR-0009 this is an invariant of the <em>step</em>, enforced where the step is
-/// built — not a condition <see cref="StartupSequence"/>'s walk discovers at startup.
+/// built — not a condition <see cref="StartupPlanner"/>'s walk discovers at startup.
 /// </summary>
 public sealed class StoreMigrationTests
 {

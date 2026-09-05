@@ -2,7 +2,7 @@ namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
 /// `/data/snapshots/&lt;utc&gt;/` — whole-file copies, taken before a startup that will migrate
-/// or sweep the registry, keeping the last 5 (<see cref="Application.Ports.IStartupSequence.SnapshotAsync"/>).
+/// or sweep the registry, keeping the last 5 (<see cref="StartupWriter.ApplyAsync"/>).
 /// A Snapshot sits <em>on</em> the protected volume and guards against this service's own writes;
 /// see the Backup entry in CONTEXT.md for the mechanism that guards against losing the volume —
 /// the two are never one word.

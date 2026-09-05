@@ -4,13 +4,16 @@ using TaskGuide.Domain.Schedule;
 
 namespace TaskGuide.Infrastructure.Storage;
 
-public sealed class DayShapeReader(IStore store) : IDayShapeReader
+/// <summary>
+/// Safe to register as a singleton: caches nothing and never writes — every <see cref="For"/>
+/// call re-reads <paramref name="store"/>'s current view, so it always sees whatever the store
+/// holds at call time.
+/// </summary>
+public sealed class DayShapeReader(IStoreReader store) : IDayShapeReader
 {
-    private readonly IStore _store = store;
-
     public DayShape For(DateOnly date)
     {
-        var view = _store.Read();
+        var view = store.Read();
         var active = view.Patterns.Active;
         var templateId = active[date.DayOfWeek];
         var template = view.DayTemplates.SingleOrDefault(t => t.Id == templateId)

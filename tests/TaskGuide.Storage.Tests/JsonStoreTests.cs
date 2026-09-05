@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.DependencyInjection;
 using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -348,15 +347,14 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void AddJsonStore_loads_eagerly_a_corrupt_tasks_json_fails_at_registration_not_first_use()
+    public void A_corrupt_tasks_json_fails_at_registration_not_first_use()
     {
         SeedTasksJson("{ not valid json");
-        var services = new ServiceCollection();
 
         // The whole store loads at startup per IStore's memory-authoritative contract — a bad
-        // tasks.json must refuse to start (assert → snapshot → migrate → sweep → serve), not
-        // surface as a failure on the first request that happens to touch the store.
-        Assert.ThrowsAny<JsonException>(() => services.AddJsonStore(_dataDir));
+        // tasks.json must refuse to start (plan → apply → open), not surface as a failure on the
+        // first request that happens to touch the store.
+        Assert.ThrowsAny<JsonException>(() => new JsonStore(_dataDir));
     }
 
     [Fact]
@@ -378,14 +376,13 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void AddJsonStore_loads_eagerly_a_corrupt_day_templates_json_fails_at_registration_not_first_use()
+    public void A_corrupt_collection_file_fails_at_registration_not_first_use_for_a_collection_other_than_tasks_json()
     {
         File.WriteAllText(Path.Combine(_dataDir, "day-templates.json"), "{ not valid json");
-        var services = new ServiceCollection();
 
         // Extends the tasks.json-only rule above to every collection: a bad day-templates.json
         // must refuse to start too, not surface on the first request that happens to touch it.
-        Assert.ThrowsAny<JsonException>(() => services.AddJsonStore(_dataDir));
+        Assert.ThrowsAny<JsonException>(() => new JsonStore(_dataDir));
     }
 
     private static TaskItem NewTask(string id, string title) =>
