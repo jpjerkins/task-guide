@@ -37,20 +37,19 @@ public static class StartupBootstrap
 
         if (result.IsT1)
         {
-            var refusal = result.AsT1;
-            if (refusal.IsT0)
-            {
-                var collision = refusal.AsT0;
-                await signalRegistryCollision(collision.Message, cancellationToken);
-                // Reconstructs a representative exception: RegistryCollision (ADR-0009's refusal
-                // union) carries only the formatted message, not the original claimants, and
-                // nothing downstream inspects Value/ClaimedBy on this path — only the type and the
-                // message text (which still names the colliding value).
-                throw new DuplicateDimensionValueException(collision.Message, []);
-            }
-
-            var versionAhead = refusal.AsT1;
-            throw new StoreVersionAheadException(versionAhead.StoredVersion, versionAhead.CurrentVersion);
+            // Match, not IsT0/AsT0/AsT1: a third refusal kind must break this at compile time
+            // (ADR-0011) rather than fall through to the wrong arm at runtime.
+            await result.AsT1.Match(
+                async collision =>
+                {
+                    await signalRegistryCollision(collision.Message, cancellationToken);
+                    // Reconstructs a representative exception: RegistryCollision (ADR-0009's
+                    // refusal union) carries only the formatted message, not the original
+                    // claimants, and nothing downstream inspects Value/ClaimedBy on this path —
+                    // only the type and the message text (which still names the colliding value).
+                    throw new DuplicateDimensionValueException(collision.Message, []);
+                },
+                versionAhead => throw new StoreVersionAheadException(versionAhead.StoredVersion, versionAhead.CurrentVersion));
         }
 
         var writer = new StartupWriter(bootstrap, dataDir, new SnapshotWriter(dataDir), clock);
