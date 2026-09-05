@@ -1,3 +1,4 @@
+using OneOf;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Time;
 
@@ -27,13 +28,13 @@ public sealed record Recurrence(RecurrenceAnchor Anchor, RecurrenceRule Rule, Da
 
     private static RecurrenceRule Validated(RecurrenceAnchor anchor, RecurrenceRule rule)
     {
-        var isIntervalSinceCompletion = rule is IntervalSinceCompletion;
+        var isIntervalSinceCompletion = rule.IsT4;
 
         if (anchor is RecurrenceAnchor.Completion && !isIntervalSinceCompletion)
         {
             throw new ArgumentException(
                 "A completion-anchored Recurrence restarts its clock from the last completion, so its "
-                + $"rule must be an {nameof(IntervalSinceCompletion)} — {rule.GetType().Name} is imposed "
+                + $"rule must be an {nameof(IntervalSinceCompletion)} — {rule.Value.GetType().Name} is imposed "
                 + "by the calendar.",
                 nameof(rule));
         }
@@ -46,39 +47,61 @@ public sealed record Recurrence(RecurrenceAnchor Anchor, RecurrenceRule Rule, Da
                 nameof(rule));
         }
 
-        switch (rule)
-        {
-            case EveryNDays(var n) when n < 1:
-                throw Interval(n);
+        return rule.Match<RecurrenceRule>(
+            everyNDays =>
+            {
+                if (everyNDays.N < 1) throw Interval(everyNDays.N);
+                return everyNDays;
+            },
+            everyNWeeksOn =>
+            {
+                if (everyNWeeksOn.N < 1) throw Interval(everyNWeeksOn.N);
 
-            case EveryNWeeksOn(var n, _) when n < 1:
-                throw Interval(n);
+                if (everyNWeeksOn.Weekdays.Count == 0)
+                {
+                    throw new ArgumentException("A weekly rule must name at least one weekday.", nameof(rule));
+                }
 
-            case IntervalSinceCompletion(var n, _) when n < 1:
-                throw Interval(n);
+                return everyNWeeksOn;
+            },
+            monthlyOnDayOfMonth =>
+            {
+                // Day-of-month clamps down to a short month, so the 31st is meaningful; the 0th
+                // and the 32nd fall on no month at all.
+                if (monthlyOnDayOfMonth.DayOfMonth is < 1 or > 31)
+                {
+                    throw new ArgumentException(
+                        $"A monthly rule's day of month must be between 1 and 31, not {monthlyOnDayOfMonth.DayOfMonth}.",
+                        nameof(rule));
+                }
 
-            case EveryNWeeksOn(_, var weekdays) when weekdays.Count == 0:
-                throw new ArgumentException("A weekly rule must name at least one weekday.", nameof(rule));
+                return monthlyOnDayOfMonth;
+            },
+            yearlyOn =>
+            {
+                if (yearlyOn.Month is < 1 or > 12)
+                {
+                    throw new ArgumentException(
+                        $"A yearly rule's month must be between 1 and 12, not {yearlyOn.Month}.", nameof(rule));
+                }
 
-            // Day-of-month clamps down to a short month, so the 31st is meaningful; the 0th and
-            // the 32nd fall on no month at all.
-            case MonthlyOnDayOfMonth(var day) when day is < 1 or > 31:
-                throw new ArgumentException(
-                    $"A monthly rule's day of month must be between 1 and 31, not {day}.", nameof(rule));
+                // February 30th could only ever mean the 29th, so it is an authoring mistake
+                // rather than a date to clamp. A leap year is the yardstick: the 29th itself is
+                // legitimate.
+                if (yearlyOn.Day < 1 || yearlyOn.Day > DateTime.DaysInMonth(2024, yearlyOn.Month))
+                {
+                    throw new ArgumentException(
+                        $"A yearly rule's day must be a day month {yearlyOn.Month} can have, not {yearlyOn.Day}.",
+                        nameof(rule));
+                }
 
-            case YearlyOn(var month, _) when month is < 1 or > 12:
-                throw new ArgumentException(
-                    $"A yearly rule's month must be between 1 and 12, not {month}.", nameof(rule));
-
-            // February 30th could only ever mean the 29th, so it is an authoring mistake rather
-            // than a date to clamp. A leap year is the yardstick: the 29th itself is legitimate.
-            case YearlyOn(var month, var day) when day < 1 || day > DateTime.DaysInMonth(2024, month):
-                throw new ArgumentException(
-                    $"A yearly rule's day must be a day month {month} can have, not {day}.", nameof(rule));
-
-            default:
-                return rule;
-        }
+                return yearlyOn;
+            },
+            intervalSinceCompletion =>
+            {
+                if (intervalSinceCompletion.N < 1) throw Interval(intervalSinceCompletion.N);
+                return intervalSinceCompletion;
+            });
 
         static ArgumentException Interval(int n) => new(
             $"A recurrence interval must be at least 1: {n} never reaches a next instance.", nameof(rule));
@@ -102,11 +125,13 @@ public enum RecurrenceAnchor
 /// phone, hard to render back as a checkable sentence); interval-only was rejected because
 /// months are not a fixed number of days.
 /// </summary>
-public abstract record RecurrenceRule;
+[GenerateOneOf]
+public partial class RecurrenceRule
+    : OneOfBase<EveryNDays, EveryNWeeksOn, MonthlyOnDayOfMonth, YearlyOn, IntervalSinceCompletion>;
 
-public sealed record EveryNDays(int N) : RecurrenceRule;
+public sealed record EveryNDays(int N);
 
-public sealed record EveryNWeeksOn(int N, IReadOnlyList<DayOfWeek> Weekdays) : RecurrenceRule
+public sealed record EveryNWeeksOn(int N, IReadOnlyList<DayOfWeek> Weekdays)
 {
     /// <summary><see cref="Weekdays"/> compares as a multiset — a set of weekdays, not a
     /// sequence.</summary>
@@ -119,11 +144,11 @@ public sealed record EveryNWeeksOn(int N, IReadOnlyList<DayOfWeek> Weekdays) : R
         HashCode.Combine(N, StructuralEquality.MultisetHash(Weekdays));
 }
 
-public sealed record MonthlyOnDayOfMonth(int DayOfMonth) : RecurrenceRule;
-public sealed record YearlyOn(int Month, int Day) : RecurrenceRule;
+public sealed record MonthlyOnDayOfMonth(int DayOfMonth);
+public sealed record YearlyOn(int Month, int Day);
 
 /// <summary>Completion-anchored only: every N days / weeks / months since the last completion.</summary>
-public sealed record IntervalSinceCompletion(int N, OffsetUnit Unit) : RecurrenceRule;
+public sealed record IntervalSinceCompletion(int N, OffsetUnit Unit);
 
 /// <summary>
 /// The generator. Nothing dated is ever reified: the live instance's deadline is computed on
@@ -155,7 +180,7 @@ public static class RecurrenceRules
                 return first;
             }
 
-            var successor = AddInterval(boundary.DateOf(last.Done), (IntervalSinceCompletion)recurrence.Rule);
+            var successor = AddInterval(boundary.DateOf(last.Done), recurrence.Rule.AsT4);
 
             // Until the successor arrives, the instance the last completion satisfied is still
             // the live one — the same grace a calendar instance gets, derived the same way.
@@ -183,19 +208,16 @@ public static class RecurrenceRules
     /// <summary>
     /// The deadline that supersedes <paramref name="instance"/> — the instant grace runs out.
     /// </summary>
-    public static DateOnly NextInstanceDeadlineAfter(Recurrence recurrence, DateOnly instance) => recurrence.Rule switch
-    {
-        EveryNDays(var n) => instance.AddDays(n),
-        EveryNWeeksOn rule => NextWeeklyAfter(rule, instance),
+    public static DateOnly NextInstanceDeadlineAfter(Recurrence recurrence, DateOnly instance) => recurrence.Rule.Match(
+        everyNDays => instance.AddDays(everyNDays.N),
+        everyNWeeksOn => NextWeeklyAfter(everyNWeeksOn, instance),
         // Stepping by calendar month, never by days: "monthly on the 5th" that walked off the
         // 5th within a year is exactly why interval-only was rejected.
-        MonthlyOnDayOfMonth(var day) => OnDayOfMonth(instance.AddMonths(1), day),
-        YearlyOn(var month, var day) => InYear(instance.Year + 1, month, day),
-        IntervalSinceCompletion => throw new InvalidOperationException(
+        monthlyOnDayOfMonth => OnDayOfMonth(instance.AddMonths(1), monthlyOnDayOfMonth.DayOfMonth),
+        yearlyOn => InYear(instance.Year + 1, yearlyOn.Month, yearlyOn.Day),
+        intervalSinceCompletion => throw new InvalidOperationException(
             "A completion-anchored instance has no successor until it is completed — that is what "
-            + "it means for it never to accrue a backlog."),
-        _ => throw new ArgumentOutOfRangeException(nameof(recurrence), recurrence.Rule, "Unknown recurrence rule."),
-    };
+            + "it means for it never to accrue a backlog."));
 
     /// <summary>Whether <paramref name="entry"/> satisfies the instance live at <paramref name="now"/>.</summary>
     public static bool SatisfiesLiveInstance(
@@ -262,13 +284,18 @@ public static class RecurrenceRules
     {
         var start = recurrence.FirstDue ?? boundary.DateOf(createdAt);
 
-        return recurrence.Rule switch
-        {
-            EveryNWeeksOn rule => FirstWeekdayOnOrAfter(rule, start),
-            MonthlyOnDayOfMonth(var day) => AtLeast(OnDayOfMonth(start, day), start, next => OnDayOfMonth(next.AddMonths(1), day)),
-            YearlyOn(var month, var day) => AtLeast(InYear(start.Year, month, day), start, _ => InYear(start.Year + 1, month, day)),
-            _ => start,
-        };
+        return recurrence.Rule.Match(
+            everyNDays => start,
+            everyNWeeksOn => FirstWeekdayOnOrAfter(everyNWeeksOn, start),
+            monthlyOnDayOfMonth => AtLeast(
+                OnDayOfMonth(start, monthlyOnDayOfMonth.DayOfMonth),
+                start,
+                next => OnDayOfMonth(next.AddMonths(1), monthlyOnDayOfMonth.DayOfMonth)),
+            yearlyOn => AtLeast(
+                InYear(start.Year, yearlyOn.Month, yearlyOn.Day),
+                start,
+                _ => InYear(start.Year + 1, yearlyOn.Month, yearlyOn.Day)),
+            intervalSinceCompletion => start);
     }
 
     private static DateOnly AtLeast(DateOnly candidate, DateOnly floor, Func<DateOnly, DateOnly> advance) =>

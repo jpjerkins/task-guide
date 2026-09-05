@@ -94,7 +94,7 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Equal(new OffsetDefer(new BeforeOffset(1, OffsetUnit.Days)), bins.Defer);
         Assert.NotNull(bins.Recurrence);
         Assert.Equal(RecurrenceAnchor.Calendar, bins.Recurrence!.Anchor);
-        var weeklyRule = Assert.IsType<EveryNWeeksOn>(bins.Recurrence.Rule);
+        var weeklyRule = Assert.IsType<EveryNWeeksOn>(bins.Recurrence.Rule.Value);
         Assert.Equal(1, weeklyRule.N);
         Assert.Equal([DayOfWeek.Tuesday], weeklyRule.Weekdays);
 

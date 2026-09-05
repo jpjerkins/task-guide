@@ -172,37 +172,38 @@ public static class TaskCodec
     private static void WriteRule(Utf8JsonWriter writer, RecurrenceRule rule)
     {
         writer.WriteStartObject();
-        switch (rule)
-        {
-            case EveryNDays everyNDays:
+        rule.Switch(
+            everyNDays =>
+            {
                 writer.WriteString("kind", "daily");
                 writer.WriteNumber("n", everyNDays.N);
-                break;
-            case EveryNWeeksOn everyNWeeksOn:
+            },
+            everyNWeeksOn =>
+            {
                 writer.WriteString("kind", "weekly");
                 writer.WriteNumber("n", everyNWeeksOn.N);
                 writer.WritePropertyName("weekdays");
                 writer.WriteStartArray();
                 foreach (var weekday in everyNWeeksOn.Weekdays) writer.WriteStringValue(weekday.ToString().ToLowerInvariant());
                 writer.WriteEndArray();
-                break;
-            case MonthlyOnDayOfMonth monthlyOnDayOfMonth:
+            },
+            monthlyOnDayOfMonth =>
+            {
                 writer.WriteString("kind", "monthly");
                 writer.WriteNumber("dayOfMonth", monthlyOnDayOfMonth.DayOfMonth);
-                break;
-            case YearlyOn yearlyOn:
+            },
+            yearlyOn =>
+            {
                 writer.WriteString("kind", "yearly");
                 writer.WriteNumber("month", yearlyOn.Month);
                 writer.WriteNumber("day", yearlyOn.Day);
-                break;
-            case IntervalSinceCompletion intervalSinceCompletion:
+            },
+            intervalSinceCompletion =>
+            {
                 writer.WriteString("kind", "interval");
                 writer.WriteNumber("n", intervalSinceCompletion.N);
                 writer.WriteString("unit", CodecPrimitives.WriteOffsetUnit(intervalSinceCompletion.Unit));
-                break;
-            default:
-                throw new JsonException($"Unknown RecurrenceRule type '{rule.GetType()}'");
-        }
+            });
 
         writer.WriteEndObject();
     }
