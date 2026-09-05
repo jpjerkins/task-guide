@@ -76,7 +76,8 @@ public sealed record FooterCounts(int ToProcess, int Stale, int Orphans);
 /// <summary>
 /// Derived from the same boundary that governs the fire, so it introduces no new concept —
 /// only the governing line applied to the notification's afterlife. Verified (#15): an expired
-/// message clears from both Notification Center and the Pushover message list.
+/// message clears from both Notification Center and the Pushover message list. The supplied
+/// <see cref="TimeProvider"/> keeps the past-span Snooze distinction deterministic in the rule.
 /// </summary>
 public static class TimeToLivePolicy
 {
@@ -86,10 +87,10 @@ public static class TimeToLivePolicy
         Firing.FireKind kind,
         DateTimeOffset windowEnd,
         DateTimeOffset dayBoundary,
-        DateTimeOffset now) => kind switch
+        TimeProvider clock) => kind switch
         {
             Firing.FireKind.Window => windowEnd,
-            Firing.FireKind.Snooze when now < windowEnd => windowEnd,
+            Firing.FireKind.Snooze when clock.GetUtcNow() < windowEnd => windowEnd,
             Firing.FireKind.Snooze => dayBoundary,
             Firing.FireKind.Unconditional => dayBoundary,
             Firing.FireKind.Fallback => dayBoundary,
