@@ -83,17 +83,15 @@ public static class TimeToLivePolicy
 {
     public static readonly TimeSpan Receipt = TimeSpan.FromHours(24);
 
-    public static DateTimeOffset For(
-        Firing.FireKind kind,
-        DateTimeOffset windowEnd,
-        DateTimeOffset dayBoundary,
-        TimeProvider clock) => kind switch
-        {
-            Firing.FireKind.Window => windowEnd,
-            Firing.FireKind.Snooze when clock.GetUtcNow() < windowEnd => windowEnd,
-            Firing.FireKind.Snooze => dayBoundary,
-            Firing.FireKind.Unconditional => dayBoundary,
-            Firing.FireKind.Fallback => dayBoundary,
-            var unexpected => throw new ArgumentOutOfRangeException(nameof(kind), unexpected, null),
-        };
+    /// <summary>
+    /// The intent's union arm has already decided whether a Snooze remains in its Window, so no
+    /// arm receives a meaningless Window end or clock. Window-bearing arms expire at their own
+    /// end; every obligation-shaped arm expires at the Day boundary.
+    /// </summary>
+    public static DateTimeOffset For(Firing.FireIntentKind kind, DateTimeOffset dayBoundary) => kind.Match(
+        window => window.Window.End,
+        snooze => snooze.Window.End,
+        _ => dayBoundary,
+        _ => dayBoundary,
+        _ => dayBoundary);
 }
