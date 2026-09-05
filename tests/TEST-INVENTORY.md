@@ -735,6 +735,40 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - a non-OK GET and a rejected fetch both land on the error state
 - the quick-add duration chip IS the submit, and is inert while the title is empty
 
+### Shared controls
+
+- `screensFor` orders registered screens by `order` then `id`
+- `screensFor` returns nothing for a tab with no registrations, and never returns another tab's
+  screens
+- registering a duplicate screen id throws
+- the quick-action slot is `null` until something registers, then returns that renderer
+- the tab bar renders all four tabs
+- the tab bar's quick-action slot renders nothing when nothing is registered
+- the tab bar's quick-action slot renders the registered action on every tab
+- a tab with no registered screen renders the placeholder
+- a tab with exactly one registered screen renders it directly
+- a tab with more than one registered screen renders an index of titles, and selecting one shows
+  it with a working back affordance
+- a freshly registered screen appears with zero changes to `App.tsx`
+- a non-OK response throws an error naming the method, path, and status
+- a 204 response is treated as absence, not a parse error
+- a 200 response parses as JSON
+- `DateEntry` renders a null value as blank and a given ISO value verbatim
+- `DateEntry` reports the new ISO value on change, and `null` when cleared
+- `DateEntry`'s date input survives its own input event — same DOM node before and after
+- `RecurrenceEditor` renders no rule as "does not repeat"
+- changing `RecurrenceEditor`'s kind reports a fresh rule for that kind, with its own defaults
+- changing the N field on an N-based rule updates only `n`
+- a completion-anchored rule renders the first-due date entry
+- `RecurrenceEditor`'s kind `<select>` survives its own change, and survives a sub-field's change
+- `OrdinalSlider` renders the current value's label
+- `OrdinalSlider` reports the value at the new slider index on change
+- `OrdinalSlider` shows a "leave at the default" control when a default is declared, and choosing
+  it clears the value to `null`
+- `OrdinalSlider` has no "leave at the default" control when no default is declared
+- `OrdinalSlider` renders read-only with the same control structure, input disabled
+- `OrdinalSlider`'s range input survives its own input event — same DOM node before and after
+
 ## `TaskGuide.E2E`
 
 - the landing page loads (#74 ARM64/Debian 12 Playwright smoke check)
