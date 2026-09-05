@@ -39,8 +39,11 @@ public sealed record Known(IReadOnlyList<TagValue> Values);
 public sealed record Unavailable(string Reason);
 ```
 
-Scoped to **new, non-persisted** union-shaped types. The three from #69 — `FetchOutcome<T>`,
-`GlanceState`, and `FireIntent`'s kind (#73) — adopt it now.
+`OneOf` is the representation for every union-shaped type in the Domain, persisted or not. The
+three from #69 — `FetchOutcome<T>`, `GlanceState`, and `FireIntent`'s kind (#73) — adopted it from
+the start; `RecurrenceRule`, `Defer` and `Offset` are persisted through hand-written codecs whose
+JSON shape is independent of the in-memory representation (#72), and **the stored shape must not
+move when the representation changes**.
 
 **The gain is exhaustiveness on adding a case, and it is the whole argument.** A sealed hierarchy
 cannot be proven exhaustive by the compiler, because the abstract base is derivable, so every switch
@@ -85,9 +88,10 @@ check but was already the wrong test; this one is checkable against something re
 - **Do not use `[GenerateOneOf]` in the global namespace** — the generator crashes with `CS8785`
   (`hintName` contains `<`). Every type in this repo is namespaced, so this only bites in a scratch
   project.
-- **Do not retrofit the five existing hierarchies opportunistically.** That is #72, deliberately
-  deferred: three of them are persisted through hand-written codecs under ADR-0001/0009/0010, and
-  two carry per-case behaviour that has to relocate. It needs a single owner, not a drive-by.
+- **The five existing hierarchies are no longer sealed hierarchies.** #72 retrofitted all five
+  (`RecurrenceRule`, `Defer`, `Offset`, `Dimension`, `ControlShape`) to `OneOf` unions. The
+  transitional split this ADR described — new types now, existing five later, under a single
+  owner — is closed.
 - **Do not add a .NET 11 preview SDK to chase native unions.** .NET 10 is LTS and proven on the Pi;
   .NET 11 is STS and not GA. Revisit at GA — and note that migrating from `OneOf` to native unions
   is a rewrite of every `Match` call site, so the retrofit in #72 should weigh whether to wait.
@@ -95,8 +99,8 @@ check but was already the wrong test; this one is checkable against something re
 ## What was rejected
 
 - **Sealed hierarchies plus a throwing discard arm** — the status quo. Rejected for the runtime-vs-
-  compile-time exhaustiveness gap above. It remains the right shape for the five existing types
-  until #72, which is a sequencing judgement, not a disagreement about representation.
+  compile-time exhaustiveness gap above. It was the right shape for the five existing types until
+  #72 retrofitted them, which was a sequencing judgement, not a disagreement about representation.
 - **Splitting the idiom by layer** — `OneOf` in Application/Infrastructure, sealed hierarchies in
   Domain, to keep the Domain package-free. Rejected: the line is arbitrary to a reader, and it would
   have handed two idioms to the parallel lanes. The transitional split that *is* accepted — new
