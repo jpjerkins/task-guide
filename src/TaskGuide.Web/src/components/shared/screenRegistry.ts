@@ -59,3 +59,15 @@ export function resetRegistry(): void {
   screens = []
   quickActionRenderer = null
 }
+
+// screens/*.screen.tsx files export nothing, so none is its own Fast Refresh boundary — an edit
+// to one propagates up to whichever ancestor module accepts the update (App.tsx, via the eager
+// glob that imports them). That module re-executes against a registry that was never cleared, so
+// `registerScreen`'s duplicate-id guard — correct in production, where a module never runs twice —
+// throws on every dev edit. The guard itself stays; App.tsx calls this with `import.meta.hot` so
+// the registry clears right before Vite re-runs the glob, not after.
+export function installHmrGuard(hot: { dispose: (cb: () => void) => void } | undefined, reset: () => void): void {
+  if (hot) {
+    hot.dispose(reset)
+  }
+}

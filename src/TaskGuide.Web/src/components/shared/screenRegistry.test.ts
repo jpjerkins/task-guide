@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { quickAction, registerQuickAction, registerScreen, resetRegistry, screensFor } from './screenRegistry'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  installHmrGuard,
+  quickAction,
+  registerQuickAction,
+  registerScreen,
+  resetRegistry,
+  screensFor,
+} from './screenRegistry'
 
 beforeEach(() => {
   resetRegistry()
@@ -56,5 +63,25 @@ describe('quick action slot', () => {
     registerQuickAction(() => null)
 
     expect(() => registerQuickAction(() => null)).toThrow(/quick action is already registered/)
+  })
+})
+
+// Review finding 5: screens/tasks.screen.tsx exports nothing, so it is not its own Fast Refresh
+// boundary — the HMR update propagates to App.tsx (which owns the eager glob), and when App.tsx
+// re-executes the glob, `registerScreen` throws "duplicate screen id" against a registry that was
+// never cleared. App.tsx's own dispose handler (installHmrGuard(import.meta.hot, resetRegistry))
+// is what actually fixes this in dev; this test holds only the guard's own logic, since
+// import.meta.hot isn't something a unit test can fake convincingly end-to-end.
+describe('installHmrGuard', () => {
+  it('registers a dispose handler that resets the registry, when hot is present', () => {
+    const dispose = vi.fn()
+
+    installHmrGuard({ dispose }, resetRegistry)
+
+    expect(dispose).toHaveBeenCalledWith(resetRegistry)
+  })
+
+  it('does nothing when hot is undefined', () => {
+    expect(() => installHmrGuard(undefined, resetRegistry)).not.toThrow()
   })
 })
