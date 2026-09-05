@@ -153,6 +153,16 @@ button {
   font-weight: 600;
 }
 
+/* The accent circle's slot (#111) — present on every screen, empty until #103 fills it. Fixed
+   width so the bar doesn't reflow once something registers into it. */
+.tabbar-quick-action {
+  flex: none;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .list {
   background: var(--surface);
   border-top: 1px solid var(--line);
