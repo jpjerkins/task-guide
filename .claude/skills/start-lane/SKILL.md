@@ -128,10 +128,13 @@ inventory gets a new line appended to the inventory in the same commit.
 
 ## 6. Stay in the file lane
 
-Touch only what the ticket's `Owns:` block names, plus new test files it implies. If the work
-genuinely needs a file another lane owns, **stop and report it rather than editing it** — that
-report is the signal a contract was wrong. This includes any `.csproj` or `task-guide.slnx`
-change: the integration lane owns every project file. Ask, don't edit.
+Touch only what the ticket's `Owns:` block names, **as extended by the plan's Merge safety rules**,
+plus new test files it implies. Before reporting an ownership blocker, reconcile the needed file
+with those rules: a ticket changing a signature owns every test call site of that signature, even
+when the existing test file is not named in its `Owns:` block. If the work genuinely needs a file
+another lane owns, **stop and report it rather than editing it** — that report is the signal a
+contract was wrong. This includes any `.csproj` or `task-guide.slnx` change: the integration lane
+owns every project file. Ask, don't edit.
 
 ## 7. Before opening a PR
 
