@@ -370,16 +370,24 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 
 ### Delivery
 
-**Project:** spans two. The adapter half (*a Receipt is never retried*, *every failed attempt is
-logged*) is A1 → `TaskGuide.Infrastructure.Tests`. The executor half (*`firedAt` written only when
-Pushover accepts*, *a rejected push reads as unfired next tick*, *retries stop when the span
-closes*, *a Receipt is not written to the Fire record*) is F3 → `TaskGuide.Application.Tests`.
+**Project:** spans two. The adapter half (*a Receipt is retried up to three times while Pushover
+has not accepted*, *every failed attempt is logged*) is A1 → `TaskGuide.Infrastructure.Tests`. The
+executor half (*`firedAt` written only when Pushover accepts*, *a rejected push reads as unfired
+next tick*, *retries stop when the span closes*, *a Receipt is not written to the Fire record*) is
+F3 → `TaskGuide.Application.Tests`.
 
 - `firedAt` is written **only when Pushover accepts**
 - a rejected push reads as unfired next tick and is retried
 - retries stop when the span closes (opportunity) or at the boundary (obligation)
 - every failed attempt is logged
-- a Receipt is **never** retried
+- a Receipt is retried up to three times while Pushover has not accepted
+- a Receipt accepted on the first attempt is not retried
+- a 4xx is never retried
+- a short backoff separates the attempts
+- a Reminder is never retried by the adapter
+- a caller's own cancellation is not swallowed into a retry
+- a Receipt attempt that exceeds its budget is refused and retried
+- a 4xx names the Task in the log
 - a Receipt is not written to the Fire record
 
 ### Notification content
