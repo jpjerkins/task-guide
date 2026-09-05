@@ -10,8 +10,8 @@ namespace TaskGuide.Domain.Notifications;
 public static class GlancePolicy
 {
     /// <summary>
-    /// Unimplemented — #79 (F1) owns the rule and its tests. <paramref name="floor"/> is supplied
-    /// by the caller rather than fixed here: the rule is domain (#69), but the floor's value is a
+    /// <paramref name="floor"/> is supplied by the caller rather than fixed here: the rule is
+    /// domain (#69), but the floor's value is a
     /// platform fact (watchOS's 50-updates-a-day budget) that belongs to the adapter that knows it.
     /// </summary>
     public static bool ShouldSend(GlanceState next, GlanceState? lastSent, TimeSpan sinceLastSend, bool windowJustStarted, TimeSpan floor) =>
