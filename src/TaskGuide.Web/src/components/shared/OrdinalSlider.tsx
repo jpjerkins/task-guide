@@ -56,6 +56,17 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         value={index}
         disabled={readOnly}
         onChange={(e) => onChange(values[Number(e.target.value)])}
+        // While unset, the thumb already sits at index 0 — dragging it TO 0 fires no `change`
+        // event, so a user could never explicitly commit the least value. A pointerUp (covers a
+        // click too, and a touch drag's release) commits whatever the slider is currently
+        // showing. Once a value is set, this is a no-op: `change` already owns every further
+        // commit, and firing again here would be redundant, not wrong, but the guard keeps the
+        // handler's job to exactly "commit from unset" and nothing else.
+        onPointerUp={() => {
+          if (unset) {
+            onChange(values[index])
+          }
+        }}
       />
       <div className="ticks">
         {values.map((v) => (

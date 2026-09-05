@@ -86,6 +86,36 @@ describe('OrdinalSlider', () => {
     expect(onChange).toHaveBeenCalledWith('normal')
   })
 
+  // Review finding 2: while unset the thumb already sits at index 0, so dragging it TO index 0
+  // fires no `change` event at all — a user can never explicitly commit the least value that way.
+  // A pointerUp (or click) on the slider while unset must commit the value it's currently showing.
+  it('committing index 0 while unset (no change event fires) still commits the least value', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.pointerUp(screen.getByLabelText('Volume'))
+
+    expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
+  it('committing on pointerUp while unset does not remount the slider', () => {
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
+
+    const el = screen.getByLabelText('Volume')
+    fireEvent.pointerUp(el)
+
+    expect(screen.getByLabelText('Volume')).toBe(el)
+  })
+
+  it('does not re-commit on pointerUp once a value is already set', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.pointerUp(screen.getByLabelText('Volume'))
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('renders read-only with the same control structure, input disabled', () => {
     const { container } = render(
       <OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={() => {}} readOnly />,
