@@ -23,6 +23,18 @@ export function BackProvider({ value, children }: { value: ScreenNavBack; childr
   return <BackContext.Provider value={value}>{children}</BackContext.Provider>
 }
 
+// `{renderQuickAction && renderQuickAction()}` called the registrant's renderer as a plain
+// function during ScreenNav's own render — not as a JSX element, so it got no component boundary
+// of its own. Any hook the renderer's body calls directly (an open-sheet flag, exactly like
+// TasksScreen's sheetOpen, is what #103's quick action needs) would then belong to *ScreenNav's*
+// hook list, conditionally, only on renders where something is registered — a Rules of Hooks
+// violation waiting to happen. Rendering it as its own always-mounted component instead means the
+// renderer's hooks belong to QuickActionSlot's own, separate, consistently-present instance.
+function QuickActionSlot() {
+  const render = quickAction()
+  return render ? <>{render()}</> : null
+}
+
 // The React equivalent of variant D's own nav() helper (docs/prototypes/ui-screens.prototype.html
 // ~774-786): "the quick-add circle owns the nav's right slot on EVERY screen" — the nav-main title
 // row, not the tab bar. #103 fills the circle's behaviour by calling registerQuickAction from its
@@ -30,7 +42,6 @@ export function BackProvider({ value, children }: { value: ScreenNavBack; childr
 export function ScreenNav({ title, sub, back }: ScreenNavProps) {
   const contextBack = useContext(BackContext)
   const effectiveBack = back ?? contextBack ?? undefined
-  const renderQuickAction = quickAction()
 
   return (
     <div className="nav">
@@ -41,7 +52,7 @@ export function ScreenNav({ title, sub, back }: ScreenNavProps) {
           </button>
         )}
         <h1>{title}</h1>
-        {renderQuickAction && renderQuickAction()}
+        <QuickActionSlot />
       </div>
       {sub && <div className="sub">{sub}</div>}
     </div>
