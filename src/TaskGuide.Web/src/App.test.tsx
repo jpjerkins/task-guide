@@ -4,6 +4,11 @@ import App from './App'
 import { registerQuickAction, registerScreen, resetRegistry } from './components/shared/screenRegistry'
 import { ScreenNav } from './components/shared/ScreenNav'
 
+// Resetting here means the real `screens/tasks.screen.tsx` wiring (App's eager glob runs its
+// registerScreen() exactly once, on this file's first import, before this very first beforeEach)
+// is never exercised by these tests — every test below registers its own fake screens instead.
+// That real wiring is covered by src/screens/tasks.screen.test.tsx, which imports the module
+// directly and asserts on its registration before resetting anything.
 beforeEach(() => {
   resetRegistry()
 })
