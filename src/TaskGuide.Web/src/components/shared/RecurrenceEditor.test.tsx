@@ -59,6 +59,39 @@ describe('RecurrenceEditor', () => {
     expect(screen.getByLabelText(/repeats/i)).toBe(el)
   })
 
+  // [hidden] alone is not enough to hide these groups — `[hidden] { display: none }` lives in the
+  // UA stylesheet, and index.css's `.stack`/`.chipset` both declare an author-origin `display`,
+  // which wins over the UA rule at equal specificity regardless of source order. jsdom does not
+  // load index.css, so this only asserts the JS half (the `hidden` attribute itself is correct);
+  // index.css's `[hidden] { display: none !important }` is the other half, and is E2E's to hold
+  // (see TEST-INVENTORY.md).
+  it('marks every non-matching sub-field group hidden for "does not repeat"', () => {
+    const { container } = render(
+      <RecurrenceEditor value={null} onChange={() => {}} firstDue={null} onFirstDueChange={() => {}} />,
+    )
+
+    for (const group of ['everyN', 'weekdays', 'dayOfMonth', 'monthDay', 'firstDue']) {
+      expect(container.querySelector(`[data-group="${group}"]`)).toHaveAttribute('hidden')
+    }
+  })
+
+  it('marks only the matching sub-field group visible for "every N weeks"', () => {
+    const { container } = render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'everyNWeeks', n: 1, weekdays: [] }}
+        onChange={() => {}}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    expect(container.querySelector('[data-group="everyN"]')).not.toHaveAttribute('hidden')
+    expect(container.querySelector('[data-group="weekdays"]')).not.toHaveAttribute('hidden')
+    expect(container.querySelector('[data-group="dayOfMonth"]')).toHaveAttribute('hidden')
+    expect(container.querySelector('[data-group="monthDay"]')).toHaveAttribute('hidden')
+    expect(container.querySelector('[data-group="firstDue"]')).toHaveAttribute('hidden')
+  })
+
   it('a sub-field survives a kind change without remounting the select', () => {
     const onChange = vi.fn()
     render(

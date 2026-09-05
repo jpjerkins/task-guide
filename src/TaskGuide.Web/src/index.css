@@ -62,6 +62,16 @@ button {
   outline-offset: 2px;
 }
 
+/* `[hidden] { display: none }` lives in the UA stylesheet, so any author-origin `display`
+   declaration on the same element — `.stack`/`.chipset`'s `display: flex` included — wins over it
+   regardless of specificity or source order. RecurrenceEditor (#111) toggles its sub-field groups
+   with the `hidden` attribute precisely because ADR-0006 forbids a conditional-render branch swap,
+   so this rule is load-bearing, not decoration: without `!important` here, `hidden` on a
+   flex-classed element is silently ignored and every sub-field group renders at once. */
+[hidden] {
+  display: none !important;
+}
+
 .device {
   display: flex;
   flex-direction: column;

@@ -124,7 +124,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
         </select>
       </label>
 
-      <div hidden={!hasN(value)} className="stack">
+      <div hidden={!hasN(value)} className="stack" data-group="everyN">
         <label className="stack">
           <span className="lbl">Every N</span>
           <input
@@ -138,7 +138,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
         </label>
       </div>
 
-      <div hidden={!isEveryNWeeks} className="chipset">
+      <div hidden={!isEveryNWeeks} className="chipset" data-group="weekdays">
         {WEEKDAYS.map((day) => (
           <button
             key={day}
@@ -152,7 +152,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
         ))}
       </div>
 
-      <div hidden={value?.kind !== 'monthlyOnDayOfMonth'} className="stack">
+      <div hidden={value?.kind !== 'monthlyOnDayOfMonth'} className="stack" data-group="dayOfMonth">
         <label className="stack">
           <span className="lbl">Day of month</span>
           <input
@@ -167,7 +167,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
         </label>
       </div>
 
-      <div hidden={value?.kind !== 'yearlyOnMonthDay'} className="stack">
+      <div hidden={value?.kind !== 'yearlyOnMonthDay'} className="stack" data-group="monthDay">
         <label className="stack">
           <span className="lbl">Month</span>
           <input
@@ -195,7 +195,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
       </div>
 
       {/* A completion-anchored Task needs a start point before its first completion. */}
-      <div hidden={value?.anchor !== 'completion'}>
+      <div hidden={value?.anchor !== 'completion'} data-group="firstDue">
         <DateEntry label="First due" value={firstDue} onChange={onFirstDueChange} disabled={disabled} />
       </div>
     </div>
