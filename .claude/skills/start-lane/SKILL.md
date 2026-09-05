@@ -151,9 +151,18 @@ invisible to every reviewer, and comes back as a finding. Put it in a ticket com
 of the commit it justifies, while it is still fresh. The merge commit is too late: review has
 already run by then.
 
-**Confirm the review target.** `/code-review` on an empty diff does not fail — it silently
-substitutes the last merge and reviews already-merged code. That produced six findings against
-`main` on #115.
+**Confirm the review target — and confirm it again afterwards.** `/code-review` runs as a forked
+agent that inherits **the session's working directory, not the worktree you have been working in**.
+Your `Bash` cwd is not the session's cwd: it resets between calls, so a `cd` into the worktree does
+not follow the review out. When the session sits in the main clone, the review reads `main` and
+reviews already-merged code — the branch is never opened.
+
+It never announces this. It returns a full, confident, well-verified review of the wrong commits.
+That has now happened twice: six findings against `main` on #115, and seven findings against the
+merged #111 web shell during #72 — the second time *after* the target check below passed, because
+the check and the review were looking at different repositories.
+
+So the check below is necessary and not sufficient. Do all three:
 
 ```sh
 git diff origin/main --stat
@@ -161,6 +170,18 @@ git diff origin/main --stat
 
 From inside the worktree, non-empty, and the paths are the ones the ticket owns. Otherwise the
 target is wrong; fix that before launching anything.
+
+**Name the branch in the invocation** — never rely on an inherited cwd:
+
+```
+/code-review high <lane>/<short-slug>
+```
+
+**Then read the review's own statement of what it reviewed**, in the first lines of its report, and
+check it against your branch — the commit range, the file count, and the file *types*. A C#-only
+ticket that comes back with findings in `.tsx` files reviewed something else. If the target is
+wrong, the findings are about someone else's merged code: discard them wholesale and re-run with the
+branch named. Do not triage them, and do not report them as your ticket's findings.
 
 Then run `/code-review` on the branch and fix what it finds — under the gate in 7a.
 
