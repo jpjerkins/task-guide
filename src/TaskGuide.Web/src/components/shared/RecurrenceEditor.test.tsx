@@ -147,6 +147,22 @@ describe('RecurrenceEditor', () => {
     expect(onFirstDueChange).not.toHaveBeenCalled()
   })
 
+  it('changing between calendar-anchored kinds leaves the first-due date alone', () => {
+    const onFirstDueChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'everyNDays', n: 2 }}
+        onChange={() => {}}
+        firstDue="2026-09-10"
+        onFirstDueChange={onFirstDueChange}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/repeats/i), { target: { value: 'calendar:everyNWeeks' } })
+
+    expect(onFirstDueChange).not.toHaveBeenCalled()
+  })
+
   it('clearing an Every N field then typing commits the replacement, not a prefixed value', () => {
     const onChange = vi.fn()
     render(

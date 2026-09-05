@@ -97,7 +97,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
 
   function handleKindChange(next: string) {
     const nextValue = defaultFor(next as Selection)
-    if (nextValue?.anchor !== 'completion') {
+    if (value?.anchor === 'completion' && nextValue?.anchor !== 'completion') {
       onFirstDueChange(null)
     }
     onChange(nextValue)
