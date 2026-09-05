@@ -33,6 +33,8 @@ public sealed class PushoverClientTests
         public static Func<HttpResponseMessage> Status(HttpStatusCode code) =>
             () => new HttpResponseMessage(code) { Content = new StringContent("") };
 
+        public static Func<HttpResponseMessage> Throws(Exception ex) => () => throw ex;
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
@@ -61,6 +63,34 @@ public sealed class PushoverClientTests
             Entries.Add(logLevel);
     }
 
+    /// <summary>
+    /// A <see cref="TimeProvider"/> whose timers fire synchronously and immediately, so a test
+    /// exercising backoff never actually sleeps — while still recording every delay requested of
+    /// it, so a test can assert a backoff was asked for.
+    /// </summary>
+    private sealed class ImmediateTimeProvider : TimeProvider
+    {
+        public List<TimeSpan> RequestedDelays { get; } = [];
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            RequestedDelays.Add(dueTime);
+            callback(state);
+            return new NoOpTimer();
+        }
+
+        private sealed class NoOpTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+
+            public void Dispose()
+            {
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
     private static Receipt SampleReceipt() => new(
         new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
         "Fix the shelf bracket",
@@ -78,11 +108,12 @@ public sealed class PushoverClientTests
         new Uri("https://task-guide.example.ts.net/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
         DateTimeOffset.UtcNow.AddHours(1));
 
-    private static PushoverClient MakeClient(HttpMessageHandler handler, ILogger<PushoverClient>? logger = null) =>
+    private static PushoverClient MakeClient(HttpMessageHandler handler, TimeProvider? timeProvider = null, ILogger<PushoverClient>? logger = null) =>
         new(
             new StubHttpClientFactory(new HttpClient(handler)),
             Options.Create(new PushoverOptions { Token = "token123", UserKey = "user123" }),
-            logger ?? NullLogger<PushoverClient>.Instance);
+            logger ?? NullLogger<PushoverClient>.Instance,
+            timeProvider ?? new ImmediateTimeProvider());
 
     [Fact]
     public async Task A_send_never_carries_priority_1()
@@ -103,7 +134,8 @@ public sealed class PushoverClientTests
     {
         var handler = new CapturingHandler();
         var options = Options.Create(new PushoverOptions { Token = null, UserKey = null });
-        var client = new PushoverClient(new StubHttpClientFactory(new HttpClient(handler)), options, NullLogger<PushoverClient>.Instance);
+        var client = new PushoverClient(
+            new StubHttpClientFactory(new HttpClient(handler)), options, NullLogger<PushoverClient>.Instance, new ImmediateTimeProvider());
 
         await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
 
@@ -115,7 +147,7 @@ public sealed class PushoverClientTests
     {
         var handler = new CapturingHandler(CapturingHandler.Status(HttpStatusCode.InternalServerError));
         var logger = new CapturingLogger();
-        var client = MakeClient(handler, logger);
+        var client = MakeClient(handler, logger: logger);
 
         await client.SendReminderAsync(SampleReminder(), CancellationToken.None);
 
@@ -135,5 +167,77 @@ public sealed class PushoverClientTests
 
         Assert.False(sent);
         Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task A_receipt_is_retried_up_to_three_times_while_pushover_has_not_accepted()
+    {
+        var handler = new CapturingHandler(
+            CapturingHandler.Status(HttpStatusCode.InternalServerError),
+            CapturingHandler.Status(HttpStatusCode.InternalServerError),
+            CapturingHandler.Status(HttpStatusCode.InternalServerError));
+        var client = MakeClient(handler);
+
+        var sent = await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
+
+        Assert.False(sent);
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_receipt_accepted_on_the_first_attempt_is_not_retried()
+    {
+        var handler = new CapturingHandler(CapturingHandler.Accepted);
+        var timeProvider = new ImmediateTimeProvider();
+        var client = MakeClient(handler, timeProvider);
+
+        var sent = await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
+
+        Assert.True(sent);
+        Assert.Single(handler.Requests);
+        Assert.Empty(timeProvider.RequestedDelays);
+    }
+
+    [Fact]
+    public async Task A_4xx_is_never_retried()
+    {
+        var handler = new CapturingHandler(
+            CapturingHandler.Status(HttpStatusCode.BadRequest),
+            CapturingHandler.Status(HttpStatusCode.InternalServerError),
+            CapturingHandler.Status(HttpStatusCode.InternalServerError));
+        var client = MakeClient(handler);
+
+        var sent = await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
+
+        Assert.False(sent);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task A_short_backoff_separates_the_attempts()
+    {
+        var handler = new CapturingHandler(
+            CapturingHandler.Status(HttpStatusCode.InternalServerError),
+            CapturingHandler.Status(HttpStatusCode.InternalServerError),
+            CapturingHandler.Status(HttpStatusCode.InternalServerError));
+        var timeProvider = new ImmediateTimeProvider();
+        var client = MakeClient(handler, timeProvider);
+
+        await client.SendReceiptAsync(SampleReceipt(), CancellationToken.None);
+
+        // 3 attempts, backoff between each: 2 delays, one per gap.
+        Assert.Equal(2, timeProvider.RequestedDelays.Count);
+        Assert.All(timeProvider.RequestedDelays, delay => Assert.True(delay > TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task A_callers_own_cancellation_is_not_swallowed_into_a_retry()
+    {
+        using var cts = new CancellationTokenSource();
+        var handler = new CapturingHandler(CapturingHandler.Throws(new TaskCanceledException("caller cancelled", null, cts.Token)));
+        var client = MakeClient(handler);
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SendReceiptAsync(SampleReceipt(), cts.Token));
     }
 }

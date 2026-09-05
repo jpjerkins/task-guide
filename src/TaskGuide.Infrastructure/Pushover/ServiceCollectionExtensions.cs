@@ -19,7 +19,10 @@ public static class PushoverServiceCollectionExtensions
     public static IServiceCollection AddPushover(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<PushoverOptions>(configuration.GetSection(PushoverOptions.SectionName));
-        services.AddHttpClient(PushoverClient.HttpClientName);
+        // "Roughly 3 seconds per attempt" (CONTEXT.md § Receipt) is the per-request timeout, set
+        // here because the named client owns its own lifetime, not PushoverClient (#76).
+        services.AddHttpClient(PushoverClient.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(3));
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton<PushoverClient>();
         services.AddSingleton<IReminderSender>(sp => sp.GetRequiredService<PushoverClient>());
         services.AddSingleton<IReceiptSender>(sp => sp.GetRequiredService<PushoverClient>());

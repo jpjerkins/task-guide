@@ -20,7 +20,11 @@ namespace TaskGuide.Infrastructure.Pushover;
 /// fields straight across without the ranking, shortlist or footer formatting a later ticket
 /// owns — that logic doesn't exist yet, so it isn't faked here.
 /// </remarks>
-public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOptions<PushoverOptions> options, ILogger<PushoverClient> logger)
+public sealed class PushoverClient(
+    IHttpClientFactory httpClientFactory,
+    IOptions<PushoverOptions> options,
+    ILogger<PushoverClient> logger,
+    TimeProvider timeProvider)
     : IReminderSender, IReceiptSender, IGlanceSender
 {
     private const string MessagesUrl = "https://api.pushover.net/1/messages.json";
@@ -34,6 +38,13 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
     // /health still green — which is exactly the kind of thing that gets "optimised" back into a
     // field by someone who doesn't know why it's here. Don't.
     public const string HttpClientName = "pushover";
+
+    // "Up to three attempts" — CONTEXT.md § Receipt (lines 1319-1367). The per-request timeout
+    // ("roughly 3 seconds per attempt") lives on the named HttpClient itself
+    // (ServiceCollectionExtensions.AddPushover), not here — this class doesn't own the client's
+    // lifetime. This constant is the "short backoff between" the three attempts.
+    private const int MaxReceiptAttempts = 3;
+    private static readonly TimeSpan ReceiptBackoff = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// One attempt only — a failed push reads as still-unfired next tick, and it's the tick loop
@@ -52,10 +63,12 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
     }
 
     /// <summary>
-    /// <see cref="IReceiptSender"/>'s own doc comment carries the contract in full. Each attempt's
-    /// outcome, and the swallow of whatever exception produced it, is <see cref="SendAsync"/>'s
-    /// job (#69: adapters return an outcome, they don't throw for expected failures) — this
-    /// method only ever sees the resulting <see cref="PushoverAttempt"/>.
+    /// Up to three attempts, only while Pushover has not accepted — <see cref="IReceiptSender"/>'s
+    /// own doc comment carries the contract in full. Each attempt's outcome, and the swallow of
+    /// whatever exception produced it, is <see cref="SendAsync"/>'s job (#69: adapters return an
+    /// outcome, they don't throw for expected failures); this loop only ever sees the resulting
+    /// <see cref="PushoverAttempt"/>. The one diagnostic naming the Task fires once, here, if
+    /// every attempt is spent without Pushover ever accepting.
     /// </summary>
     public async Task<bool> SendReceiptAsync(Receipt receipt, CancellationToken cancellationToken)
     {
@@ -64,8 +77,27 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
             return false;
         }
 
-        var attempt = await SendAsync(Receipt.FixedTitle, receipt.TaskTitle, receipt.DetailPage, priority: 0, cancellationToken);
-        return attempt.Match(accepted => true, refused => false, rejected => false);
+        for (var attemptNumber = 1; attemptNumber <= MaxReceiptAttempts; attemptNumber++)
+        {
+            var attempt = await SendAsync(Receipt.FixedTitle, receipt.TaskTitle, receipt.DetailPage, priority: 0, cancellationToken);
+            var outcome = attempt.Match(
+                accepted => (bool?)true,
+                refused => null, // not accepted yet — worth another attempt
+                rejected => (bool?)false);
+
+            if (outcome is { } done)
+            {
+                return done;
+            }
+
+            if (attemptNumber < MaxReceiptAttempts)
+            {
+                await Task.Delay(ReceiptBackoff, timeProvider, cancellationToken);
+            }
+        }
+
+        logger.LogError("Pushover Receipt send failed for Task {TaskId} after {Attempts} attempts", receipt.TaskId, MaxReceiptAttempts);
+        return false;
     }
 
     // Rendering a GlanceState into a complication's three text slots is the Adapters lane's
@@ -83,7 +115,8 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
 
     /// <summary>
     /// Not an attempt at all — a missing Token/UserKey never reaches the network, so it can't be
-    /// Accepted, Refused or Rejected.
+    /// Accepted, Refused or Rejected. Checked before either caller's loop starts, so it never
+    /// consumes one of the Receipt's three attempts.
     /// </summary>
     private bool EnsureConfigured()
     {
@@ -130,8 +163,8 @@ public sealed class PushoverClient(IHttpClientFactory httpClientFactory, IOption
         }
         // A TaskCanceledException whose token is the *caller's* cancellationToken is a genuine
         // cancellation, not a send failure — the `when` guard excludes that case, so it
-        // propagates instead of being swallowed into a retry. What reaches this catch is a
-        // client-side timeout.
+        // propagates instead of being swallowed into a retry. What reaches this catch is the
+        // per-request timeout set on the named HttpClient (ServiceCollectionExtensions.AddPushover).
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogError(ex, "Pushover send timed out");
