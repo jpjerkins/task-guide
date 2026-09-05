@@ -119,14 +119,14 @@ public sealed class FakeStoreViewBuilder
 
         if (patterns is null)
         {
-            // The builder's own default: never throws for any input, so an empty seed still
-            // falls back to the vanilla template rather than leaving the derived Pattern
-            // dangling (#116 finding 1).
-            if (dayTemplates.Count == 0) dayTemplates = [DefaultDayTemplate];
-
-            var derivedPattern = new Pattern(
-                DefaultPatternId, DefaultPatternName, Enumerable.Repeat(dayTemplates[0].Id, 7).ToArray());
-            patterns = new PatternBook(derivedPattern.Id, [derivedPattern]);
+            // The builder's own default: derives a book naming the first seeded template, or —
+            // when DayTemplates is empty — an empty book that resolves nothing, matching a fresh
+            // JsonStore rather than resurrecting a template nobody wrote. An emptied store is a
+            // deliberate act, not an unseeded one (#116 finding 3).
+            patterns = dayTemplates.Count == 0
+                ? new PatternBook(DefaultPatternId, [])
+                : new PatternBook(DefaultPatternId, [new Pattern(
+                    DefaultPatternId, DefaultPatternName, Enumerable.Repeat(dayTemplates[0].Id, 7).ToArray())]);
         }
 
         return new(

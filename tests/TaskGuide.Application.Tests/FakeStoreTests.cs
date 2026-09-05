@@ -295,6 +295,24 @@ public sealed class FakeStoreTests
         }
     }
 
+    /// <summary>#116 finding 3: emptying `DayTemplates` is a deliberate act, not an unseeded
+    /// store — the builder's default pair is a fallback for a store nobody has touched yet, and
+    /// must not resurrect itself once a caller has explicitly written an empty list. Matches
+    /// `JsonStore`, whose `DayTemplates` and `Patterns.Patterns` both come back empty from a
+    /// missing collection file (see `JsonStoreTests.A_missing_collection_file_loads_as_empty_rather_than_throwing_a_fresh_data_is_valid`).</summary>
+    [Fact]
+    public async Task A_DayTemplatesWrite_that_empties_DayTemplates_leaves_it_empty_and_its_Pattern_book_unresolvable()
+    {
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([])]), CancellationToken.None);
+
+        var view = store.Read();
+        Assert.Empty(view.DayTemplates);
+        Assert.Empty(view.Patterns.Patterns);
+        Assert.Throws<InvalidOperationException>(() => view.Patterns.Active);
+    }
+
     /// <summary>#116 finding 2: a write that throws part-way through `OrderedWrites` — after an
     /// earlier recognised write already landed — must report `LastWriteSucceeded` false, matching
     /// `JsonStore`.</summary>
