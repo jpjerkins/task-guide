@@ -65,9 +65,15 @@ describe('RecurrenceEditor', () => {
       />,
     )
 
-    fireEvent.change(screen.getByLabelText(/day of month/i), { target: { value: '99' } })
+    const field = screen.getByLabelText(/day of month/i)
+    fireEvent.change(field, { target: { value: '99' } })
 
     expect(onChange).not.toHaveBeenCalled()
+    expect(field).toHaveValue(99)
+
+    fireEvent.blur(field)
+
+    expect(field).toHaveValue(5)
   })
 
   it('typing an out-of-range "Month" does not commit it', () => {

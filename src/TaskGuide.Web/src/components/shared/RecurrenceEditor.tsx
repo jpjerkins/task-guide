@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { DateEntry } from './DateEntry'
 
 // Expressible recurrence rules are a closed set, two kinds: calendar-anchored (the world imposes
@@ -88,12 +88,16 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
   // A parent re-render with a new committed rule wins over any locally retained, invalid draft.
   // Until then, retaining the draft lets a person clear a field and type its replacement without
   // React restoring the previous committed value ahead of each rejected keystroke.
-  useEffect(() => {
+  const resetDrafts = useCallback(() => {
     setNDraft(null)
     setDayOfMonthDraft(null)
     setMonthDraft(null)
     setYearlyDayDraft(null)
-  }, [value])
+  }, [])
+
+  useEffect(() => {
+    resetDrafts()
+  }, [value, resetDrafts])
 
   function handleKindChange(next: string) {
     const nextValue = defaultFor(next as Selection)
@@ -176,6 +180,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
               setNDraft(e.target.value)
               handleNChange(e.target.value)
             }}
+            onBlur={resetDrafts}
           />
         </label>
       </div>
@@ -208,6 +213,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
               setDayOfMonthDraft(e.target.value)
               handleDayOfMonthChange(e.target.value)
             }}
+            onBlur={resetDrafts}
           />
         </label>
       </div>
@@ -226,6 +232,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
               setMonthDraft(e.target.value)
               handleMonthChange(e.target.value)
             }}
+            onBlur={resetDrafts}
           />
         </label>
         <label className="stack">
@@ -241,6 +248,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
               setYearlyDayDraft(e.target.value)
               handleYearlyDayChange(e.target.value)
             }}
+            onBlur={resetDrafts}
           />
         </label>
       </div>
