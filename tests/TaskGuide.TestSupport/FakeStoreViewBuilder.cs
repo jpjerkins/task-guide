@@ -14,7 +14,7 @@ public sealed class FakeStoreViewBuilder
 {
     /// <summary>
     /// The vanilla Day template an unseeded view falls back to — mirroring
-    /// <c>StartupSequence.SeedDefaultPatternAsync</c>'s shape (one plain template, all seven
+    /// <c>StartupPlanner</c>'s seed-planning shape (one plain template, all seven
     /// weekday slots pointing at it) — so <see cref="PatternBook.Active"/> resolves and
     /// <c>DayShapeReader.For</c> can walk an unseeded <see cref="FakeStoreView"/> end to end
     /// instead of throwing (#77 review finding 1).
