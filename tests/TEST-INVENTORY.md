@@ -508,6 +508,23 @@ directly.
 - a written fire row survives the next unrelated mutation
 - a completion log seeded for a task absent from Tasks survives the next mutation
 - a view already built is unaffected by a later `With…` call on the same builder
+- `WithDayTemplates` re-points the builder's default Pattern at the first seeded template, so a
+  view seeded with templates alone still resolves (#116)
+- an explicit `WithPatterns` wins over that re-pointing, in either call order (#116)
+- a `DayTemplatesWrite` through `MutateAsync` re-points the builder's default Pattern the same way,
+  while the builder's default pair is still intact (#116)
+- a `DayTemplatesWrite` leaves a caller-supplied Pattern book exactly as it was, matching
+  `JsonStore`, which does no fix-up (#116)
+- a `DayTemplatesWrite` that empties `DayTemplates` leaves it empty and its Pattern book
+  unresolvable, matching a fresh `JsonStore` (#116)
+- once real Day templates have been seeded, a `DayTemplatesWrite` leaves the derived Pattern book
+  alone, so an orphaned template surfaces as it would in production (#116)
+- the builder's default pair survives an unrelated write, so a later `DayTemplatesWrite` still
+  re-points (#116)
+- a write that throws part-way through `OrderedWrites` reports `LastWriteSucceeded` false,
+  matching `JsonStore` (#116)
+- an unrecognised payload as the very first write leaves `LastWriteSucceeded` untouched,
+  matching `JsonStore` (#116)
 
 ---
 

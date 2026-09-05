@@ -272,4 +272,73 @@ public sealed class FakeStoreTests
 
         Assert.Empty(view.CompletionsFor(otherTaskId).Entries);
     }
+
+    /// <summary>#116 finding 1: once the Pattern book is caller-supplied — by seeding or by a
+    /// `PatternsWrite` — a later `DayTemplatesWrite` leaves it exactly as it was, orphan and all,
+    /// matching `JsonStore`, which does no fix-up.</summary>
+    [Fact]
+    public async Task A_DayTemplatesWrite_leaves_a_caller_supplied_Pattern_book_exactly_as_it_was()
+    {
+        var original = new DayTemplate(new DayTemplateId("dt_original"), "Original day", [], []);
+        var pattern = new Pattern(new PatternId("p_mine"), "Mine", Enumerable.Repeat(original.Id, 7).ToArray());
+        var book = new PatternBook(pattern.Id, [pattern]);
+        var store = new FakeStore();
+        await store.MutateAsync<Never>(_ => new StoreMutation([new PatternsWrite(book)]), CancellationToken.None);
+
+        var mine = new DayTemplate(new DayTemplateId("dt_mine"), "My day", [], []);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([mine])]), CancellationToken.None);
+
+        var active = store.Read().Patterns.Active;
+        foreach (DayOfWeek weekday in Enum.GetValues<DayOfWeek>())
+        {
+            Assert.Equal(original.Id, active[weekday]);
+        }
+    }
+
+    /// <summary>#116 finding 3: emptying `DayTemplates` is a deliberate act, not an unseeded
+    /// store — the builder's default pair is a fallback for a store nobody has touched yet, and
+    /// must not resurrect itself once a caller has explicitly written an empty list. Matches
+    /// `JsonStore`, whose `DayTemplates` and `Patterns.Patterns` both come back empty from a
+    /// missing collection file (see `JsonStoreTests.A_missing_collection_file_loads_as_empty_rather_than_throwing_a_fresh_data_is_valid`).</summary>
+    [Fact]
+    public async Task A_DayTemplatesWrite_that_empties_DayTemplates_leaves_it_empty_and_its_Pattern_book_unresolvable()
+    {
+        var store = new FakeStore();
+
+        await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([])]), CancellationToken.None);
+
+        var view = store.Read();
+        Assert.Empty(view.DayTemplates);
+        Assert.Empty(view.Patterns.Patterns);
+        Assert.Throws<InvalidOperationException>(() => view.Patterns.Active);
+    }
+
+    /// <summary>#116 finding 2: a write that throws part-way through `OrderedWrites` — after an
+    /// earlier recognised write already landed — must report `LastWriteSucceeded` false, matching
+    /// `JsonStore`.</summary>
+    [Fact]
+    public async Task A_write_that_throws_part_way_through_OrderedWrites_reports_LastWriteSucceeded_false()
+    {
+        var store = new FakeStore();
+        var mine = new DayTemplate(new DayTemplateId("dt_mine"), "My day", [], []);
+
+        await Assert.ThrowsAsync<NotImplementedException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new DayTemplatesWrite([mine]), new UnrecognisedWrite()]), CancellationToken.None));
+
+        Assert.False(store.LastWriteSucceeded);
+    }
+
+    /// <summary>#116 finding 2: an unrecognised payload as the very first write never reaches a
+    /// real apply, so `LastWriteSucceeded` must stay untouched, matching `JsonStore` — this is
+    /// the boundary that keeps the fix a rule rather than a blanket `false`.</summary>
+    [Fact]
+    public async Task An_unrecognised_payload_as_the_very_first_write_leaves_LastWriteSucceeded_untouched()
+    {
+        var store = new FakeStore();
+
+        await Assert.ThrowsAsync<NotImplementedException>(() => store.MutateAsync<Never>(
+            _ => new StoreMutation([new UnrecognisedWrite()]), CancellationToken.None));
+
+        Assert.Null(store.LastWriteSucceeded);
+    }
 }

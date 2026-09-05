@@ -64,9 +64,22 @@ public sealed class FakeStore : IStore
                 }
 
                 var builder = ViewAsBuilder(_view);
-                foreach (var write in storeMutation.OrderedWrites)
+                var attemptedWrite = false;
+                try
                 {
-                    Apply(builder, write);
+                    foreach (var write in storeMutation.OrderedWrites)
+                    {
+                        Apply(builder, write, ref attemptedWrite);
+                    }
+                }
+                catch
+                {
+                    // Matches JsonStore.cs's own rule: LastWriteSucceeded documents an actual
+                    // apply, so an unrecognised payload that throws before any write in this list
+                    // has landed leaves it untouched, but once an earlier write has landed, a
+                    // later throw reports false (#116 finding 2).
+                    if (attemptedWrite) LastWriteSucceeded = false;
+                    throw;
                 }
 
                 _view = builder.Build();
@@ -92,11 +105,10 @@ public sealed class FakeStore : IStore
     /// assert a refusal happened without a write, alongside <see cref="Mutations"/> staying put.</summary>
     public int RefusalCount { get; private set; }
 
-    private static FakeStoreViewBuilder ViewAsBuilder(FakeStoreView view) =>
-        new FakeStoreViewBuilder()
+    private static FakeStoreViewBuilder ViewAsBuilder(FakeStoreView view)
+    {
+        var builder = new FakeStoreViewBuilder()
             .WithTasks(view.Tasks)
-            .WithDayTemplates(view.DayTemplates)
-            .WithPatterns(view.Patterns)
             .WithOverrides(view.Overrides)
             .WithEvents(view.Events)
             .WithEventExceptions(view.EventExceptions)
@@ -104,17 +116,35 @@ public sealed class FakeStore : IStore
             .WithAllCompletions(view.AllCompletions)
             .WithAllFires(view.AllFires);
 
-    private static void Apply(FakeStoreViewBuilder builder, object write)
+        // Replaying WithDayTemplates/WithPatterns unconditionally would pin the builder's own
+        // derived default at its old day template, orphaning it the moment a later
+        // DayTemplatesWrite replaces DayTemplates underneath it. Only replay — both together,
+        // never just one — once the pair has actually stopped being the builder's own default:
+        // replaying just one would mark that half caller-supplied and destroy intactness on the
+        // very next unrelated write, breaking the re-pointing this fix exists for (#116 finding 1, narrowed by review finding 2).
+        if (!view.DefaultPairIntact)
+        {
+            builder.WithDayTemplates(view.DayTemplates);
+            builder.WithPatterns(view.Patterns);
+        }
+
+        return builder;
+    }
+
+    private static void Apply(FakeStoreViewBuilder builder, object write, ref bool attemptedWrite)
     {
         switch (write)
         {
             case TasksWrite w:
+                attemptedWrite = true;
                 builder.WithTasks(w.Tasks);
                 break;
             case DayTemplatesWrite w:
+                attemptedWrite = true;
                 builder.WithDayTemplates(w.Templates);
                 break;
             case PatternsWrite w:
+                attemptedWrite = true;
                 // A defensive copy, matching JsonStore.cs: the store must own its storage, and
                 // IReadOnlyList<T> is not a promise of immutability — a caller that keeps its own
                 // reference and mutates it later must not be able to reach a view any concurrent
@@ -124,26 +154,33 @@ public sealed class FakeStore : IStore
                 builder.WithPatterns(w.Book with { Patterns = w.Book.Patterns.ToArray() });
                 break;
             case OverridesWrite w:
+                attemptedWrite = true;
                 builder.WithOverrides(w.Overrides);
                 break;
             case EventsWrite w:
+                attemptedWrite = true;
                 builder.WithEvents(w.Events);
                 break;
             case EventExceptionsWrite w:
+                attemptedWrite = true;
                 builder.WithEventExceptions(w.Exceptions);
                 break;
             case CompletionLogWrite w:
+                attemptedWrite = true;
                 builder.WithCompletions(w.Log.TaskId, w.Log with { Entries = w.Log.Entries.ToArray() });
                 break;
             case DerivedCompletionsWrite w:
+                attemptedWrite = true;
                 builder.WithDerivedCompletions(w.Entries);
                 break;
             case FiresWrite w:
+                attemptedWrite = true;
                 builder.WithFires(w.Fires.Date, w.Fires with { Rows = w.Fires.Rows.ToArray() });
                 break;
             default:
-                // Matches JsonStore.cs's type and message shape for the same programming error
-                // (#77 review finding 6).
+                // An unrecognised payload never applies, so it must not flip attemptedWrite —
+                // matching JsonStore.cs, whose default: case is the only one that doesn't assign
+                // it either (#116 review finding 3).
                 throw new NotImplementedException($"FakeStore does not know how to write a {write.GetType().Name}.");
         }
     }
