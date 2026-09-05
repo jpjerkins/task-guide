@@ -93,15 +93,36 @@ describe('OrdinalSlider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
-    fireEvent.pointerUp(screen.getByLabelText('Volume'))
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.pointerDown(slider)
+    fireEvent.pointerUp(slider)
 
     expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
+  it('commits the least value from the keyboard while unset', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowLeft' })
+
+    expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
+  it('does not commit a pointer release that did not start on the slider', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.pointerUp(screen.getByLabelText('Volume'))
+
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('committing on pointerUp while unset does not remount the slider', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
 
     const el = screen.getByLabelText('Volume')
+    fireEvent.pointerDown(el)
     fireEvent.pointerUp(el)
 
     expect(screen.getByLabelText('Volume')).toBe(el)
@@ -111,7 +132,9 @@ describe('OrdinalSlider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
 
-    fireEvent.pointerUp(screen.getByLabelText('Volume'))
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.pointerDown(slider)
+    fireEvent.pointerUp(slider)
 
     expect(onChange).not.toHaveBeenCalled()
   })

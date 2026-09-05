@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+
 interface OrdinalSliderProps {
   label: string
   // Ordered, least-constrained first — the caller supplies the order; this component only
@@ -22,6 +24,7 @@ interface OrdinalSliderProps {
 // two-state toggle you press again to undo). While unset, the slider dims (a class, not inline
 // style) and shows index 0. Duration declares no default, so that control is simply absent.
 export function OrdinalSlider({ label, values, value, onChange, defaultValue, readOnly, id }: OrdinalSliderProps) {
+  const pointerStartedOnSlider = useRef(false)
   const hasDefault = defaultValue !== undefined && defaultValue !== null
   // A value not present in `values` (indexOf === -1) falls back to the unset presentation too —
   // otherwise React writes value="-1" on the input, the browser clamps the visible thumb to
@@ -61,16 +64,28 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         value={index}
         disabled={readOnly}
         onChange={(e) => onChange(values[Number(e.target.value)])}
+        onKeyUp={(e) => {
+          if (unset && (e.key === 'ArrowLeft' || e.key === 'Home')) {
+            onChange(values[index])
+          }
+        }}
         // While unset, the thumb already sits at index 0 — dragging it TO 0 fires no `change`
         // event, so a user could never explicitly commit the least value. A pointerUp (covers a
         // click too, and a touch drag's release) commits whatever the slider is currently
         // showing. Once a value is set, this is a no-op: `change` already owns every further
         // commit, and firing again here would be redundant, not wrong, but the guard keeps the
         // handler's job to exactly "commit from unset" and nothing else.
+        onPointerDown={() => {
+          pointerStartedOnSlider.current = true
+        }}
         onPointerUp={() => {
-          if (unset) {
+          if (unset && pointerStartedOnSlider.current) {
             onChange(values[index])
           }
+          pointerStartedOnSlider.current = false
+        }}
+        onPointerCancel={() => {
+          pointerStartedOnSlider.current = false
         }}
       />
       <div className="ticks">

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { DateEntry } from './DateEntry'
 
 // Expressible recurrence rules are a closed set, two kinds: calendar-anchored (the world imposes
@@ -79,9 +80,27 @@ function parsedInRange(raw: string, min: number, max: number): number | null {
 // sub-field's node, stays identical across a kind change.
 export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, disabled }: RecurrenceEditorProps) {
   const selection = selectionOf(value)
+  const [nDraft, setNDraft] = useState<string | null>(null)
+  const [dayOfMonthDraft, setDayOfMonthDraft] = useState<string | null>(null)
+  const [monthDraft, setMonthDraft] = useState<string | null>(null)
+  const [yearlyDayDraft, setYearlyDayDraft] = useState<string | null>(null)
+
+  // A parent re-render with a new committed rule wins over any locally retained, invalid draft.
+  // Until then, retaining the draft lets a person clear a field and type its replacement without
+  // React restoring the previous committed value ahead of each rejected keystroke.
+  useEffect(() => {
+    setNDraft(null)
+    setDayOfMonthDraft(null)
+    setMonthDraft(null)
+    setYearlyDayDraft(null)
+  }, [value])
 
   function handleKindChange(next: string) {
-    onChange(defaultFor(next as Selection))
+    const nextValue = defaultFor(next as Selection)
+    if (nextValue?.anchor !== 'completion') {
+      onFirstDueChange(null)
+    }
+    onChange(nextValue)
   }
 
   function handleNChange(raw: string) {
@@ -152,8 +171,11 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             type="number"
             min={1}
             disabled={disabled}
-            value={hasN(value) ? value.n : 1}
-            onChange={(e) => handleNChange(e.target.value)}
+            value={nDraft ?? (hasN(value) ? value.n : 1)}
+            onChange={(e) => {
+              setNDraft(e.target.value)
+              handleNChange(e.target.value)
+            }}
           />
         </label>
       </div>
@@ -181,8 +203,11 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             min={1}
             max={31}
             disabled={disabled}
-            value={value?.kind === 'monthlyOnDayOfMonth' ? value.dayOfMonth : 1}
-            onChange={(e) => handleDayOfMonthChange(e.target.value)}
+            value={dayOfMonthDraft ?? (value?.kind === 'monthlyOnDayOfMonth' ? value.dayOfMonth : 1)}
+            onChange={(e) => {
+              setDayOfMonthDraft(e.target.value)
+              handleDayOfMonthChange(e.target.value)
+            }}
           />
         </label>
       </div>
@@ -196,8 +221,11 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             min={1}
             max={12}
             disabled={disabled}
-            value={value?.kind === 'yearlyOnMonthDay' ? value.month : 1}
-            onChange={(e) => handleMonthChange(e.target.value)}
+            value={monthDraft ?? (value?.kind === 'yearlyOnMonthDay' ? value.month : 1)}
+            onChange={(e) => {
+              setMonthDraft(e.target.value)
+              handleMonthChange(e.target.value)
+            }}
           />
         </label>
         <label className="stack">
@@ -208,8 +236,11 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             min={1}
             max={31}
             disabled={disabled}
-            value={value?.kind === 'yearlyOnMonthDay' ? value.dayOfMonth : 1}
-            onChange={(e) => handleYearlyDayChange(e.target.value)}
+            value={yearlyDayDraft ?? (value?.kind === 'yearlyOnMonthDay' ? value.dayOfMonth : 1)}
+            onChange={(e) => {
+              setYearlyDayDraft(e.target.value)
+              handleYearlyDayChange(e.target.value)
+            }}
           />
         </label>
       </div>

@@ -806,6 +806,11 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   included — every control disabled
 - `OrdinalSlider`'s range input survives its own input event and a press of the default toggle —
   same DOM node throughout
+- changing `RecurrenceEditor`'s kind away from a completion anchor clears the first-due date;
+  changing between two completion-anchored kinds leaves it alone
+- a rejected keystroke in a `RecurrenceEditor` number field leaves the field showing what was
+  typed, not the previous committed value re-inserted ahead of it — clearing "3" and typing "12"
+  commits 12, never 312
 
 ## `TaskGuide.E2E`
 
@@ -816,4 +821,6 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   absolute form, Postpone's escape, Recurrence's first-due, an Event's date, and the Override
   rail's "Pick a date…"
 - a `<select>` and an ordinal slider survive the same way
+- an ordinal slider commits its least value from the keyboard alone, and a press of "leave at the
+  default" released over the slider does not commit one
 - authoring an Override over a range from the rail's escape writes the whole span

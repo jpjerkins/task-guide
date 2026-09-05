@@ -115,6 +115,58 @@ describe('RecurrenceEditor', () => {
     expect(screen.getByLabelText(/first due/i)).toHaveValue('2026-09-10')
   })
 
+  it('changing kind away from a completion anchor clears the first-due date', () => {
+    const onFirstDueChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'completion', kind: 'everyNDays', n: 2 }}
+        onChange={() => {}}
+        firstDue="2026-09-10"
+        onFirstDueChange={onFirstDueChange}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/repeats/i), { target: { value: 'calendar:everyNDays' } })
+
+    expect(onFirstDueChange).toHaveBeenCalledWith(null)
+  })
+
+  it('changing between completion-anchored kinds leaves the first-due date alone', () => {
+    const onFirstDueChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'completion', kind: 'everyNDays', n: 2 }}
+        onChange={() => {}}
+        firstDue="2026-09-10"
+        onFirstDueChange={onFirstDueChange}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/repeats/i), { target: { value: 'completion:everyNWeeks' } })
+
+    expect(onFirstDueChange).not.toHaveBeenCalled()
+  })
+
+  it('clearing an Every N field then typing commits the replacement, not a prefixed value', () => {
+    const onChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'everyNDays', n: 3 }}
+        onChange={onChange}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    const field = screen.getByLabelText(/every n/i)
+    fireEvent.change(field, { target: { value: '' } })
+    fireEvent.change(field, { target: { value: '12' } })
+
+    expect(field).toHaveValue(12)
+    expect(onChange).toHaveBeenCalledWith({ anchor: 'calendar', kind: 'everyNDays', n: 12 })
+    expect(onChange).not.toHaveBeenCalledWith({ anchor: 'calendar', kind: 'everyNDays', n: 312 })
+  })
+
   // ADR-0006: switching kind changes which sub-fields render. The <select> must not be swapped
   // for a different node, and a sub-field's own change must not remount the <select> either —
   // every sub-field group mounts once and toggles via `hidden`, never a conditional-render branch.
