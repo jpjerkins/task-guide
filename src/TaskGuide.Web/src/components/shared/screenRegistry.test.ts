@@ -45,6 +45,21 @@ describe('registerScreen', () => {
       /duplicate screen id "dup"/,
     )
   })
+
+  it('removes only the disposed hot screen before it re-registers', () => {
+    let disposeCallback: (() => void) | undefined
+    const dispose = vi.fn((callback: () => void) => {
+      disposeCallback = callback
+    })
+    const hot = { dispose }
+
+    registerScreen({ id: 'updated', tab: 'now', title: 'Updated', render: () => null }, hot)
+    registerScreen({ id: 'sibling', tab: 'now', title: 'Sibling', render: () => null })
+    disposeCallback?.()
+
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(screensFor('now').map((screen) => screen.id)).toEqual(['sibling'])
+  })
 })
 
 describe('quick action slot', () => {
@@ -66,22 +81,22 @@ describe('quick action slot', () => {
   })
 })
 
-// Review finding 5: screens/tasks.screen.tsx exports nothing, so it is not its own Fast Refresh
-// boundary — the HMR update propagates to App.tsx (which owns the eager glob), and when App.tsx
-// re-executes the glob, `registerScreen` throws "duplicate screen id" against a registry that was
-// never cleared. App.tsx's own dispose handler (installHmrGuard(import.meta.hot, resetRegistry))
-// is what actually fixes this in dev; this test holds only the guard's own logic, since
-// import.meta.hot isn't something a unit test can fake convincingly end-to-end.
+// An App.tsx update cannot safely rebuild the eager screen imports from the browser module cache.
+// The guard deliberately invalidates it so Vite performs a full reload. This test covers that
+// wiring only; it cannot reproduce Vite's module-graph invalidation end-to-end.
 describe('installHmrGuard', () => {
-  it('registers a dispose handler that resets the registry, when hot is present', () => {
+  it('registers a dispose handler that invalidates App.tsx, when hot is present', () => {
     const dispose = vi.fn()
+    const invalidate = vi.fn()
 
-    installHmrGuard({ dispose }, resetRegistry)
+    installHmrGuard({ dispose, invalidate })
 
-    expect(dispose).toHaveBeenCalledWith(resetRegistry)
+    expect(dispose).toHaveBeenCalledOnce()
+    dispose.mock.calls[0][0]()
+    expect(invalidate).toHaveBeenCalledOnce()
   })
 
   it('does nothing when hot is undefined', () => {
-    expect(() => installHmrGuard(undefined, resetRegistry)).not.toThrow()
+    expect(() => installHmrGuard(undefined)).not.toThrow()
   })
 })

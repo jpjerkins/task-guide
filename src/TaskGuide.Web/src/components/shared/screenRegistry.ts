@@ -18,14 +18,27 @@ const DEFAULT_ORDER = 100
 let screens: ScreenDescriptor[] = []
 let quickActionRenderer: (() => ReactNode) | null = null
 
+interface ScreenModuleHot {
+  dispose: (cb: () => void) => void
+}
+
 // Seven Web tickets across two concurrently-running lanes each register a screen. A duplicate
 // `id` is a defect, not a merge — mirrors the Dimension registry's rule that a value name belongs
 // to exactly one Dimension: rejected before the service will run, not resolved at the point of use.
-export function registerScreen(screen: ScreenDescriptor): void {
+export function registerScreen(screen: ScreenDescriptor, hot?: ScreenModuleHot): void {
   if (screens.some((s) => s.id === screen.id)) {
     throw new Error(`registerScreen: duplicate screen id "${screen.id}"`)
   }
   screens.push(screen)
+
+  // The screen module itself opts into handling its update, so Vite does not propagate it to
+  // App.tsx. Its dispose callback removes only this registration; sibling screens stay registered
+  // while this module re-executes and registers its replacement.
+  if (hot) {
+    hot.dispose(() => {
+      screens = screens.filter((registered) => registered.id !== screen.id)
+    })
+  }
 }
 
 export function screensFor(tab: Tab): ScreenDescriptor[] {
@@ -60,14 +73,13 @@ export function resetRegistry(): void {
   quickActionRenderer = null
 }
 
-// screens/*.screen.tsx files export nothing, so none is its own Fast Refresh boundary — an edit
-// to one propagates up to whichever ancestor module accepts the update (App.tsx, via the eager
-// glob that imports them). That module re-executes against a registry that was never cleared, so
-// `registerScreen`'s duplicate-id guard — correct in production, where a module never runs twice —
-// throws on every dev edit. The guard itself stays; App.tsx calls this with `import.meta.hot` so
-// the registry clears right before Vite re-runs the glob, not after.
-export function installHmrGuard(hot: { dispose: (cb: () => void) => void } | undefined, reset: () => void): void {
+// App.tsx is a Fast Refresh boundary, but its eager imports are cached on an App-only update. A
+// partial update would therefore leave the registry without re-running every screen module. Turn
+// that one case into a full reload, which rebuilds the registry from a clean module graph.
+export function installHmrGuard(
+  hot: { dispose: (cb: () => void) => void; invalidate: () => void } | undefined,
+): void {
   if (hot) {
-    hot.dispose(reset)
+    hot.dispose(() => hot.invalidate())
   }
 }

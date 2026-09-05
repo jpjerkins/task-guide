@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PlaceholderScreen } from './components/PlaceholderScreen'
 import { TabBar, type Tab } from './components/TabBar'
-import { installHmrGuard, resetRegistry, screensFor } from './components/shared/screenRegistry'
+import { installHmrGuard, screensFor } from './components/shared/screenRegistry'
 import { BackProvider, ScreenNav } from './components/shared/ScreenNav'
 
 // Each file under ./screens registers itself as a module side effect (registerScreen). This is
@@ -9,13 +9,10 @@ import { BackProvider, ScreenNav } from './components/shared/ScreenNav'
 // `<name>.screen.tsx` file there and this glob picks it up with zero edits here.
 import.meta.glob('./screens/**/*.screen.tsx', { eager: true })
 
-// A screen file exports nothing, so it isn't its own Fast Refresh boundary — an edit to one
-// propagates up to here (the nearest module that accepts the update, via the glob above), which
-// then re-executes the glob against a registry that was never cleared, and registerScreen's
-// duplicate-id guard throws on every dev edit. Clearing the registry right before Vite re-runs
-// this module keeps that guard's contract — a real duplicate is still a defect in production —
-// without punishing every hot reload for it.
-installHmrGuard(import.meta.hot, resetRegistry)
+// Screen modules accept and replace only their own registration. An App.tsx edit cannot safely
+// rebuild every eager screen import from the browser cache, so its HMR disposal requests a full
+// reload rather than silently rendering placeholders from an empty registry.
+installHmrGuard(import.meta.hot)
 
 const TAB_TITLES: Record<Tab, string> = {
   now: 'Now',

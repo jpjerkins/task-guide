@@ -743,9 +743,10 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - registering a duplicate screen id throws
 - the quick-action slot is `null` until something registers, then returns that renderer
 - registering a second quick action throws
-- `installHmrGuard` registers a dispose handler that resets the registry when hot is present, and
-  does nothing when it isn't (screens/tasks.screen.tsx isn't its own Fast Refresh boundary, so an
-  edit propagates to App.tsx's eager glob against a registry that was never cleared)
+- each screen module self-accepts its Vite update and `registerScreen` unregisters only that ID on
+  dispose, preserving sibling registrations; `installHmrGuard` invalidates an updated `App.tsx`
+  for a full reload, and both no-op when hot is absent (Vite's module graph itself remains manual
+  verification)
 - the tasks.screen module registers "tasks" on the tasks tab, rendering `TasksScreen` — asserted
   directly against the module's own import, since App.test.tsx resets the registry before any
   test and never exercises this real wiring
