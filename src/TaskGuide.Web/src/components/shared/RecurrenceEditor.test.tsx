@@ -34,6 +34,74 @@ describe('RecurrenceEditor', () => {
     expect(onChange).toHaveBeenCalledWith({ anchor: 'calendar', kind: 'everyNDays', n: 5 })
   })
 
+  // Review finding 3: `Number('') === 0`, so backspacing a number field committed `n: 0` (or
+  // `dayOfMonth: 0`, etc.) with no guard at all — and `min`/`max` on <input type=number> only
+  // constrain the spinner and form validation, not a typed value, so a typed 99 sailed past
+  // `max={31}` too. A cleared or out-of-range field must be ignored, keeping the last valid value.
+  it('emptying the "Every N" field does not commit n: 0', () => {
+    const onChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'everyNDays', n: 3 }}
+        onChange={onChange}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/every n/i), { target: { value: '' } })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('typing an out-of-range "Day of month" does not commit it', () => {
+    const onChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'monthlyOnDayOfMonth', dayOfMonth: 5 }}
+        onChange={onChange}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/day of month/i), { target: { value: '99' } })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('typing an out-of-range "Month" does not commit it', () => {
+    const onChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'yearlyOnMonthDay', month: 6, dayOfMonth: 5 }}
+        onChange={onChange}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/^month$/i), { target: { value: '99' } })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('typing an out-of-range yearly "Day" does not commit it', () => {
+    const onChange = vi.fn()
+    render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'yearlyOnMonthDay', month: 6, dayOfMonth: 5 }}
+        onChange={onChange}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/^day$/i), { target: { value: '99' } })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('renders the first-due date entry for a completion-anchored rule', () => {
     render(
       <RecurrenceEditor

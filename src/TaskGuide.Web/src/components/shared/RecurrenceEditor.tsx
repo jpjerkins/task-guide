@@ -56,6 +56,22 @@ function hasN(value: RecurrenceRule | null): value is Extract<RecurrenceRule, { 
   return value !== null && 'n' in value
 }
 
+// `Number('') === 0`, so a cleared field would otherwise commit 0 silently. And `min`/`max` on
+// <input type=number> only constrain the spinner and form validation — a typed value bypasses
+// both — so an explicit range check is the only thing that actually holds these fields' bounds.
+// Returns null for anything that shouldn't commit; the caller then leaves the last valid value in
+// place rather than writing a bad one.
+function parsedInRange(raw: string, min: number, max: number): number | null {
+  if (raw.trim() === '') {
+    return null
+  }
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < min || n > max) {
+    return null
+  }
+  return n
+}
+
 // The closed set above, rendered as one <select> plus every sub-field group mounted once and
 // toggled with `hidden`. ADR-0006 requires this: switching kind changes which sub-fields apply,
 // and a conditional-render branch swap here would replace the <select>'s siblings and risk an
@@ -68,9 +84,10 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
     onChange(defaultFor(next as Selection))
   }
 
-  function handleNChange(next: number) {
-    if (hasN(value)) {
-      onChange({ ...value, n: next })
+  function handleNChange(raw: string) {
+    const n = parsedInRange(raw, 1, Infinity)
+    if (n !== null && hasN(value)) {
+      onChange({ ...value, n })
     }
   }
 
@@ -83,21 +100,24 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
     }
   }
 
-  function handleDayOfMonthChange(next: number) {
-    if (value && value.kind === 'monthlyOnDayOfMonth') {
-      onChange({ ...value, dayOfMonth: next })
+  function handleDayOfMonthChange(raw: string) {
+    const n = parsedInRange(raw, 1, 31)
+    if (n !== null && value && value.kind === 'monthlyOnDayOfMonth') {
+      onChange({ ...value, dayOfMonth: n })
     }
   }
 
-  function handleMonthChange(next: number) {
-    if (value && value.kind === 'yearlyOnMonthDay') {
-      onChange({ ...value, month: next })
+  function handleMonthChange(raw: string) {
+    const n = parsedInRange(raw, 1, 12)
+    if (n !== null && value && value.kind === 'yearlyOnMonthDay') {
+      onChange({ ...value, month: n })
     }
   }
 
-  function handleYearlyDayChange(next: number) {
-    if (value && value.kind === 'yearlyOnMonthDay') {
-      onChange({ ...value, dayOfMonth: next })
+  function handleYearlyDayChange(raw: string) {
+    const n = parsedInRange(raw, 1, 31)
+    if (n !== null && value && value.kind === 'yearlyOnMonthDay') {
+      onChange({ ...value, dayOfMonth: n })
     }
   }
 
@@ -133,7 +153,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             min={1}
             disabled={disabled}
             value={hasN(value) ? value.n : 1}
-            onChange={(e) => handleNChange(Number(e.target.value))}
+            onChange={(e) => handleNChange(e.target.value)}
           />
         </label>
       </div>
@@ -162,7 +182,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             max={31}
             disabled={disabled}
             value={value?.kind === 'monthlyOnDayOfMonth' ? value.dayOfMonth : 1}
-            onChange={(e) => handleDayOfMonthChange(Number(e.target.value))}
+            onChange={(e) => handleDayOfMonthChange(e.target.value)}
           />
         </label>
       </div>
@@ -177,7 +197,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             max={12}
             disabled={disabled}
             value={value?.kind === 'yearlyOnMonthDay' ? value.month : 1}
-            onChange={(e) => handleMonthChange(Number(e.target.value))}
+            onChange={(e) => handleMonthChange(e.target.value)}
           />
         </label>
         <label className="stack">
@@ -189,7 +209,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
             max={31}
             disabled={disabled}
             value={value?.kind === 'yearlyOnMonthDay' ? value.dayOfMonth : 1}
-            onChange={(e) => handleYearlyDayChange(Number(e.target.value))}
+            onChange={(e) => handleYearlyDayChange(e.target.value)}
           />
         </label>
       </div>
