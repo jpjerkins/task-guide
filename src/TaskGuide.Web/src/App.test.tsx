@@ -71,9 +71,9 @@ describe('App', () => {
   })
 
   // Review finding 4: the shell used to wrap a selected screen in its own ScreenNav + .scroll,
-  // so a screen that renders its own ScreenNav (as every screen does — TasksScreen already does,
-  // and any future one adopting the pattern will) got two stacked title bars and two quick-action
-  // circles once one was registered.
+  // so a screen that renders its own ScreenNav got two stacked title bars and two quick-action
+  // circles once one was registered. TasksScreen still hand-rolls its nav; the registrations here
+  // model screens that adopt the shared component.
   it('does not double-wrap a selected screen in another ScreenNav', () => {
     registerTwoScheduleScreens()
     render(<App />)
