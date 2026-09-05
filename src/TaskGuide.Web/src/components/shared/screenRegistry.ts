@@ -40,8 +40,13 @@ export function screensFor(tab: Tab): ScreenDescriptor[] {
 }
 
 // The accent circle owns the nav's right slot on every screen (#111); #103 fills its behaviour by
-// calling registerQuickAction from its own registration file, without editing TabBar.tsx or App.tsx.
+// calling registerQuickAction from its own registration file, without editing ScreenNav.tsx or
+// App.tsx. A second registration is the same hazard registerScreen's duplicate-id guard exists
+// for — two lanes both claiming the slot would otherwise silently lose one — so it throws too.
 export function registerQuickAction(render: () => ReactNode): void {
+  if (quickActionRenderer !== null) {
+    throw new Error('registerQuickAction: a quick action is already registered')
+  }
   quickActionRenderer = render
 }
 

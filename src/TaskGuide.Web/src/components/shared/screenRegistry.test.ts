@@ -17,6 +17,9 @@ describe('screensFor', () => {
   })
 
   it('returns an empty list for a tab with nothing registered', () => {
+    registerScreen({ id: 'sched-screen', tab: 'schedule', title: 'Sched', render: () => null })
+    registerScreen({ id: 'tasks-screen', tab: 'tasks', title: 'Tasks', render: () => null })
+
     expect(screensFor('now')).toEqual([])
   })
 
@@ -47,5 +50,11 @@ describe('quick action slot', () => {
     registerQuickAction(render)
 
     expect(quickAction()).toBe(render)
+  })
+
+  it('throws on a second registration', () => {
+    registerQuickAction(() => null)
+
+    expect(() => registerQuickAction(() => null)).toThrow(/quick action is already registered/)
   })
 })
