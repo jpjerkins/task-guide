@@ -735,6 +735,77 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - a non-OK GET and a rejected fetch both land on the error state
 - the quick-add duration chip IS the submit, and is inert while the title is empty
 
+### Shared controls
+
+- `screensFor` orders registered screens by `order` then `id`
+- `screensFor` returns nothing for a tab with no registrations, and never returns another tab's
+  screens
+- registering a duplicate screen id throws
+- the quick-action slot is `null` until something registers, then returns that renderer
+- registering a second quick action throws
+- `installHmrGuard` registers a dispose handler that resets the registry when hot is present, and
+  does nothing when it isn't (screens/tasks.screen.tsx isn't its own Fast Refresh boundary, so an
+  edit propagates to App.tsx's eager glob against a registry that was never cleared)
+- the tasks.screen module registers "tasks" on the tasks tab, rendering `TasksScreen` — asserted
+  directly against the module's own import, since App.test.tsx resets the registry before any
+  test and never exercises this real wiring
+- the tab bar renders all four tabs
+- `ScreenNav` renders the title, and the back control only when `back` is given
+- `ScreenNav` renders the back control from a `BackProvider` ancestor when no explicit `back` prop
+  is given, and an explicit prop wins over that ancestor
+- `ScreenNav` renders the registered quick action in the nav's right slot; renders nothing there
+  when nothing is registered
+- `ScreenNav`'s quick-action slot renders as its own component instance rather than a bare inlined
+  function call, so a renderer with its own hook doesn't risk a Rules of Hooks violation when it
+  registers after ScreenNav has already rendered once
+- `PlaceholderScreen` renders its title and the not-built-yet message, and the registered quick
+  action — a placeholder tab is a screen too
+- a tab with no registered screen renders the placeholder
+- a tab with exactly one registered screen renders it directly
+- a tab with more than one registered screen renders an index of titles, and selecting one shows
+  it with a working back affordance
+- a selected screen is not double-wrapped in a second `ScreenNav` — every screen renders its own,
+  and the shell supplies the back action via `BackProvider`/context rather than wrapping it again
+- a freshly registered screen appears with zero changes to `App.tsx`
+- the registered quick action appears once in the multi-screen index, once in a selected screen,
+  on more than one active tab including a placeholder tab, and on a single-screen tab via that
+  screen's own `ScreenNav`
+- a non-OK response throws an error naming the method, path, and status
+- a 204 response is treated as absence, not a parse error
+- a 200 response parses as JSON
+- `DateEntry` renders a null value as blank and a given ISO value verbatim
+- `DateEntry` reports the new ISO value on change, and `null` when cleared
+- `DateEntry`'s date input survives its own input event — same DOM node before and after
+- `RecurrenceEditor` renders no rule as "does not repeat"
+- changing `RecurrenceEditor`'s kind reports a fresh rule for that kind, with its own defaults
+- changing the N field on an N-based rule updates only `n`
+- every non-matching `RecurrenceEditor` sub-field group carries the `hidden` attribute (the JS
+  half of the contract — `index.css`'s `[hidden] { display: none !important }` is the other half,
+  needed because `.stack`/`.chipset`'s own `display: flex` otherwise beats the UA `[hidden]` rule
+  regardless of specificity; that CSS half is E2E's to hold, since jsdom never loads index.css)
+- emptying "Every N" does not commit `n: 0`; typing an out-of-range "Day of month", "Month", or
+  yearly "Day" does not commit it either — `min`/`max` on a number input only constrain the
+  spinner, not a typed value
+- a completion-anchored rule renders the first-due date entry
+- `RecurrenceEditor`'s kind `<select>` survives its own change, and survives a sub-field's change
+- `OrdinalSlider` renders a labelled tick for every value, in order, and a hint naming the set
+  value
+- `OrdinalSlider` reports the value at the new slider index on change
+- `OrdinalSlider` shows a "leave at the default" toggle when a default is declared, pressed while
+  unset, and choosing it clears the value to `null`
+- `OrdinalSlider` has no "leave at the default" control when no default is declared
+- `OrdinalSlider` dims the slider with a class (never inline style) and shows index 0 while unset,
+  with a hint explaining the default; touching the slider while unset still commits a value
+- committing index 0 while unset (no `change` event fires, since the thumb already sits there) on
+  `pointerUp` still commits the least value, without remounting the slider or double-committing
+  once a value is already set
+- `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
+  — when `value` isn't present in `values` at all
+- `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
+  included — every control disabled
+- `OrdinalSlider`'s range input survives its own input event and a press of the default toggle —
+  same DOM node throughout
+
 ## `TaskGuide.E2E`
 
 - the landing page loads (#74 ARM64/Debian 12 Playwright smoke check)

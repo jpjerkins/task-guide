@@ -62,6 +62,16 @@ button {
   outline-offset: 2px;
 }
 
+/* `[hidden] { display: none }` lives in the UA stylesheet, so any author-origin `display`
+   declaration on the same element — `.stack`/`.chipset`'s `display: flex` included — wins over it
+   regardless of specificity or source order. RecurrenceEditor (#111) toggles its sub-field groups
+   with the `hidden` attribute precisely because ADR-0006 forbids a conditional-render branch swap,
+   so this rule is load-bearing, not decoration: without `!important` here, `hidden` on a
+   flex-classed element is silently ignored and every sub-field group renders at once. */
+[hidden] {
+  display: none !important;
+}
+
 .device {
   display: flex;
   flex-direction: column;
@@ -331,4 +341,29 @@ button {
 
 .chipset button:disabled {
   opacity: 0.5;
+}
+
+/* OrdinalSlider (#111), lifted from tag-entry.prototype.html's sheet (~850-862). */
+.range {
+  width: 100%;
+  height: 34px;
+  accent-color: var(--accent);
+}
+
+.range.unset {
+  opacity: 0.4;
+}
+
+.ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
 }
