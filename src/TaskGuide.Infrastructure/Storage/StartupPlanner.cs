@@ -54,7 +54,7 @@ public sealed class StartupPlanner(
         }
         catch (DuplicateDimensionValueException ex)
         {
-            return new StartupRefusal(new RegistryCollision(ex.Message));
+            return new StartupRefusal(new RegistryCollision(ex.Value, ex.ClaimedBy));
         }
 
         var migrationResult = PlanMigration();

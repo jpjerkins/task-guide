@@ -146,8 +146,9 @@ public sealed class StartupBootstrapTests : IDisposable
             if (refusal.IsT0)
             {
                 var collision = refusal.AsT0;
-                if (signal is not null) await signal(collision.Message, CancellationToken.None);
-                throw new DuplicateDimensionValueException(collision.Message, []);
+                var exception = new DuplicateDimensionValueException(collision.Value, collision.ClaimedBy);
+                if (signal is not null) await signal(exception.Message, CancellationToken.None);
+                throw exception;
             }
 
             var versionAhead = refusal.AsT1;
@@ -228,6 +229,40 @@ public sealed class StartupBootstrapTests : IDisposable
         Assert.Contains("garage", signalledMessage);
         Assert.False(Directory.Exists(SnapshotsDir));
         AssertNothingWasWritten("manifest.json");
+    }
+
+    /// <summary>
+    /// #78 review finding: <see cref="StartupBootstrap"/> used to hand its own already-formatted
+    /// message back into <see cref="DuplicateDimensionValueException"/>'s <c>value</c> parameter,
+    /// nesting it and reporting zero claimants. The expected message is derived from the registry's
+    /// own <see cref="DimensionRegistry.AssertNoDuplicateValues"/> rather than hard-coded, so this
+    /// test cannot drift from the formatter it is pinning.
+    /// </summary>
+    [Fact]
+    public async Task A_registry_collisions_outbound_signal_and_thrown_exception_carry_the_same_unnested_message()
+    {
+        WriteManifest(1);
+        var signalled = new List<string>();
+
+        DuplicateDimensionValueException expected;
+        try
+        {
+            CollidingRegistry().AssertNoDuplicateValues();
+            throw new InvalidOperationException("CollidingRegistry() did not collide.");
+        }
+        catch (DuplicateDimensionValueException ex)
+        {
+            expected = ex;
+        }
+
+        var thrown = await Assert.ThrowsAsync<DuplicateDimensionValueException>(() => BootstrapAsync(
+            registry: CollidingRegistry(),
+            signal: (message, _) => { signalled.Add(message); return Task.CompletedTask; }));
+
+        var signalledMessage = Assert.Single(signalled);
+        Assert.Equal(expected.Message, signalledMessage);
+        Assert.Equal(expected.Message, thrown.Message);
+        Assert.NotEmpty(thrown.ClaimedBy);
     }
 
     [Fact]

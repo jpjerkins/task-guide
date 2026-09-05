@@ -1,4 +1,5 @@
 using OneOf;
+using TaskGuide.Domain.Dimensions;
 
 namespace TaskGuide.Application.Ports;
 
@@ -53,8 +54,13 @@ public sealed record StartupPlan(
 [GenerateOneOf]
 public partial class StartupRefusal : OneOfBase<RegistryCollision, StoreVersionAhead>;
 
-/// <summary>A Dimension registry collision (#21) — a duplicate value declared by two Dimensions.</summary>
-public sealed record RegistryCollision(string Message);
+/// <summary>
+/// A Dimension registry collision (#21) — a duplicate value declared by two Dimensions. Carries the
+/// facts, not a pre-formatted message, so <see cref="DuplicateDimensionValueException"/> can be
+/// reconstructed byte-identical to the one <see cref="DimensionRegistry.AssertNoDuplicateValues"/>
+/// itself throws, instead of nesting a re-formatted string inside its own formatter (#78).
+/// </summary>
+public sealed record RegistryCollision(string Value, IReadOnlyList<DimensionId> ClaimedBy);
 
 /// <summary>`manifest.json`'s version (or a migration walk's landing version) is ahead of this
 /// binary's `ManifestCodec.CurrentVersion` — a rollback must not silently down-migrate.</summary>

@@ -42,12 +42,14 @@ public static class StartupBootstrap
             await result.AsT1.Match(
                 async collision =>
                 {
-                    await signalRegistryCollision(collision.Message, cancellationToken);
-                    // Reconstructs a representative exception: RegistryCollision (ADR-0009's
-                    // refusal union) carries only the formatted message, not the original
-                    // claimants, and nothing downstream inspects Value/ClaimedBy on this path —
-                    // only the type and the message text (which still names the colliding value).
-                    throw new DuplicateDimensionValueException(collision.Message, []);
+                    // Reconstructs the exception from the facts RegistryCollision carries (#78) so
+                    // its Message is formatted exactly once, by DuplicateDimensionValueException
+                    // itself — the operator signal and the thrown exception then say the same
+                    // thing, rather than the signal nesting an already-formatted string back into
+                    // the formatter's own value parameter.
+                    var exception = new DuplicateDimensionValueException(collision.Value, collision.ClaimedBy);
+                    await signalRegistryCollision(exception.Message, cancellationToken);
+                    throw exception;
                 },
                 versionAhead => throw new StoreVersionAheadException(versionAhead.StoredVersion, versionAhead.CurrentVersion));
         }

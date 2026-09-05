@@ -614,6 +614,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - a valid plan snapshots, migrates, stamps the manifest, then writes, in that order (#78)
 - the runtime store opened after the write phase reads what the write phase landed (#78)
 - an empty `/data` bootstraps and `IDayShapeReader` returns a usable `DayShape` (#78)
+- a registry collision's outbound signal and its thrown exception carry the same, unnested message (#78)
 - `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
