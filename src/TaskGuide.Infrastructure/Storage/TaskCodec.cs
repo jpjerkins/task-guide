@@ -93,19 +93,17 @@ public static class TaskCodec
 
         writer.WritePropertyName(property);
         writer.WriteStartObject();
-        switch (defer)
-        {
-            case AbsoluteDefer absolute:
+        defer.Switch(
+            absolute =>
+            {
                 writer.WriteString("kind", "absolute");
                 CodecPrimitives.WriteDateOrNull(writer, "date", absolute.Date);
-                break;
-            case OffsetDefer offset:
+            },
+            offset =>
+            {
                 writer.WriteString("kind", "offset");
                 CodecPrimitives.WriteOffsetOrNull(writer, "offset", offset.Offset);
-                break;
-            default:
-                throw new JsonException($"Unknown Defer type '{defer.GetType()}'");
-        }
+            });
 
         writer.WriteEndObject();
     }

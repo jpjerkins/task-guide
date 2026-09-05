@@ -160,20 +160,18 @@ public static class CodecPrimitives
     private static void WriteOffset(Utf8JsonWriter w, Offset offset)
     {
         w.WriteStartObject();
-        switch (offset)
-        {
-            case BeforeOffset before:
+        offset.Switch(
+            before =>
+            {
                 w.WriteString("kind", "before");
                 w.WriteNumber("n", before.N);
                 w.WriteString("unit", WriteOffsetUnit(before.Unit));
-                break;
-            case LastWeekdayBefore lastWeekdayBefore:
+            },
+            lastWeekdayBefore =>
+            {
                 w.WriteString("kind", "lastWeekdayBefore");
                 w.WriteString("weekday", lastWeekdayBefore.Weekday.ToString().ToLowerInvariant());
-                break;
-            default:
-                throw new JsonException($"Unknown Offset type '{offset.GetType()}'");
-        }
+            });
 
         w.WriteEndObject();
     }

@@ -19,7 +19,7 @@ public sealed class OffsetTests
 
         var offset = new BeforeOffset(n, unit);
 
-        Assert.Equal(expected, offset.ResolveAgainst(anchor));
+        Assert.Equal(expected, OffsetRules.ResolveAgainst(offset, anchor));
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public sealed class OffsetTests
         var anchor = new DateOnly(2026, 8, 28); // a Friday
         var offset = new LastWeekdayBefore(DayOfWeek.Friday);
 
-        var resolved = offset.ResolveAgainst(anchor);
+        var resolved = OffsetRules.ResolveAgainst(offset, anchor);
 
         Assert.Equal(new DateOnly(2026, 8, 21), resolved); // the Friday before, not its own morning
     }
@@ -39,7 +39,7 @@ public sealed class OffsetTests
         var anchor = new DateOnly(2026, 8, 29); // a Saturday
         var offset = new LastWeekdayBefore(DayOfWeek.Friday);
 
-        var resolved = offset.ResolveAgainst(anchor);
+        var resolved = OffsetRules.ResolveAgainst(offset, anchor);
 
         Assert.Equal(new DateOnly(2026, 8, 28), resolved);
     }
@@ -50,7 +50,7 @@ public sealed class OffsetTests
         var anchor = new DateOnly(2026, 3, 31);
         var offset = new BeforeOffset(1, OffsetUnit.Months);
 
-        var resolved = offset.ResolveAgainst(anchor);
+        var resolved = OffsetRules.ResolveAgainst(offset, anchor);
 
         // February 2026 has 28 days — must not throw and must not silently roll into March.
         Assert.Equal(new DateOnly(2026, 2, 28), resolved);

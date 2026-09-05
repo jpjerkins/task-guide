@@ -213,7 +213,7 @@ public sealed class AbsenceRule : IDerivedObligationRule
                 continue;
             }
 
-            var due = commitment.AbsenceNotice!.ResolveAgainst(first);
+            var due = OffsetRules.ResolveAgainst(commitment.AbsenceNotice!, first);
             var triggerId = TriggerId(commitment, first);
 
             if (DerivedTask.IsDone(context, Id, triggerId, due))
@@ -382,7 +382,7 @@ public sealed class TagDeclaredRule : IDerivedObligationRule
                 continue;
             }
 
-            var due = _lead.ResolveAgainst(trigger.Date);
+            var due = OffsetRules.ResolveAgainst(_lead, trigger.Date);
 
             if (DerivedTask.IsDone(context, _id, trigger.Id.Value, due))
             {
