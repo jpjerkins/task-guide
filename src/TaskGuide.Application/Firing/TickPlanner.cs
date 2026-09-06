@@ -36,11 +36,11 @@ public sealed class TickPlanner(
         var date = _boundary.DateOf(now);
         var shape = _shapes.For(date);
         var fires = view.FiresOn(date).Rows;
+        var dayFires = view.FiresOn(date);
+        var carrier = Fallback.CarrierFor(view, date);
+        var carried = Fallback.IsCarried(dayFires);
         var counter = new OpportunityCounter(_shapes, _registry, _resolution, _boundary);
-        var events = shape.Events
-            .OrderBy(e => e.Date)
-            .Select(e => new EventLine(e.Id, e.Name, e.Date.DayOfWeek))
-            .ToArray();
+        var events = Fallback.EventsForFooter(shape.Events, view, date);
         var footer = Footer(view, counter, now);
         var intents = new List<FireIntent>();
 
@@ -49,7 +49,7 @@ public sealed class TickPlanner(
             var resolved = _resolution.ResolveWindow(date, window);
             if (resolved is null || !FiringPolicy.IsWindowDue(window, resolved.Start, now)
                 || !FiringPolicy.IsWindowAlive(window, resolved.End, now)
-                || fires.Any(row => row.WindowId == window.Id && row.Kind == FireKind.Window && row.IsFired))
+                || fires.Any(row => row.WindowId == window.Id && row.IsFired))
             {
                 continue;
             }
@@ -69,30 +69,43 @@ public sealed class TickPlanner(
                     _registry))
                 .ToList();
 
-            if (matches.Count == 0) continue;
+            var unconditional = carrier is not null && !carried;
+            if (matches.Count == 0 && !unconditional) continue;
 
             var ranked = Rank(matches, counter, now, fetched, failedFetches);
+            FireIntentKind kind = unconditional ? new UnconditionalFire() : new WindowFire(resolved);
+            var dayBoundary = _boundary.EndOf(date);
             intents.Add(new FireIntent(
-                new WindowFire(resolved),
+                kind,
                 ranked,
-                ReminderComposer.Compose(
-                    new WindowFire(resolved),
-                    ranked,
-                    events,
-                    footer,
-                    failedFetches,
-                    _landingPage,
-                    resolved.End),
+                ranked.Count > 0
+                    ? ReminderComposer.Compose(kind, ranked, events, footer, failedFetches, _landingPage,
+                        TimeToLivePolicy.For(kind, dayBoundary))
+                    : Fallback.Intent(
+                        carrier ?? throw new InvalidOperationException("An unconditional fire requires a carrier Event."),
+                        events,
+                        footer,
+                        failedFetches,
+                        _landingPage,
+                        dayBoundary).Reminder,
                 new FireRow(
                     window.Id,
-                    FireKind.Window,
+                    unconditional ? FireKind.Unconditional : FireKind.Window,
                     window.Name,
                     window.Start,
                     window.End,
                     DueAt: null,
                     FiredAt: null,
                     Matched: ranked.Count,
-                    Carried: null)));
+                    Carried: unconditional ? carrier?.Id : null)));
+
+            carried |= unconditional;
+        }
+
+        if (carrier is { } fallbackCarrier
+            && Fallback.IsDue(fallbackCarrier, shape.Windows, dayFires, now, _resolution, _boundary))
+        {
+            intents.Add(Fallback.Intent(fallbackCarrier, events, footer, failedFetches, _landingPage, _boundary.EndOf(date)));
         }
 
         return new TickPlan(intents.ToArray(), Glance: null);
