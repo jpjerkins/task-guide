@@ -36,16 +36,12 @@ public sealed class TickService(IStore store, TickPlanner planner, TickExecutor 
         }
 
         var outcome = await _weather.CurrentAsync(cancellationToken);
-        if (outcome.Value is Known<IReadOnlyList<TagValue>> known)
-        {
-            return (new Dictionary<DimensionId, IReadOnlyList<TagValue>> { [KnownDimensions.Weather] = known.Value }, []);
-        }
-
-        if (outcome.Value is Unavailable)
-        {
-            return (new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [KnownDimensions.Weather]);
-        }
-
-        throw new InvalidOperationException("Every fetch outcome must be known or unavailable.");
+        return outcome.Match(
+            known => ((IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>>)new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Weather] = known.Value,
+            }, (IReadOnlyList<DimensionId>)[]),
+            unavailable => ((IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>>)new Dictionary<DimensionId, IReadOnlyList<TagValue>>(),
+                (IReadOnlyList<DimensionId>)[KnownDimensions.Weather]));
     }
 }

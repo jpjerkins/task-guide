@@ -14,11 +14,12 @@ public sealed class GlanceScheduling(IGlanceSender sender)
     private GlanceState? _lastSent;
     private DateTimeOffset? _lastSentAt;
     private bool _retryPending;
+    private GlanceState? _retryExhausted;
 
     public async Task SendAsync(GlanceState next, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var retrying = _retryPending;
-        if (!retrying && !ShouldSend(next, now))
+        if (!retrying && (_retryExhausted?.Equals(next) is true || !ShouldSend(next, now)))
         {
             return;
         }
@@ -29,10 +30,18 @@ public sealed class GlanceScheduling(IGlanceSender sender)
             _lastSent = next;
             _lastSentAt = now;
             _retryPending = false;
+            _retryExhausted = null;
             return;
         }
 
-        _retryPending = !retrying;
+        if (retrying)
+        {
+            _retryPending = false;
+            _retryExhausted = next;
+            return;
+        }
+
+        _retryPending = true;
     }
 
     private bool ShouldSend(GlanceState next, DateTimeOffset now) =>

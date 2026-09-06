@@ -84,15 +84,14 @@ public sealed class GlanceSendingTests
     [Fact]
     public async Task one_retry_at_the_next_tick_ignoring_the_floor_never_two()
     {
-        var sender = new RecordingGlanceSender();
-        sender.FailNextSend();
+        var sender = new RejectingGlanceSender();
         var scheduling = new GlanceScheduling(sender);
 
         await scheduling.SendAsync(State("first"), Now, CancellationToken.None);
         await scheduling.SendAsync(State("first"), Now.AddSeconds(30), CancellationToken.None);
-        await scheduling.SendAsync(State("changed"), Now.AddMinutes(1), CancellationToken.None);
+        await scheduling.SendAsync(State("first"), Now.AddMinutes(1), CancellationToken.None);
 
-        Assert.Equal([State("first"), State("first")], sender.Sent);
+        Assert.Equal(2, sender.Calls);
     }
 
     [Fact]
@@ -143,5 +142,16 @@ public sealed class GlanceSendingTests
     private sealed class NoopRetention : IFireRetention
     {
         public FireSweepResult Sweep(DateOnly today) => new([], []);
+    }
+
+    private sealed class RejectingGlanceSender : IGlanceSender
+    {
+        public int Calls { get; private set; }
+
+        public Task<bool> SendGlanceAsync(GlanceState state, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(false);
+        }
     }
 }
