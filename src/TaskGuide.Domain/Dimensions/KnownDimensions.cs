@@ -24,7 +24,7 @@ public static class KnownDimensions
     public static DimensionRegistry Default { get; } = new([
         new CategoricalDimension(Location, "Location", [new("home"), new("garage"), new("outside"), new("desk")]),
         new CategoricalDimension(WithWhom, "With whom", [new("sam"), new("ana"), new("carrie"), new("the kids")]),
-        new CategoricalDimension(Weather, "Weather", [new("dry"), new("sunny")], WindowValueSource.Fetched),
+        new CategoricalDimension(Weather, "Weather", [new("dry"), new("wet"), new("snow")], WindowValueSource.Fetched),
         new OrdinalDimension(MentalEnergy, "Mental energy",
             [new("low"), new("medium"), new("high")],
             TaskDefault: new("low"), WindowDefault: new("low")),

@@ -42,7 +42,7 @@ public sealed class OpportunitiesTests
         CreatedAt: Resolution.Resolve(new DateOnly(2026, 8, 1), new TimeOnly(9, 0)));
 
     /// <summary>The same Task, plus a Tag on the one axis whose Window-side value is fetched.</summary>
-    private static TaskItem SunnyHalfHourTask()
+    private static TaskItem WetHalfHourTask()
     {
         var plain = HalfHourTask();
 
@@ -51,7 +51,7 @@ public sealed class OpportunitiesTests
             Tags = new TagSet(
                 new Dictionary<DimensionId, IReadOnlyList<TagValue>>(plain.Tags.Dimensions)
                 {
-                    [KnownDimensions.Weather] = [new TagValue("sunny")],
+                    [KnownDimensions.Weather] = [new TagValue("wet")],
                 },
                 Array.Empty<LooseTag>()),
         };
@@ -67,6 +67,14 @@ public sealed class OpportunitiesTests
 
     private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> NoFetchedValues =
         new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
+    [Fact]
+    public void Weather_values_describe_precipitation_not_cloud_cover()
+    {
+        var weather = Assert.Single(KnownDimensions.Default.Dimensions, dimension => dimension.Id.Equals(KnownDimensions.Weather)).AsT0;
+
+        Assert.Equal([new TagValue("dry"), new TagValue("wet"), new TagValue("snow")], weather.DeclaredValues);
+    }
 
     /// <summary>The only view of the calendar: a shape per date, and reading one never writes one.</summary>
     private sealed class FakeShapes(Func<DateOnly, DayShape> shapeOf) : IDayShapeReader
@@ -274,13 +282,13 @@ public sealed class OpportunitiesTests
         var workday = new DayTemplate(new DayTemplateId("dt_workday"), "Workday", [Window("w_evening", 18, 19)], []);
         var pattern = new Pattern(new PatternId("p_normal"), "Normal", [.. Enumerable.Repeat(workday.Id, 7)]);
         var counter = CounterOver(EveryDay(Window("w_evening", 18, 19)));
-        var sunny = SunnyHalfHourTask();
+        var wet = WetHalfHourTask();
 
         // Could any Window in the active Pattern *ever* admit this Task? The weather is not a
         // constraint on that question — no Window declares a Weather value and none ever could,
         // so failing it closed here would badge a perfectly well-formed Task as an Orphan and
         // send the user to declare a Tag on a Dimension whose window side is blank by design.
-        var patternWeekCount = counter.CountInPatternWeek(sunny, pattern, [workday], Tuesday);
+        var patternWeekCount = counter.CountInPatternWeek(wet, pattern, [workday], Tuesday);
 
         Assert.Equal(7, patternWeekCount);
         Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
@@ -295,15 +303,15 @@ public sealed class OpportunitiesTests
         // The same seven Windows the untagged Task counts. Nothing has been fetched for a Window
         // three days out, and unknown resolves to the empty set — so this one counts none.
         Assert.Equal(7, counter.CountAhead(HalfHourTask(), now, NoFetchedValues));
-        Assert.Equal(0, counter.CountAhead(SunnyHalfHourTask(), now, NoFetchedValues));
+        Assert.Equal(0, counter.CountAhead(WetHalfHourTask(), now, NoFetchedValues));
 
         var currentAndFuture = CounterOver(EveryDay(Window("w_midday", 11, 13)));
         var currentWeather = new Dictionary<DimensionId, IReadOnlyList<TagValue>>
         {
-            [KnownDimensions.Weather] = [new TagValue("sunny")],
+            [KnownDimensions.Weather] = [new TagValue("wet")],
         };
 
-        Assert.Equal(1, currentAndFuture.CountAhead(SunnyHalfHourTask(), now, currentWeather));
+        Assert.Equal(1, currentAndFuture.CountAhead(WetHalfHourTask(), now, currentWeather));
     }
 
     [Fact]

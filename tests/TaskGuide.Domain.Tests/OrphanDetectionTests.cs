@@ -303,7 +303,7 @@ public sealed class OrphanDetectionTests
     public void A_fetched_axis_never_makes_a_zero_read_as_an_Orphan()
     {
         var counter = CounterOver(EveryDay(Evening));
-        var sunny = Item("t_sunny", Tags((KnownDimensions.Duration, "30"), (KnownDimensions.Weather, "sunny")));
+        var sunny = Item("t_sunny", Tags((KnownDimensions.Duration, "30"), (KnownDimensions.Weather, "wet")));
         var patternWeekCount = PatternWeekCount(sunny, Workday);
 
         // Nothing is fetched for a Window days out and unknown fails closed, so this Task has no

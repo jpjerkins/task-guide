@@ -439,6 +439,12 @@ UI-visible footer note) is A2 → `TaskGuide.Infrastructure.Tests`.
 - a firing uses current conditions; a future evaluation uses the forecast
 - unknown weather matches nothing (fails closed) in both headless and UI-visible cases
 - only the UI-visible case adds the footer note
+- Weather values describe precipitation, not cloud cover
+- current conditions are memoized for one tick interval
+- a bulk forecast fetch serves point queries until its TTL expires
+- a distant forecast point uses daily resolution
+- an unavailable weather fetch is never represented as an empty value set
+- a timed-out weather fetch is unavailable
 
 ### Capture and Receipt
 
