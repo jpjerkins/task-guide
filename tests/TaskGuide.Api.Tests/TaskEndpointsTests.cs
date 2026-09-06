@@ -139,6 +139,26 @@ public sealed class TaskEndpointsTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Completing_a_derived_Task_writes_its_ruleId_triggerId_due_derived_completion_fact()
+    {
+        var due = new DateOnly(2026, 9, 8);
+        var derived = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAX") with
+        {
+            Deadline = due,
+            Provenance = new DerivedProvenance(new RuleId("absence"), "event_1"),
+        };
+        await SeedTasksAsync(derived);
+
+        var response = await _client.PostAsync($"/api/tasks/{derived.Id.Value}/completions", content: null);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var derivedCompletion = Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().DerivedCompletions);
+        Assert.Equal(new RuleId("absence"), derivedCompletion.RuleId);
+        Assert.Equal("event_1", derivedCompletion.TriggerId);
+        Assert.Equal(due, derivedCompletion.Due);
+    }
+
     private async Task SeedTasksAsync(params TaskItem[] tasks)
     {
         var store = _factory.Services.GetRequiredService<IStore>();

@@ -731,6 +731,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `PUT /api/right-now/matching-on` is refused on a landing page past its Reminder's day boundary
 - marking off is accepted on that same stale page
 - `POST /api/tasks/{id}/completions` is refused on an `Unprocessed` Task
+- completing a derived Task writes its `(ruleId, triggerId, due)` derived-completion fact
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date

@@ -23,6 +23,11 @@ public sealed class DeferTask(IStore store)
                 return new DeferRefused("A recurring Task requires an offset Defer");
             }
 
+            if (task.Provenance is not null)
+            {
+                return new DeferRefused("A derived Task cannot be deferred");
+            }
+
             var updated = task with { Defer = defer };
             return OneOf<StoreMutation, DeferRefused>.FromT0(
                 new StoreMutation([new TasksWrite((IReadOnlyList<TaskItem>)[.. view.Tasks.Select(candidate => candidate.Id.Equals(id) ? updated : candidate)])]));

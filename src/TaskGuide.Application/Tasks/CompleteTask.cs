@@ -32,6 +32,18 @@ public sealed class CompleteTask(
                 return new CompletionRefused("An Unprocessed Task cannot be completed");
             }
 
+            if (task.Provenance is { } provenance)
+            {
+                if (task.Deadline is not { } deadline)
+                {
+                    return new CompletionRefused("A derived Task requires a deadline");
+                }
+
+                var completion = new DerivedCompletionEntry(provenance.RuleId, provenance.TriggerId, deadline, now);
+                return OneOf<StoreMutation, CompletionRefused>.FromT0(
+                    new StoreMutation([new DerivedCompletionsWrite([.. view.DerivedCompletions, completion])]));
+            }
+
             var due = task.Recurrence is { } recurrence
                 ? RecurrenceRules.LiveInstanceDeadline(recurrence, task.CreatedAt, log, now, boundary)
                 : task.Deadline;
