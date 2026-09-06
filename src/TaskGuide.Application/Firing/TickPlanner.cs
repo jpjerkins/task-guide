@@ -17,13 +17,15 @@ public sealed class TickPlanner(
     DimensionRegistry registry,
     ClockTimeResolution resolution,
     DayBoundary boundary,
-    StaleThresholds staleThresholds)
+    StaleThresholds staleThresholds,
+    Uri landingPage)
 {
     private readonly IDayShapeReader _shapes = shapes;
     private readonly DimensionRegistry _registry = registry;
     private readonly ClockTimeResolution _resolution = resolution;
     private readonly DayBoundary _boundary = boundary;
     private readonly StaleThresholds _staleThresholds = staleThresholds;
+    private readonly Uri _landingPage = landingPage;
 
     public TickPlan Plan(
         IStoreView view,
@@ -35,6 +37,11 @@ public sealed class TickPlanner(
         var shape = _shapes.For(date);
         var fires = view.FiresOn(date).Rows;
         var counter = new OpportunityCounter(_shapes, _registry, _resolution, _boundary);
+        var events = shape.Events
+            .OrderBy(e => e.Date)
+            .Select(e => new EventLine(e.Id, e.Name, e.Date.DayOfWeek))
+            .ToArray();
+        var footer = Footer(view, counter, now);
         var intents = new List<FireIntent>();
 
         foreach (var window in shape.Windows)
@@ -68,7 +75,14 @@ public sealed class TickPlanner(
             intents.Add(new FireIntent(
                 new WindowFire(resolved),
                 ranked,
-                resolved.End,
+                ReminderComposer.Compose(
+                    new WindowFire(resolved),
+                    ranked,
+                    events,
+                    footer,
+                    failedFetches,
+                    _landingPage,
+                    resolved.End),
                 new FireRow(
                     window.Id,
                     FireKind.Window,
@@ -106,5 +120,25 @@ public sealed class TickPlanner(
             .OfType<OrdinalDimension>()
             .Single(dimension => dimension.Id == KnownDimensions.Duration);
         return TaskGuide.Domain.Matching.DurationCeiling.WindowCeiling(window.End - now, duration.OrderedValues);
+    }
+
+    private FooterCounts Footer(IStoreView view, OpportunityCounter counter, DateTimeOffset now)
+    {
+        var statuses = view.Tasks.Select(task => (task, status: StatusRules.Of(
+            task,
+            view.CompletionsFor(task.Id),
+            _registry,
+            _staleThresholds,
+            now,
+            _boundary))).ToArray();
+        var weekOf = _boundary.DateOf(now).AddDays(-(int)_boundary.DateOf(now).DayOfWeek);
+
+        return new FooterCounts(
+            statuses.Count(entry => entry.status == Status.Unprocessed),
+            statuses.Count(entry => entry.status == Status.Stale),
+            statuses.Count(entry => entry.status == Status.Active
+                && OrphanDetection.IsTaskOrphan(
+                    entry.status,
+                    counter.CountInPatternWeek(entry.task, view.Patterns.Active, view.DayTemplates, weekOf))));
     }
 }

@@ -2,6 +2,7 @@ using TaskGuide.Application.Firing;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Firing;
+using TaskGuide.Domain.Notifications;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
@@ -34,7 +35,8 @@ public sealed class TickPlannerTests
         Assert.Equal(FireKind.Window, intent.FireRow.Kind);
         Assert.Equal(1, intent.FireRow.Matched);
         Assert.Equal([task], intent.Shortlist);
-        Assert.Equal(resolved.End, intent.TimeToLive);
+        var reminder = Assert.IsType<Reminder>(typeof(FireIntent).GetProperty("Reminder")?.GetValue(intent));
+        Assert.Equal(resolved.End, reminder.TimeToLive);
         Assert.Null(plan.Glance);
     }
 
@@ -80,7 +82,7 @@ public sealed class TickPlannerTests
             []);
 
         var intent = Assert.Single(plan.Fires);
-        Assert.Equal(Resolution.Resolve(Today, new TimeOnly(10, 0)), intent.TimeToLive);
+        Assert.Equal(Resolution.Resolve(Today, new TimeOnly(10, 0)), intent.Reminder.TimeToLive);
         Assert.Equal([Task("t_hour", duration: "60")], intent.Shortlist);
     }
 
@@ -135,7 +137,7 @@ public sealed class TickPlannerTests
     }
 
     private static TickPlanner Planner(FakeDayShapeReader shapes) =>
-        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds);
+        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, new Uri("https://taskguide.example/"));
 
     private static FakeStoreView View(params TaskItem[] tasks) =>
         new FakeStoreViewBuilder().WithTasks(tasks).WithFires(Today, new DayFires(Today, [])).Build();

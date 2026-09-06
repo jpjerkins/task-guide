@@ -44,6 +44,7 @@ var store = await StartupBootstrap.BootstrapAndOpenStoreAsync(
 
 builder.Services.AddSingleton<IStore>(store);
 builder.Services.AddSingleton<IStoreReader>(store);
+builder.Services.AddSingleton<IFireRetention>(_ => new FireRetentionSweep(dataDir));
 builder.Services.AddSingleton(KnownDimensions.Default);
 // AddPushover below also TryAddSingleton(TimeProvider.System); kept here instead because this is
 // where the process-wide clock is first needed (the bootstrap call above), and a reader shouldn't
