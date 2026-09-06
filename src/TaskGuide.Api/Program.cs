@@ -11,6 +11,7 @@ using TaskGuide.Infrastructure.BackgroundServices;
 using TaskGuide.Infrastructure.Configuration;
 using TaskGuide.Infrastructure.Ids;
 using TaskGuide.Infrastructure.Storage;
+using TaskGuide.Infrastructure.Weather;
 
 // One container: API + SPA + the ~30s tick loop (#5, #6). Host-mode port 8007, tailnet-only,
 // TLS via Tailscale Serve, no auth — single user, gated at the network layer.
@@ -65,6 +66,10 @@ builder.Services.AddSingleton(new StaleThresholds(
     ConsecutiveMissedInstances: builder.Configuration.GetValue("Stale:ConsecutiveMissedInstances", 3)));
 builder.Services.AddPushover(builder.Configuration);
 builder.Services.AddHealthReporter(dataDir);
+// Singleton because the adapter's cache lives in the instance; its named client keeps
+// IHttpClientFactory's handler rotation (same reason as AddPushover).
+builder.Services.AddHttpClient(OpenMeteoWeatherSource.HttpClientName);
+builder.Services.AddSingleton<IWeatherSource, OpenMeteoWeatherSource>();
 // Explicit factory, not a naked Uri singleton: registering Uri itself would make it resolvable
 // (and swappable) by anything else in the container, when it's really just a TickPlanner ctor arg.
 builder.Services.AddSingleton(provider => new TickPlanner(

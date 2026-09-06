@@ -136,6 +136,12 @@ another lane owns, **stop and report it rather than editing it** — that report
 contract was wrong. This includes any `.csproj` or `task-guide.slnx` change: the integration lane
 owns every project file. Ask, don't edit.
 
+`Api/Program.cs` is the standing case, and the answer is never an ownership amendment: a new
+constructor dependency on a port makes API startup fail with *Unable to resolve service for type
+`IPort`*. Report the registration you need — the concrete type and its ctor args — and the
+integration lane wires it, usually the same day. Your lane's own tests still have to be green; API
+tests red on that one DI error alone are not a blocker.
+
 ## 7. Before opening a PR
 
 ```sh
