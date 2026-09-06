@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using OneOf.Types;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Firing;
+using TaskGuide.Domain.Notifications;
 using TaskGuide.Domain.Time;
 
 namespace TaskGuide.Application.Firing;
@@ -10,6 +11,7 @@ namespace TaskGuide.Application.Firing;
 public sealed class TickExecutor(
     IStore store,
     IReminderSender reminders,
+    IGlanceSender glances,
     ITickHeartbeat heartbeat,
     IFireRetention retention,
     DayBoundary boundary,
@@ -17,6 +19,7 @@ public sealed class TickExecutor(
 {
     private readonly IStore _store = store;
     private readonly IReminderSender _reminders = reminders;
+    private readonly GlanceScheduling _glanceScheduling = new(glances);
     private readonly ITickHeartbeat _heartbeat = heartbeat;
     private readonly IFireRetention _retention = retention;
     private readonly DayBoundary _boundary = boundary;
@@ -31,11 +34,32 @@ public sealed class TickExecutor(
                 await DeliverAsync(intent, now, cancellationToken);
             }
 
+            if (plan.Glance is { } glance)
+            {
+                await DeliverGlanceAsync(glance, now, cancellationToken);
+            }
+
             RunSweep(_boundary.DateOf(now), cancellationToken);
         }
         finally
         {
             _heartbeat.RecordTick(now);
+        }
+    }
+
+    private async Task DeliverGlanceAsync(GlanceState glance, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _glanceScheduling.SendAsync(glance, now, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Glance update failed.");
         }
     }
 

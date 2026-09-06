@@ -37,7 +37,10 @@ public sealed class TickPlannerTests
         Assert.Equal([task], intent.Shortlist);
         var reminder = Assert.IsType<Reminder>(typeof(FireIntent).GetProperty("Reminder")?.GetValue(intent));
         Assert.Equal(resolved.End, reminder.TimeToLive);
-        Assert.Null(plan.Glance);
+        var glance = Assert.IsType<GlanceState>(plan.Glance);
+        var inside = Assert.IsType<InsideWindow>(glance.Shape.Value);
+        Assert.Equal(window.Id, inside.Window.Window.Id);
+        Assert.Equal([task], inside.Shortlist);
     }
 
     [Fact]

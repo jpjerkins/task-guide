@@ -108,8 +108,73 @@ public sealed class TickPlanner(
             intents.Add(Fallback.Intent(fallbackCarrier, events, footer, failedFetches, _landingPage, _boundary.EndOf(date)));
         }
 
-        return new TickPlan(intents.ToArray(), Glance: null);
+        return new TickPlan(intents.ToArray(), Glance(view, date, shape, now, fetched, failedFetches));
     }
+
+    /// <summary>
+    /// Weather is fetched only for an Active Task that actually constrains it. The tick owns this
+    /// decision because an adapter cannot inspect the store-derived Status.
+    /// </summary>
+    public bool NeedsWeather(IStoreView view, DateTimeOffset now) =>
+        view.Tasks.Any(task =>
+            task.Tags.On(KnownDimensions.Weather).Count > 0
+            && StatusRules.Of(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, now, _boundary) is Status.Active);
+
+    private GlanceState? Glance(
+        IStoreView view,
+        DateOnly date,
+        DayShape shape,
+        DateTimeOffset now,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
+        IReadOnlyList<DimensionId> failedFetches)
+    {
+        var counter = new OpportunityCounter(_shapes, _registry, _resolution, _boundary);
+        var count = view.Tasks.Count(task => StatusRules.Of(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, now, _boundary) is not Status.Done);
+        var live = shape.Windows
+            .Select(window => _resolution.ResolveWindow(date, window))
+            .FirstOrDefault(window => window is not null && FiringPolicy.IsWindowDue(window.Window, window.Start, now) && FiringPolicy.IsWindowAlive(window.Window, window.End, now));
+
+        if (live is not null)
+        {
+            var matches = Matches(view, live, now, now, fetched, failedFetches);
+            if (matches.Count > 0)
+            {
+                return new GlanceState(count, new InsideWindow(live, Rank(matches, counter, now, fetched, failedFetches), matches.Count));
+            }
+        }
+
+        var next = NextWindow(date, now);
+        if (next is null) return null;
+
+        var nextMatches = Matches(view, next, next.Start, now, fetched, failedFetches);
+        return new GlanceState(count, new NextWindow(next, Rank(nextMatches, counter, now, fetched, failedFetches)));
+    }
+
+    private ResolvedWindow? NextWindow(DateOnly date, DateTimeOffset now)
+    {
+        for (var offset = 0; offset < 8; offset++)
+        {
+            var candidateDate = date.AddDays(offset);
+            var candidate = _shapes.For(candidateDate).Windows
+                .Select(window => _resolution.ResolveWindow(candidateDate, window))
+                .FirstOrDefault(window => window is not null && window.Start > now);
+            if (candidate is not null) return candidate;
+        }
+
+        return null;
+    }
+
+    private List<TaskItem> Matches(
+        IStoreView view,
+        ResolvedWindow window,
+        DateTimeOffset evaluationAt,
+        DateTimeOffset statusAt,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
+        IReadOnlyList<DimensionId> failedFetches) =>
+        view.Tasks
+            .Where(task => StatusRules.IsEligible(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, statusAt, _boundary))
+            .Where(task => Matcher.Fits(task, new MatchContext(window.Window, DurationCeiling(window, evaluationAt), fetched, failedFetches), _registry))
+            .ToList();
 
     private IReadOnlyList<TaskItem> Rank(
         IReadOnlyList<TaskItem> matches,

@@ -17,11 +17,15 @@ public sealed class TickExecutorTests
     private static readonly DateTimeOffset Now = new(2026, 9, 6, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void A_tick_executor_delivers_planned_intents_without_deciding_them()
+    public async Task A_tick_executor_delivers_planned_intents_without_deciding_them()
     {
-        var executor = typeof(TickPlan).Assembly.GetType("TaskGuide.Application.Firing.TickExecutor");
+        var store = new FakeStore();
+        var glances = new RecordingGlanceSender();
+        var executor = Executor(store, new RecordingReminderSender(), new RecordingTickHeartbeat(), new RecordingRetention(), glances);
 
-        Assert.NotNull(executor);
+        await executor.ExecuteAsync(new TickPlan([], Glance()), Now, CancellationToken.None);
+
+        Assert.Single(glances.Sent);
     }
 
     [Fact]
@@ -102,8 +106,11 @@ public sealed class TickExecutorTests
         FakeStore store,
         RecordingReminderSender reminders,
         RecordingTickHeartbeat heartbeat,
-        RecordingRetention retention) =>
-        new(store, reminders, heartbeat, retention, Boundary, NullLogger<TickExecutor>.Instance);
+        RecordingRetention retention,
+        RecordingGlanceSender? glances = null) =>
+        new(store, reminders, glances ?? new RecordingGlanceSender(), heartbeat, retention, Boundary, NullLogger<TickExecutor>.Instance);
+
+    private static GlanceState Glance() => new(0, new NextWindow(Intent("glance").Kind.AsT0.Window, []));
 
     private static FireIntent Intent(string windowId)
     {
