@@ -32,7 +32,10 @@ public static class TaskCodec
                 ReadDefer(element, "defer"),
                 CodecPrimitives.ReadDateOrNull(element, "postpone"),
                 ReadRecurrence(element, "recurrence"),
-                CodecPrimitives.ReadInstant(element.GetProperty("createdAt")));
+                CodecPrimitives.ReadInstant(element.GetProperty("createdAt")))
+            {
+                Source = ReadOptionalNullableString(element, "source"),
+            };
 
             tasks.Add(task);
         }
@@ -51,6 +54,7 @@ public static class TaskCodec
             writer.WriteString("id", task.Id.Value);
             writer.WriteString("title", task.Title);
             if (task.Notes is null) writer.WriteNull("notes"); else writer.WriteString("notes", task.Notes);
+            if (task.Source is not null) writer.WriteString("source", task.Source);
 
             CodecPrimitives.WriteTagSet(writer, task.Tags);
 
@@ -72,6 +76,11 @@ public static class TaskCodec
         var value = element.GetProperty(property);
         return value.ValueKind == JsonValueKind.Null ? null : value.GetString();
     }
+
+    private static string? ReadOptionalNullableString(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value)
+            ? value.ValueKind == JsonValueKind.Null ? null : value.GetString()
+            : null;
 
     private static Defer? ReadDefer(JsonElement element, string property)
     {

@@ -30,6 +30,12 @@ public sealed record TaskItem(
     DateTimeOffset CreatedAt)
 {
     /// <summary>
+    /// The open capture-path value that created this Task. Older Tasks have no recorded source;
+    /// new captures retain their value verbatim so their provenance survives the request.
+    /// </summary>
+    public string? Source { get; init; }
+
+    /// <summary>
     /// A derived Task is a projection of a trigger through a rule: read-only, no lifecycle,
     /// nothing stored. Marking it done is the only interaction.
     /// </summary>

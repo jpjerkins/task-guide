@@ -17,6 +17,7 @@ public sealed class CaptureTaskTests
         var task = await capture.ExecuteAsync(new CaptureTaskRequest("Sort the garage", null, "quick-task-shortcut"), DetailPage, CancellationToken.None);
 
         Assert.Empty(task.Tags.Dimensions);
+        Assert.Equal("quick-task-shortcut", task.Source);
         Assert.Single(store.Read().Tasks);
         Assert.Single(receipts.Receipts);
     }

@@ -25,7 +25,10 @@ public sealed class TaskCodecTests
         null,
         null,
         recurrence,
-        new DateTimeOffset(2026, 8, 15, 14, 2, 11, TimeSpan.Zero));
+        new DateTimeOffset(2026, 8, 15, 14, 2, 11, TimeSpan.Zero))
+    {
+        Source = "quick-task-shortcut",
+    };
 
     private static string RoundTrip(TaskItem task)
     {
@@ -56,5 +59,14 @@ public sealed class TaskCodecTests
 
         var readBack = TaskCodec.Read(written);
         Assert.Equal(recurrence, Assert.Single(readBack).Recurrence);
+    }
+
+    [Fact]
+    public void Capture_source_is_recorded_verbatim()
+    {
+        var written = RoundTrip(NewTask(new Recurrence(RecurrenceAnchor.Calendar, new EveryNDays(3), null)));
+
+        using var document = JsonDocument.Parse(written);
+        Assert.Equal("quick-task-shortcut", document.RootElement[0].GetProperty("source").GetString());
     }
 }

@@ -457,6 +457,7 @@ UI-visible footer note) is A2 → `TaskGuide.Infrastructure.Tests`.
 - capture from any of the three Shortcuts sends a Receipt
 - **in-app capture sends none**
 - an unrecognised source sends a Receipt
+- a capture source is recorded verbatim
 - a capture that cannot reach the server fails loudly and queues nothing
 
 ### Glance

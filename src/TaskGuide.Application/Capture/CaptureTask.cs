@@ -31,7 +31,10 @@ public sealed class CaptureTask(IStore store, IIdMinter minter, IReceiptSender r
             Defer: null,
             Postpone: null,
             Recurrence: null,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow())
+        {
+            Source = request.Source,
+        };
 
         await store.MutateAsync<Never>(
             view => OneOf<StoreMutation, Never>.FromT0(
