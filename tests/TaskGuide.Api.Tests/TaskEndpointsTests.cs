@@ -3,6 +3,12 @@ using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using TaskGuide.Application.Ports;
+using TaskGuide.Domain.Common;
+using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Tags;
+using TaskGuide.Domain.Tasks;
 using Xunit;
 
 namespace TaskGuide.Api.Tests;
@@ -100,6 +106,58 @@ public sealed class TaskEndpointsTests : IDisposable
         var response = await _client.PostAsJsonAsync("/api/tasks", new { title = "Water the plants", duration = 0 });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task POST_api_tasks_id_completions_is_refused_on_an_Unprocessed_Task()
+    {
+        var capture = await _client.PostAsJsonAsync("/api/capture", new { title = "Sort the garage", duration = (int?)null, source = "in-app" });
+        var task = await capture.Content.ReadFromJsonAsync<JsonElement>();
+        var id = task.GetProperty("id").GetString();
+
+        var response = await _client.PostAsync($"/api/tasks/{id}/completions", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PUT_api_tasks_id_postpone_is_refused_on_a_recurring_Task_and_a_derived_Task()
+    {
+        var recurring = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Recurrence = new Recurrence(RecurrenceAnchor.Calendar, new EveryNDays(1), null),
+        };
+        var derived = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAX") with
+        {
+            Provenance = new DerivedProvenance(new RuleId("absence"), "event_1"),
+        };
+        await SeedTasksAsync(recurring, derived);
+
+        foreach (var task in new[] { recurring, derived })
+        {
+            var response = await _client.PutAsJsonAsync($"/api/tasks/{task.Id.Value}/postpone", new { date = new DateOnly(2026, 9, 8) });
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        }
+    }
+
+    private async Task SeedTasksAsync(params TaskItem[] tasks)
+    {
+        var store = _factory.Services.GetRequiredService<IStore>();
+        await store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite(tasks)]), CancellationToken.None);
+    }
+
+    private static TaskItem Task(string id) => new(
+        new TaskId(id),
+        "Seeded task",
+        Notes: null,
+        new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+        {
+            [KnownDimensions.Duration] = [new TagValue("30")],
+        }, LooseTags: []),
+        Deadline: null,
+        Defer: null,
+        Postpone: null,
+        Recurrence: null,
+        DateTimeOffset.UtcNow);
 
     /// <summary>
     /// The exact repro reported live against the running API: chmod the data dir unwritable

@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
 using OneOf;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Tasks;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Tags;
+using TaskGuide.Domain.Time;
 using TaskGuide.Domain.Tasks;
 
 namespace TaskGuide.Api.Endpoints;
@@ -74,18 +76,68 @@ public static class TaskEndpoints
         // ?status=unprocessed|stale|active|done|orphan — Status is derived per request, never read
         // from storage. `orphan` is a third, disjoint filter, not a Status.
         tasks.MapGet("/{id}", (string id) => Results.NoContent());
-        tasks.MapPatch("/{id}", (string id) => Results.NoContent());
+        // An absolute date is for a one-off Task; recurring Tasks carry a moving, per-instance
+        // offset from their generated deadline instead.
+        tasks.MapPatch("/{id}", async Task<IResult> (string id, DeferTaskRequest request, IStore store, CancellationToken ct) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest(new { error = "id must be a Task id" });
+            }
+
+            var defer = ToDefer(request);
+            if (defer is null)
+            {
+                return TypedResults.BadRequest(new { error = "supply either date or offset and unit" });
+            }
+
+            var result = await new DeferTask(store).ExecuteAsync(new TaskId(id), defer, ct);
+            return result.Match<IResult>(
+                _ => TypedResults.NoContent(),
+                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+        });
         tasks.MapDelete("/{id}", (string id) => Results.NoContent());
 
         // The only authored completion fact. Refused on an `Unprocessed` Task — there is nothing
         // yet to be done within — and on a derived Task it is the only interaction there is.
-        tasks.MapPost("/{id}/completions", (string id) => Results.NoContent());
+        tasks.MapPost("/{id}/completions", async Task<IResult> (
+            string id,
+            IStore store,
+            DimensionRegistry registry,
+            StaleThresholds staleThresholds,
+            TimeProvider timeProvider,
+            DayBoundary boundary,
+            CancellationToken ct) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest(new { error = "id must be a Task id" });
+            }
+
+            var result = await new CompleteTask(store, registry, staleThresholds, timeProvider, boundary)
+                .ExecuteAsync(new TaskId(id), ct);
+            return result.Match<IResult>(
+                _ => TypedResults.NoContent(),
+                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+        });
         tasks.MapDelete("/{id}/completions/{due}", (string id, string due) => Results.NoContent());
 
         // "Not now." Stored as an absolute date; "two weeks" is a UI shorthand resolved at write
         // time. Offered on Active rows only — never on recurring or derived Tasks.
-        tasks.MapPut("/{id}/postpone", (string id) => Results.NoContent());
+        tasks.MapPut("/{id}/postpone", async Task<IResult> (string id, PostponeTaskRequest request, IStore store, CancellationToken ct) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest(new { error = "id must be a Task id" });
+            }
+
+            var result = await new PostponeTask(store).ExecuteAsync(new TaskId(id), request.Date, ct);
+            return result.Match<IResult>(
+                _ => TypedResults.NoContent(),
+                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+        });
         tasks.MapDelete("/{id}/postpone", (string id) => Results.NoContent());
+
 
         // The Orphan badge's deep link: the active Pattern's distinct Day templates that don't yet
         // declare a value on this Task's unmatched Dimension.
@@ -103,12 +155,27 @@ public static class TaskEndpoints
     /// <summary>The one Dimension the walking skeleton (#51) reads back out — the ordinal single value, if any.</summary>
     private static int? DurationOf(TaskItem task) =>
         task.Tags.SingleOn(KnownDimensions.Duration) is { } duration ? int.Parse(duration.Value) : null;
+
+    private static bool IsTaskId(string id) =>
+        id.Length == 28 && id.StartsWith(TaskId.Prefix, StringComparison.Ordinal) && id[2..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
+
+    private static Defer? ToDefer(DeferTaskRequest request) =>
+        request switch
+        {
+            { Date: { } date, Offset: null, Unit: null } => new AbsoluteDefer(date),
+            { Date: null, Offset: > 0, Unit: { } unit } => new OffsetDefer(new BeforeOffset(request.Offset.Value, unit)),
+            _ => null,
+        };
 }
 
 /// <summary>Walking skeleton request shape (#51): a Task is a title and a Duration, nothing else.</summary>
 public sealed record CreateTaskRequest(string Title, int Duration);
 
 public sealed record TaskResponse(string Id, string Title, int? Duration, DateTimeOffset CreatedAt);
+
+public sealed record PostponeTaskRequest(DateOnly Date);
+
+public sealed record DeferTaskRequest(DateOnly? Date, int? Offset, OffsetUnit? Unit);
 
 /// <summary>A logging-category marker — <see cref="TaskEndpoints"/> is static and can't be used as one directly.</summary>
 public sealed class TaskEndpointsLogCategory;
