@@ -72,7 +72,11 @@ public sealed class TickExecutor(
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _retention.Sweep(today);
+            var result = _retention.Sweep(today);
+            if (result.Failed.Count > 0)
+            {
+                _logger.LogError("Fire-record retention failed for {Count} day files.", result.Failed.Count);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

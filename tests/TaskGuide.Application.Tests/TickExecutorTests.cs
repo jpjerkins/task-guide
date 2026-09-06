@@ -25,6 +25,14 @@ public sealed class TickExecutorTests
     }
 
     [Fact]
+    public void A_fire_retention_port_reports_the_sweep_outcome()
+    {
+        var sweep = typeof(IFireRetention).GetMethod(nameof(IFireRetention.Sweep));
+
+        Assert.Equal("FireSweepResult", sweep?.ReturnType.Name);
+    }
+
+    [Fact]
     public async Task FiredAt_is_written_only_when_Pushover_accepts()
     {
         var store = new FakeStore();
@@ -109,6 +117,10 @@ public sealed class TickExecutorTests
     {
         public List<DateOnly> Dates { get; } = [];
 
-        public void Sweep(DateOnly today) => Dates.Add(today);
+        public FireSweepResult Sweep(DateOnly today)
+        {
+            Dates.Add(today);
+            return new FireSweepResult([], []);
+        }
     }
 }

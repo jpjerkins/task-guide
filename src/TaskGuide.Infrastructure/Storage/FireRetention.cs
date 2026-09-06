@@ -1,3 +1,5 @@
+using TaskGuide.Application.Ports;
+
 namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
@@ -6,8 +8,6 @@ namespace TaskGuide.Infrastructure.Storage;
 /// <see cref="Failed"/> still has its file on disk — the sweep does not remove, rename, or
 /// otherwise touch a file it could not delete.
 /// </summary>
-public sealed record FireSweepResult(IReadOnlyList<DateOnly> Removed, IReadOnlyList<DateOnly> Failed);
-
 public static class FireRetention
 {
     /// <summary>
