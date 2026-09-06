@@ -65,6 +65,9 @@ public sealed class OpportunitiesTests
     private static OpportunityCounter CounterOver(IDayShapeReader shapes) =>
         new(shapes, Registry, Resolution, Boundary);
 
+    private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> NoFetchedValues =
+        new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
     /// <summary>The only view of the calendar: a shape per date, and reading one never writes one.</summary>
     private sealed class FakeShapes(Func<DateOnly, DayShape> shapeOf) : IDayShapeReader
     {
@@ -96,7 +99,7 @@ public sealed class OpportunitiesTests
         // 09:00 on each of the seven dates after now, up to and including the morning of the
         // eighth date — that last one still falls inside 7 x 24h of a midday "now". A horizon
         // snapped to date boundaries would stop a day short and report six.
-        Assert.Equal(7, CounterOver(shapes).CountAhead(HalfHourTask(), now));
+        Assert.Equal(7, CounterOver(shapes).CountAhead(HalfHourTask(), now, NoFetchedValues));
     }
 
     [Theory]
@@ -114,7 +117,7 @@ public sealed class OpportunitiesTests
 
         // Asked on the very weekday the Window falls on, a horizon that snapped to whole dates
         // would see both this Wednesday's Window and next Wednesday's for every hour before 18.
-        Assert.Equal(1, CounterOver(shapes).CountAhead(HalfHourTask(), At(Wednesday, hour)));
+        Assert.Equal(1, CounterOver(shapes).CountAhead(HalfHourTask(), At(Wednesday, hour), NoFetchedValues));
     }
 
     [Fact]
@@ -127,7 +130,7 @@ public sealed class OpportunitiesTests
         // Window on the Deadline day is the one that matters: it falls after this midday "now",
         // so a horizon running to the same clock time on the Deadline day would score 4 and
         // silently drop it.
-        Assert.Equal(5, CounterOver(shapes).CountAhead(HalfHourTask(deadline: Tuesday.AddDays(2)), now));
+        Assert.Equal(5, CounterOver(shapes).CountAhead(HalfHourTask(deadline: Tuesday.AddDays(2)), now, NoFetchedValues));
     }
 
     [Fact]
@@ -140,7 +143,7 @@ public sealed class OpportunitiesTests
         // `SnoozePolicy.CeilingFor` already asserts in code by re-deriving the ceiling from the
         // time *actually remaining*. And a notification's landing page is read *inside* a running
         // Window by construction, so a count that excluded it was off by one exactly when read.
-        Assert.Equal(2, CounterOver(shapes).CountAhead(HalfHourTask(), halfwayThrough));
+        Assert.Equal(2, CounterOver(shapes).CountAhead(HalfHourTask(), halfwayThrough, NoFetchedValues));
     }
 
     [Fact]
@@ -152,7 +155,7 @@ public sealed class OpportunitiesTests
         // Only the near edge moved. Today's Window counts (it is running, and it also starts
         // exactly at now); the one a rolling seven days later starts exactly *at* the horizon end
         // and so does not — half-open there still, or a once-a-week chance would count twice.
-        Assert.Equal(7, CounterOver(shapes).CountAhead(HalfHourTask(), now));
+        Assert.Equal(7, CounterOver(shapes).CountAhead(HalfHourTask(), now, NoFetchedValues));
     }
 
     [Fact]
@@ -161,11 +164,11 @@ public sealed class OpportunitiesTests
         var shapes = EveryDay(Window("w_morning", 9, 10));
         var now = At(Tuesday, 12);
 
-        var overdue = CounterOver(shapes).CountAhead(HalfHourTask(deadline: Tuesday.AddDays(-3)), now);
+        var overdue = CounterOver(shapes).CountAhead(HalfHourTask(deadline: Tuesday.AddDays(-3)), now, NoFetchedValues);
 
         // Exactly what the same Task would score with no Deadline at all: the negative horizon
         // is not clamped to zero, it is not applied.
-        Assert.Equal(CounterOver(EveryDay(Window("w_morning", 9, 10))).CountAhead(HalfHourTask(), now), overdue);
+        Assert.Equal(CounterOver(EveryDay(Window("w_morning", 9, 10))).CountAhead(HalfHourTask(), now, NoFetchedValues), overdue);
         Assert.Equal(7, overdue);
     }
 
@@ -179,7 +182,7 @@ public sealed class OpportunitiesTests
 
         var patternWeekCount = counter.CountInPatternWeek(overdue, pattern, [template], Tuesday);
 
-        Assert.True(counter.CountAhead(overdue, At(Tuesday, 12)) > 0);
+        Assert.True(counter.CountAhead(overdue, At(Tuesday, 12), NoFetchedValues) > 0);
         Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
     }
 
@@ -190,13 +193,13 @@ public sealed class OpportunitiesTests
         var evening = Window("w_evening", 18, 19);
 
         var untouched = OnWeekday(DayOfWeek.Thursday, evening);
-        Assert.Equal(1, CounterOver(untouched).CountAhead(HalfHourTask(), At(Tuesday, 12)));
+        Assert.Equal(1, CounterOver(untouched).CountAhead(HalfHourTask(), At(Tuesday, 12), NoFetchedValues));
 
         var travelDay = new FakeShapes(date => date == thursday
             ? new DayShape(date, [], [], IsOverridden: true)
             : untouched.For(date));
 
-        Assert.Equal(0, CounterOver(travelDay).CountAhead(HalfHourTask(), At(Tuesday, 12)));
+        Assert.Equal(0, CounterOver(travelDay).CountAhead(HalfHourTask(), At(Tuesday, 12), NoFetchedValues));
     }
 
     [Fact]
@@ -216,8 +219,8 @@ public sealed class OpportunitiesTests
                 ? new DayShape(date, [evening], [], IsOverridden: false)
                 : Empty(date));
 
-        Assert.Equal(1, CounterOver(OnWeekday(DayOfWeek.Thursday, evening)).CountAhead(HalfHourTask(), At(Tuesday, 12)));
-        Assert.Equal(0, CounterOver(displaced).CountAhead(HalfHourTask(), At(Tuesday, 12)));
+        Assert.Equal(1, CounterOver(OnWeekday(DayOfWeek.Thursday, evening)).CountAhead(HalfHourTask(), At(Tuesday, 12), NoFetchedValues));
+        Assert.Equal(0, CounterOver(displaced).CountAhead(HalfHourTask(), At(Tuesday, 12), NoFetchedValues));
     }
 
     [Fact]
@@ -234,8 +237,8 @@ public sealed class OpportunitiesTests
         var task = HalfHourTask();
         var now = At(Tuesday, 12);
 
-        Assert.Equal(5, CounterOver(ShapesOf(busyWeek)).CountAhead(task, now));
-        Assert.Equal(2, CounterOver(ShapesOf(quietWeek)).CountAhead(task, now));
+        Assert.Equal(5, CounterOver(ShapesOf(busyWeek)).CountAhead(task, now, NoFetchedValues));
+        Assert.Equal(2, CounterOver(ShapesOf(quietWeek)).CountAhead(task, now, NoFetchedValues));
 
         Pattern Days(Func<DayOfWeek, DayTemplate> pick) => new(
             new PatternId("p_x"), "Some pattern",
@@ -261,7 +264,7 @@ public sealed class OpportunitiesTests
         // active Pattern still declares a Window that would admit this Task.
         var counter = CounterOver(new FakeShapes(date => new DayShape(date, [], [], IsOverridden: true)));
 
-        Assert.Equal(0, counter.CountAhead(HalfHourTask(), At(Tuesday, 12)));
+        Assert.Equal(0, counter.CountAhead(HalfHourTask(), At(Tuesday, 12), NoFetchedValues));
         Assert.Equal(1, counter.CountInPatternWeek(HalfHourTask(), pattern, [workday, restday], Tuesday));
     }
 
@@ -291,8 +294,16 @@ public sealed class OpportunitiesTests
 
         // The same seven Windows the untagged Task counts. Nothing has been fetched for a Window
         // three days out, and unknown resolves to the empty set — so this one counts none.
-        Assert.Equal(7, counter.CountAhead(HalfHourTask(), now));
-        Assert.Equal(0, counter.CountAhead(SunnyHalfHourTask(), now));
+        Assert.Equal(7, counter.CountAhead(HalfHourTask(), now, NoFetchedValues));
+        Assert.Equal(0, counter.CountAhead(SunnyHalfHourTask(), now, NoFetchedValues));
+
+        var currentAndFuture = CounterOver(EveryDay(Window("w_midday", 11, 13)));
+        var currentWeather = new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+        {
+            [KnownDimensions.Weather] = [new TagValue("sunny")],
+        };
+
+        Assert.Equal(1, currentAndFuture.CountAhead(SunnyHalfHourTask(), now, currentWeather));
     }
 
     [Fact]

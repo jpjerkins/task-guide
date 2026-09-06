@@ -249,6 +249,8 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - a Task with a Deadline does not automatically outrank one without — bands, not a continuous key
 - inside band 2, a sooner Deadline yields a shorter horizon and therefore a higher rank, without a
   deadline key being applied on top
+- a failed forecast leaves a currently matching Task in the shortlist and sorts its unknown
+  Opportunities count last within its urgency band
 
 ### Opportunities and the horizon
 
@@ -359,6 +361,7 @@ duplicate-count-sensitive, following `TagSet`): everything else.
   the ceiling re-derived from `now → end`
 - a Window whose span closed while the service was down **is silent**
 - a long outage produces **no burst on return**
+- the complete matched set is ranked rather than filtered
 - a pending Snooze survives a restart, because it is just a row
 - the retention sweep runs unguarded on every tick
 - `unfired?` is answered by the Fire record, so a slow tick never double-fires

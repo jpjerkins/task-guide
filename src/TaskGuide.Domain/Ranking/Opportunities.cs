@@ -33,12 +33,27 @@ public sealed class OpportunityCounter(
     /// reverts to a plain rolling 7 days; without that it goes negative and every overdue Task
     /// misreports as an Orphan.
     /// </summary>
-    public int CountAhead(TaskItem task, DateTimeOffset now)
+    /// <summary>
+    /// Counts against fetched values supplied by the current evaluation. A failed fetched axis
+    /// carried by the Task produces an unknown count rather than zero.
+    /// </summary>
+    public int? CountAhead(
+        TaskItem task,
+        DateTimeOffset now,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
+        IReadOnlyList<DimensionId>? failedFetches = null)
     {
+        if (failedFetches is not null
+            && task.Tags.Dimensions.Any(kv => kv.Value.Count > 0 && failedFetches.Contains(kv.Key)))
+        {
+            return null;
+        }
+
         var horizonEnd = HorizonEnd(task.Deadline, now);
 
         return WindowsOn(DatesFrom(_boundary.DateOf(now), _boundary.DateOf(horizonEnd)), _shapes)
-            .Count(slot => FallsWithin(slot, now, horizonEnd) && Admits(task, slot, NoFetchedValues));
+            .Count(slot => FallsWithin(slot, now, horizonEnd)
+                && Admits(task, slot, FetchedValuesFor(slot, now, fetched)));
     }
 
     /// <summary>
@@ -111,11 +126,22 @@ public sealed class OpportunityCounter(
         Array.Empty<DimensionId>());
 
     /// <summary>
-    /// A future Window's fetched axes are simply not known, and unknown resolves to the empty
-    /// set — the same fail-closed rule absence already follows. This is the right rule for
-    /// <em>"will this fire?"</em>, which is the question <see cref="CountAhead"/> asks.
+    /// The supplied values describe the point being evaluated now. They can admit only a Window
+    /// alive at that point; every later Window has no forecast at this seam and therefore fails
+    /// closed on fetched axes.
     /// </summary>
-    private static IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> NoFetchedValues { get; } =
+    private IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> FetchedValuesFor(
+        (DateOnly Date, AvailabilityWindow Window) slot,
+        DateTimeOffset now,
+        IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched)
+    {
+        var resolved = _resolution.ResolveWindow(slot.Date, slot.Window);
+        return resolved is not null && resolved.Start <= now && now < resolved.End
+            ? fetched
+            : EmptyFetchedValues;
+    }
+
+    private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> EmptyFetchedValues =
         new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
 
     /// <summary>

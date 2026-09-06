@@ -1,4 +1,6 @@
+using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Tasks;
+using TaskGuide.Domain.Time;
 
 namespace TaskGuide.Domain.Ranking;
 
@@ -9,7 +11,8 @@ namespace TaskGuide.Domain.Ranking;
 /// </summary>
 public sealed record RankKey(
     UrgencyBand Band,
-    int Opportunities,
+    /// <summary>Known count, or null when the forecast needed to count it failed.</summary>
+    int? Opportunities,
     int DurationRankDescending,
     DateTimeOffset CreatedAt) : IComparable<RankKey>
 {
@@ -30,7 +33,12 @@ public sealed record RankKey(
         if (other is null) return -1;
 
         if (Band != other.Band) return Band.CompareTo(other.Band);
-        if (Opportunities != other.Opportunities) return Opportunities.CompareTo(other.Opportunities);
+        if (Opportunities != other.Opportunities)
+        {
+            if (Opportunities is null) return 1;
+            if (other.Opportunities is null) return -1;
+            return Opportunities.Value.CompareTo(other.Opportunities.Value);
+        }
         if (DurationRankDescending != other.DurationRankDescending)
         {
             return DurationRankDescending.CompareTo(other.DurationRankDescending);
@@ -58,6 +66,28 @@ public enum UrgencyBand
 
 public static class Ranker
 {
+    /// <summary>Derives the four ranking keys for an already eligible, matched Task.</summary>
+    public static RankKey KeyFor(
+        TaskItem task,
+        int? opportunities,
+        DimensionRegistry registry,
+        DateTimeOffset now,
+        DayBoundary boundary)
+    {
+        var duration = registry.Dimensions
+            .Select(dimension => dimension.Value)
+            .OfType<OrdinalDimension>()
+            .Single(dimension => dimension.Id == KnownDimensions.Duration);
+        var durationValue = task.Tags.SingleOn(duration.Id)
+            ?? throw new InvalidOperationException("Only active Tasks can be ranked.");
+
+        return new RankKey(
+            BandOf(task, now, boundary),
+            opportunities,
+            -duration.RankOf(durationValue),
+            task.CreatedAt);
+    }
+
     /// <summary>
     /// Fewest Opportunities first — <em>spend the rarest opportunity</em>. Then longest Duration
     /// first ("the biggest Task that fits leads"), then oldest CreatedAt as a backstop reached
@@ -66,4 +96,15 @@ public static class Ranker
     public static IReadOnlyList<TaskItem> Rank(
         IReadOnlyList<(TaskItem Task, RankKey Key)> eligible) =>
         eligible.OrderBy(entry => entry.Key).Select(entry => entry.Task).ToList();
+
+    private static UrgencyBand BandOf(TaskItem task, DateTimeOffset now, DayBoundary boundary)
+    {
+        if (task.Deadline is null) return UrgencyBand.NoPressure;
+
+        var deadline = boundary.EndOf(task.Deadline.Value);
+        if (deadline <= now) return UrgencyBand.DeadlinePassed;
+        return deadline <= now + TimeSpan.FromDays(7)
+            ? UrgencyBand.WithinHorizon
+            : UrgencyBand.NoPressure;
+    }
 }

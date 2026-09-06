@@ -93,6 +93,9 @@ public sealed class OrphanDetectionTests
     private static OpportunityCounter CounterOver(IDayShapeReader shapes) =>
         new(shapes, Registry, Resolution, Boundary);
 
+    private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> NoFetchedValues =
+        new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
     private static int PatternWeekCount(TaskItem task, DayTemplate template) =>
         CounterOver(EveryDay(Evening)).CountInPatternWeek(task, EveryDayIs(template), [template], Tuesday);
 
@@ -112,7 +115,7 @@ public sealed class OrphanDetectionTests
         // Nothing ahead, and nothing in the active Pattern either: no Window declares the
         // Location this Task carries, so none of them could ever admit it. Something is
         // malformed — that is the claim the badge makes.
-        Assert.Equal(0, counter.CountAhead(task, Now));
+        Assert.Equal(0, counter.CountAhead(task, Now, NoFetchedValues));
         Assert.Equal(0, patternWeekCount);
         Assert.Equal(Status.Active, StatusOf(task));
 
@@ -129,7 +132,7 @@ public sealed class OrphanDetectionTests
         var task = Item();
         var patternWeekCount = PatternWeekCount(task, Workday);
 
-        Assert.Equal(0, travelWeek.CountAhead(task, Now));
+        Assert.Equal(0, travelWeek.CountAhead(task, Now, NoFetchedValues));
         Assert.Equal(7, patternWeekCount);
 
         // The two zeroes look identical on the surface and mean opposite things. Nothing is
@@ -289,7 +292,7 @@ public sealed class OrphanDetectionTests
         var task = Item();
         var patternWeekCount = PatternWeekCount(task, Workday);
 
-        Assert.Equal(1, counter.CountAhead(task, Now));
+        Assert.Equal(1, counter.CountAhead(task, Now, NoFetchedValues));
         Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));
 
         // One is not a zero at all, so neither kind of zero is being claimed.
@@ -306,7 +309,7 @@ public sealed class OrphanDetectionTests
         // Nothing is fetched for a Window days out and unknown fails closed, so this Task has no
         // Opportunities ahead. The Pattern-week count asks a counterfactual question in which a
         // live condition is not a constraint at all — so the zero above is the harmless kind.
-        Assert.Equal(0, counter.CountAhead(sunny, Now));
+        Assert.Equal(0, counter.CountAhead(sunny, Now, NoFetchedValues));
         Assert.Equal(7, patternWeekCount);
 
         Assert.False(OrphanDetection.IsTaskOrphan(Status.Active, patternWeekCount));

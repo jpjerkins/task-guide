@@ -23,6 +23,9 @@ public sealed class RankingTests
 
     private static readonly DateTimeOffset Noon = Resolution.Resolve(Tuesday, new TimeOnly(12, 0));
 
+    private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> NoFetchedValues =
+        new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
     /// <summary>
     /// The Duration axis, read off the registry rather than hard-coded: this test file must pin
     /// the <em>direction</em> of the key, not a bucket list that lives elsewhere.
@@ -40,7 +43,7 @@ public sealed class RankingTests
 
     private static RankKey Key(
         UrgencyBand band = UrgencyBand.NoPressure,
-        int opportunities = 5,
+        int? opportunities = 5,
         string duration = "30",
         int createdDaysAgo = 10) =>
         new(band, opportunities, DurationKey(duration), Noon.AddDays(-createdDaysAgo));
@@ -107,6 +110,16 @@ public sealed class RankingTests
     }
 
     [Fact]
+    public void A_failed_forecast_leaves_a_currently_matching_Task_in_the_shortlist_and_sorts_its_unknown_Opportunities_count_last_within_its_urgency_band()
+    {
+        var order = RankedIds(
+            (Task("t_unknown"), Key(UrgencyBand.WithinHorizon, opportunities: null)),
+            (Task("t_known"), Key(UrgencyBand.WithinHorizon, opportunities: 4)));
+
+        Assert.Equal(["t_known", "t_unknown"], order);
+    }
+
+    [Fact]
     public void On_an_Opportunities_tie_longest_Duration_first()
     {
         // The biggest Task that fits leads. Shortest-first is the exact inversion — the 2-minute
@@ -163,12 +176,12 @@ public sealed class RankingTests
         var soon = HalfHourTask("t_due_thursday", Tuesday.AddDays(2));
         var later = HalfHourTask("t_due_sunday", Tuesday.AddDays(5));
 
-        Assert.Equal(2, counter.CountAhead(soon, Noon));
-        Assert.Equal(5, counter.CountAhead(later, Noon));
+        Assert.Equal(2, counter.CountAhead(soon, Noon, NoFetchedValues));
+        Assert.Equal(5, counter.CountAhead(later, Noon, NoFetchedValues));
 
         var order = RankedIds(
-            (later, Key(UrgencyBand.WithinHorizon, counter.CountAhead(later, Noon))),
-            (soon, Key(UrgencyBand.WithinHorizon, counter.CountAhead(soon, Noon))));
+            (later, Key(UrgencyBand.WithinHorizon, counter.CountAhead(later, Noon, NoFetchedValues)!.Value)),
+            (soon, Key(UrgencyBand.WithinHorizon, counter.CountAhead(soon, Noon, NoFetchedValues)!.Value)));
 
         Assert.Equal(["t_due_thursday", "t_due_sunday"], order);
     }
