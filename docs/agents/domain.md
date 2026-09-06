@@ -49,3 +49,11 @@ If the concept you need isn't in the glossary yet, that's a signal — either yo
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
 > _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+
+## Fixtures the API can't create
+
+Not every Task shape has a create endpoint, and some never will — a derived Task is a projection of
+a rule, and `POST /api/tasks` is the walking skeleton's title-and-Duration shape. Seed those
+fixtures through the store: resolve `IStore` from the test factory's `Services` and `MutateAsync`,
+or write the collection file into the test's data dir before the host starts. A missing endpoint is
+not a blocked ticket.
