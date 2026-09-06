@@ -468,6 +468,15 @@ tick, the 30-minute floor, the one retry) → `TaskGuide.Application.Tests`; #88
 `TaskGuide.Infrastructure.Tests`. The one-test-file-per-section rule does not hold for this
 section.
 
+> **#88's renderer is parked — do not write its tests.** #50's on-device check (2026-09-06) found
+> Pushover offers no complication on the Series 3 (watchOS 8.8.x), so there is no surface to render
+> into and no way to verify a renderer against one. Every bullet below describing *what the Glance
+> displays* — the fall-through shapes, the weekday rule, never-blank — belongs to that parked
+> renderer and is **not** to be implemented until Pushover restores the complication.
+>
+> The Domain and Application bullets are unaffected: `GlanceState` equality, `ShouldSend`, the
+> 30-minute floor and the one retry are all device-independent and remain live.
+
 - `GlanceState` equality (#76): two structurally equal states built on distinct-but-equal
   `Shortlist` instances compare equal — the reference-equality trap a positional record falls
   into on an `IReadOnlyList` member
