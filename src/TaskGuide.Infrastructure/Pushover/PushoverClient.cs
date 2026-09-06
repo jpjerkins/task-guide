@@ -120,18 +120,26 @@ public sealed class PushoverClient(
         return false;
     }
 
-    // Rendering a GlanceState into a complication's three text slots is the Adapters lane's
-    // renderer, which does not exist yet (#76 does not invent one). Unreachable in production
-    // today — nothing calls SendGlanceAsync, and nothing in the tree implements IGlanceSender any
-    // more (TickLoopTests dropped its fake) — which is why throwing here, rather than preserving
-    // behaviour, is acceptable for this ticket.
+    // No renderer exists, and none is scheduled: the Glance surface is unavailable on the only
+    // hardware this system targets. #50's on-device check found that Pushover offers no
+    // complication at all on the Series 3 (watchOS 8.8.x) — no slot on the Modular face or any
+    // other face tried, with stale-cache causes ruled out by restarting both devices and
+    // reinstalling the watch app. So there is nothing to render into, and a renderer written
+    // today could be neither aimed nor verified. #88 is parked on the vendor, not on us.
     //
-    // The contract this throw stands in for, for whoever writes the renderer: POST
+    // Do not wire this up. TickPlan.Glance is still computed — GlanceState, GlancePolicy and the
+    // 30-minute floor are device-independent and remain correct — but the plan's Glance goes
+    // nowhere on purpose. Unreachable in production today: nothing calls SendGlanceAsync, and
+    // nothing in the tree implements IGlanceSender any more (TickLoopTests dropped its fake),
+    // which is why throwing here rather than preserving behaviour is acceptable.
+    //
+    // The contract this throw stands in for, should Pushover restore the complication: POST
     // https://api.pushover.net/1/glances.json (docs/research/pushover-api.md), form fields
     // "title", "subtext", "text" and "count" — the four the Glance endpoint takes, alongside the
-    // usual "token"/"user".
+    // usual "token"/"user". Which field lands in which slot is still unobserved and undocumented
+    // (the vendor's guidance is to experiment), so #50 must be answered before this is written.
     public Task<bool> SendGlanceAsync(GlanceState state, CancellationToken cancellationToken) =>
-        throw new NotImplementedException("Rendering a GlanceState into Pushover's Glance fields belongs to the Adapters lane.");
+        throw new NotImplementedException("The Pushover Glance surface is unavailable on this hardware — see #50.");
 
     /// <summary>The two static secrets, once checked — so <see cref="SendAsync"/> holds two
     /// non-nullable strings and needs no null-forgiving operator to use them.</summary>
