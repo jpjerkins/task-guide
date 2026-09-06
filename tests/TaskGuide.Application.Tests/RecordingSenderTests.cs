@@ -18,7 +18,7 @@ public sealed class RecordingSenderTests
         var reminders = new RecordingReminderSender();
         var reminder = new Reminder(
             "Water the plants", "Evening", [], 0, [], new FooterCounts(0, 0, 0), [],
-            new Uri("https://taskguide.example/today"), DateTimeOffset.UtcNow.AddHours(1));
+            new Uri("https://not-the-real-host.invalid/today"), DateTimeOffset.UtcNow.AddHours(1));
 
         var accepted = await reminders.SendReminderAsync(reminder, CancellationToken.None);
 
@@ -30,7 +30,7 @@ public sealed class RecordingSenderTests
     public async Task A_recording_sender_reports_the_failure_it_was_configured_for_without_throwing()
     {
         var receipts = new RecordingReceiptSender();
-        var receipt = new Receipt(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Water the plants", "15m", new Uri("https://taskguide.example/today"));
+        var receipt = new Receipt(new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Water the plants", "15m", new Uri("https://not-the-real-host.invalid/today"));
         receipts.FailNextSend();
 
         var accepted = await receipts.SendReceiptAsync(receipt, CancellationToken.None);

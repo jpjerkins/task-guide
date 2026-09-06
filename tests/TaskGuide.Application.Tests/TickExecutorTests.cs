@@ -108,7 +108,7 @@ public sealed class TickExecutorTests
     private static FireIntent Intent(string windowId)
     {
         var row = new FireRow(new WindowId(windowId), FireKind.Window, windowId, new TimeOnly(9, 0), new TimeOnly(10, 0), null, null, 1, null);
-        var reminder = new Reminder("Task (30)", windowId, [], 0, [], new FooterCounts(0, 0, 0), [], new Uri("https://taskguide.example/"), Now.AddHours(1));
+        var reminder = new Reminder("Task (30)", windowId, [], 0, [], new FooterCounts(0, 0, 0), [], new Uri("https://not-the-real-host.invalid/"), Now.AddHours(1));
         var window = new ResolvedWindow(new(new WindowId(windowId), windowId, new TimeOnly(9, 0), new TimeOnly(10, 0), TaskGuide.Domain.Tags.TagSet.Empty), Now, Now.AddHours(1));
         return new FireIntent(new WindowFire(window), [], reminder, row);
     }

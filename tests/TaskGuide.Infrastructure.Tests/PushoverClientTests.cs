@@ -114,7 +114,7 @@ public sealed class PushoverClientTests
         new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
         "Fix the shelf bracket",
         "30",
-        new Uri("https://task-guide.example.ts.net/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        new Uri("https://not-the-real-host.invalid/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FAV"));
 
     private static Reminder SampleReminder() => new(
         "Fix the shelf bracket",
@@ -124,7 +124,7 @@ public sealed class PushoverClientTests
         [],
         new FooterCounts(0, 0, 0),
         [],
-        new Uri("https://task-guide.example.ts.net/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
+        new Uri("https://not-the-real-host.invalid/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
         DateTimeOffset.UtcNow.AddHours(1));
 
     private static PushoverClient MakeClient(HttpMessageHandler handler, TimeProvider? timeProvider = null, ILogger<PushoverClient>? logger = null) =>

@@ -60,7 +60,7 @@ public sealed class FiringAndNotificationRecordEqualityTests
             events,
             new FooterCounts(0, 0, 0),
             failedFetches,
-            new Uri("https://jerkins.net/reminder"),
+            new Uri("https://not-the-real-host.invalid/reminder"),
             DateTimeOffset.UnixEpoch);
 
     [Fact]

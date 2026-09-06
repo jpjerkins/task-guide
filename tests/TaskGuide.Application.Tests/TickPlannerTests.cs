@@ -137,7 +137,7 @@ public sealed class TickPlannerTests
     }
 
     private static TickPlanner Planner(FakeDayShapeReader shapes) =>
-        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, new Uri("https://taskguide.example/"));
+        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, new Uri("https://not-the-real-host.invalid/"));
 
     private static FakeStoreView View(params TaskItem[] tasks) =>
         new FakeStoreViewBuilder().WithTasks(tasks).WithFires(Today, new DayFires(Today, [])).Build();
