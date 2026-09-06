@@ -73,7 +73,11 @@ builder.Services.AddSingleton(provider => new TickPlanner(
     provider.GetRequiredService<ClockTimeResolution>(),
     provider.GetRequiredService<DayBoundary>(),
     provider.GetRequiredService<StaleThresholds>(),
-    new Uri(builder.Configuration["Firing:LandingPage"] ?? "https://task-guide.example.ts.net/")));
+    // The default is the real MagicDNS name (docs/runbooks/first-deploy.md), not a placeholder or
+    // localhost: this Uri's only consumer is the `url` on a Pushover push, so it is opened on the
+    // phone and nowhere else. localhost there means the phone itself, and a forgotten override
+    // would ship plausible-looking dead links. Override per-environment if the tailnet is renamed.
+    new Uri(builder.Configuration["Firing:LandingPage"] ?? "https://pi5.taile6b761.ts.net/")));
 builder.Services.AddSingleton<TickExecutor>();
 builder.Services.AddSingleton<ITickLoop, TickService>();
 builder.Services.AddHostedService<TickLoop>();
