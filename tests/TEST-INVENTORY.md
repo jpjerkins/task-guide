@@ -393,6 +393,7 @@ F3 → `TaskGuide.Application.Tests`.
 - a rejected push reads as unfired next tick and is retried
 - each accepted fire is persisted in its own mutation, immediately after acceptance
 - a failed fire does not skip later intents, the retention sweep, or the heartbeat
+- the fire-retention port reports the sweep outcome to the executor
 - retries stop when the span closes (opportunity) or at the boundary (obligation)
 - every failed attempt is logged
 - a Receipt is retried up to three times while Pushover has not accepted

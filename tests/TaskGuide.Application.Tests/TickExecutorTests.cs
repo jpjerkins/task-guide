@@ -25,7 +25,7 @@ public sealed class TickExecutorTests
     }
 
     [Fact]
-    public void A_fire_retention_port_reports_the_sweep_outcome()
+    public void The_fire_retention_port_reports_the_sweep_outcome()
     {
         var sweep = typeof(IFireRetention).GetMethod(nameof(IFireRetention.Sweep));
 
