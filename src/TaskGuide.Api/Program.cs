@@ -4,6 +4,8 @@ using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
+using TaskGuide.Domain.Tasks;
+using TaskGuide.Domain.Time;
 using TaskGuide.Infrastructure.BackgroundServices;
 using TaskGuide.Infrastructure.Configuration;
 using TaskGuide.Infrastructure.Ids;
@@ -52,6 +54,14 @@ builder.Services.AddSingleton(KnownDimensions.Default);
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IIdMinter, UlidIdMinter>();
 builder.Services.AddSingleton<IDayShapeReader, DayShapeReader>();
+builder.Services.AddSingleton(new DayBoundary(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId)));
+builder.Services.AddSingleton<ClockTimeResolution>();
+// CONTEXT.md leaves these numbers unspecified ("aged past a threshold", "N consecutive missed
+// instances"); 60 days / 3 match what the Domain tests already assume, so they're config here
+// rather than a second place those numbers could drift from the tests.
+builder.Services.AddSingleton(new StaleThresholds(
+    UndeadlinedAge: TimeSpan.FromDays(builder.Configuration.GetValue("Stale:UndeadlinedAgeDays", 60)),
+    ConsecutiveMissedInstances: builder.Configuration.GetValue("Stale:ConsecutiveMissedInstances", 3)));
 builder.Services.AddPushover(builder.Configuration);
 builder.Services.AddHealthReporter(dataDir);
 builder.Services.AddHostedService<TickLoop>();
