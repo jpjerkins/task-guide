@@ -353,6 +353,8 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 
 ### The tick loop
 
+- every tick invokes the Application tick loop
+- every tick does not send a skeleton Receipt
 - a Window fires at its start
 - **a Window that matches nothing sends nothing** — the biconditional, and the only restraint lever
 - a Window is not re-fired part-way through, however long it is

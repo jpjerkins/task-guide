@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskGuide.Api.Endpoints;
+using TaskGuide.Application.Firing;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -64,6 +65,17 @@ builder.Services.AddSingleton(new StaleThresholds(
     ConsecutiveMissedInstances: builder.Configuration.GetValue("Stale:ConsecutiveMissedInstances", 3)));
 builder.Services.AddPushover(builder.Configuration);
 builder.Services.AddHealthReporter(dataDir);
+// Explicit factory, not a naked Uri singleton: registering Uri itself would make it resolvable
+// (and swappable) by anything else in the container, when it's really just a TickPlanner ctor arg.
+builder.Services.AddSingleton(provider => new TickPlanner(
+    provider.GetRequiredService<IDayShapeReader>(),
+    provider.GetRequiredService<DimensionRegistry>(),
+    provider.GetRequiredService<ClockTimeResolution>(),
+    provider.GetRequiredService<DayBoundary>(),
+    provider.GetRequiredService<StaleThresholds>(),
+    new Uri(builder.Configuration["Firing:LandingPage"] ?? "https://task-guide.example.ts.net/")));
+builder.Services.AddSingleton<TickExecutor>();
+builder.Services.AddSingleton<ITickLoop, TickService>();
 builder.Services.AddHostedService<TickLoop>();
 builder.Services.AddOpenApi();               // TS types are generated from this output (openapi-typescript)
 
