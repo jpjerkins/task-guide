@@ -766,6 +766,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   included
 - `PATCH /api/day-templates/{id}/windows/{windowId}` edits that Window only and **does not propagate**
   to a same-named Window in another template
+- `POST /api/day-templates/{id}/windows` appends a minted Window to that template
+- `DELETE /api/day-templates/{id}/windows/{windowId}` removes only that Window
 - `GET /api/day-templates/{id}/windows/{windowId}/dependents` counts the Tasks that would be orphaned
   by removing a Dimension value, **before** the edit is saved, and writes nothing
 - `POST /api/events` writes the Event **first**, then the one-off day its overlap resolution generates

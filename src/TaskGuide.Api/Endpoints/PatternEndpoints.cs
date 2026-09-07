@@ -83,16 +83,19 @@ public static class PatternEndpoints
         if (candidate is null) return TypedResults.BadRequest<object>(new { error = "to must be a known Pattern id" });
 
         var now = clock.GetUtcNow();
-        var today = boundary.DateOf(now);
-        var weekOf = today.AddDays(-(int)today.DayOfWeek);
         var counter = new OpportunityCounter(shapes, registry, resolution, boundary);
-        var newlyOrphaned = view.Tasks.Count(task =>
-        {
-            var status = StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary);
-            var currentIsOrphan = OrphanDetection.IsTaskOrphan(status, counter.CountInPatternWeek(task, view.Patterns.Active, view.DayTemplates, weekOf));
-            var candidateIsOrphan = OrphanDetection.IsTaskOrphan(status, counter.CountInPatternWeek(task, candidate, view.DayTemplates, weekOf));
-            return !currentIsOrphan && candidateIsOrphan;
-        });
+        var newlyOrphaned = Drift.CountNewlyOrphaned(
+            view.Tasks,
+            view.CompletionsFor,
+            view.Patterns.Active,
+            candidate,
+            view.DayTemplates,
+            view.DayTemplates,
+            counter,
+            registry,
+            staleThresholds,
+            now,
+            boundary);
 
         return TypedResults.Ok(new SwitchImpactResponse(newlyOrphaned));
     }
