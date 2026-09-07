@@ -61,6 +61,22 @@ public sealed class EventEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task POST_api_events_without_an_overlap_needs_no_resolution()
+    {
+        var response = await _client.PostAsJsonAsync("/api/events", new
+        {
+            date = "2026-10-10",
+            name = "Sam's tournament",
+            start = "14:00",
+            end = "16:00",
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Events);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
+    }
+
+    [Fact]
     public async Task GET_api_events_overlap_check_names_every_Window_the_proposed_Event_overlaps_partial_overlaps_included()
     {
         var date = new DateOnly(2026, 10, 10);
@@ -74,6 +90,44 @@ public sealed class EventEndpointsTests : IDisposable
             "/api/events/overlap-check?date=2026-10-10&start=14:00&end=16:00");
 
         Assert.Equal([partial.Id], Assert.IsType<AvailabilityWindow[]>(overlaps).Select(window => window.Id));
+    }
+
+    [Fact]
+    public async Task POST_api_events_rejects_an_unknown_overlap_resolution()
+    {
+        var date = new DateOnly(2026, 10, 10);
+        var window = new AvailabilityWindow(
+            new WindowId("w_afternoon"), "Afternoon", new TimeOnly(13, 0), new TimeOnly(17, 0), TagSet.Empty);
+        await WriteAsync(new OverridesWrite([new DateOverride(date, [window], null)]));
+
+        var response = await _client.PostAsJsonAsync("/api/events", new
+        {
+            date = "2026-10-10", name = "Sam's tournament", start = "14:00", end = "16:00",
+            resolutions = new[] { new { windowId = window.Id.Value, resolution = "99" } },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Events);
+        Assert.Equal(window, Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Overrides).Windows.Single());
+    }
+
+    [Fact]
+    public async Task POST_api_events_refuses_an_overlap_resolution_that_cannot_preserve_a_Window()
+    {
+        var date = new DateOnly(2026, 10, 10);
+        var window = new AvailabilityWindow(
+            new WindowId("w_afternoon"), "Afternoon", new TimeOnly(13, 0), new TimeOnly(17, 0), TagSet.Empty);
+        await WriteAsync(new OverridesWrite([new DateOverride(date, [window], null)]));
+
+        var response = await _client.PostAsJsonAsync("/api/events", new
+        {
+            date = "2026-10-10", name = "Sam's tournament", start = "12:00", end = "18:00",
+            resolutions = new[] { new { windowId = window.Id.Value, resolution = "truncateStart" } },
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Events);
+        Assert.Equal(window, Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Overrides).Windows.Single());
     }
 
     [Fact]

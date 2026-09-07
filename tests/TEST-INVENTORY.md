@@ -775,6 +775,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/day-templates/{id}/windows/{windowId}/dependents` counts the Tasks that would be orphaned
   by removing a Dimension value, **before** the edit is saved, and writes nothing
 - `POST /api/events` writes the Event **first**, then the one-off day its overlap resolution generates
+- `POST /api/events` without an overlap needs no resolution
+- `POST /api/events` rejects an unknown overlap resolution
+- `POST /api/events` refuses an overlap resolution that cannot preserve a Window
 - `GET /api/events/overlap-check` names every Window the proposed Event overlaps, **partial overlaps
   included**, and writes nothing
 - `PUT /api/event-exceptions/{date}/{prototypeId}` records a **move** as an edit, not as

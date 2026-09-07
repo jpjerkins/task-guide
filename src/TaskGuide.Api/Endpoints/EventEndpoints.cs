@@ -61,14 +61,18 @@ public static class EventEndpoints
             return TypedResults.BadRequest<object>(new { error = "a date, name, and ordered start/end times are required" });
         }
 
-        if (request.Resolutions is null || request.Resolutions.Any(resolution => !Enum.TryParse<OverlapResolution>(resolution.Resolution, true, out _)))
+        var resolutionRequests = request.Resolutions ?? [];
+        if (resolutionRequests.Any(resolution => !TryParseOverlapResolution(resolution.Resolution, out _)) ||
+            resolutionRequests.Select(resolution => resolution.WindowId).Distinct(StringComparer.Ordinal).Count() != resolutionRequests.Count)
         {
             return TypedResults.BadRequest<object>(new { error = "each overlap resolution must be replace, truncateStart, truncateEnd, or split" });
         }
 
-        var resolutions = request.Resolutions.ToDictionary(
+        var resolutions = resolutionRequests.ToDictionary(
             resolution => new WindowId(resolution.WindowId),
-            resolution => Enum.Parse<OverlapResolution>(resolution.Resolution, true));
+            resolution => TryParseOverlapResolution(resolution.Resolution, out var parsed)
+                ? parsed
+                : throw new InvalidOperationException("Overlap resolutions are validated before they are applied."));
         var @event = new Event(minter.NextEventId(), date, request.Name, start, end, request.Tags ?? TagSet.Empty, request.AbsenceNotice);
         var outcome = await new CreateEvent(store, minter).ExecuteAsync(@event, resolutions, ct);
 
@@ -111,6 +115,9 @@ public static class EventEndpoints
     }
 
     private static bool IsEventPrototypeId(string value) => value.StartsWith(EventPrototypeId.Prefix, StringComparison.Ordinal);
+
+    private static bool TryParseOverlapResolution(string value, out OverlapResolution resolution) =>
+        Enum.TryParse(value, ignoreCase: true, out resolution) && Enum.IsDefined(resolution);
 }
 
 public sealed record CreateEventRequest(

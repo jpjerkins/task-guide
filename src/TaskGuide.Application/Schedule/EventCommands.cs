@@ -23,6 +23,11 @@ public sealed class CreateEvent(IStore store, IIdMinter minter)
                 return new CreateEventRefused("Every overlapping Window needs a resolution");
             }
 
+            if (overlapping.Any(window => !CanResolve(window, @event, resolutions[window.Id])))
+            {
+                return new CreateEventRefused("The overlap resolution cannot preserve that Window");
+            }
+
             if (overlapping.Length == 0)
             {
                 return OneOf<StoreMutation, CreateEventRefused>.FromT0(new StoreMutation([
@@ -52,6 +57,16 @@ public sealed class CreateEvent(IStore store, IIdMinter minter)
     private static bool Overlaps(AvailabilityWindow window, Event @event) =>
         window.Start < @event.End && @event.Start < window.End;
 
+    private static bool CanResolve(AvailabilityWindow window, Event @event, OverlapResolution resolution) =>
+        resolution switch
+        {
+            OverlapResolution.Replace => true,
+            OverlapResolution.TruncateStart => @event.End < window.End,
+            OverlapResolution.TruncateEnd => window.Start < @event.Start,
+            OverlapResolution.Split => window.Start < @event.Start && @event.End < window.End,
+            _ => false,
+        };
+
     private IEnumerable<AvailabilityWindow> Resolve(AvailabilityWindow window, Event @event, OverlapResolution resolution) =>
         resolution switch
         {
@@ -60,12 +75,12 @@ public sealed class CreateEvent(IStore store, IIdMinter minter)
                 [window with { Start = @event.End }],
             OverlapResolution.TruncateEnd when window.Start < @event.Start =>
                 [window with { End = @event.Start }],
-            OverlapResolution.Split when window.Start < @event.Start && @event.End < window.End =>
+            OverlapResolution.Split =>
             [
                 window with { End = @event.Start },
                 window with { Id = minter.NextWindowId(), Start = @event.End },
             ],
-            _ => [],
+            _ => throw new InvalidOperationException("Overlap resolutions are validated before they are applied."),
         };
 }
 
