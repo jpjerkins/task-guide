@@ -18,11 +18,11 @@ public static class DayTemplateEndpoints
         // Gated on `Unused` — derived, never stored. Reachable from nothing, so the delete cannot
         // corrupt any record and the dangerous case is unrepresentable rather than warned about.
         // The confirmation names any Event prototypes carried, since those hold Absence notices.
-        templates.MapDelete("/{id}", (string id) => Results.NoContent());
+        templates.MapDelete("/{id}", DayTemplateLifecycleHandlers.DeleteAsync);
 
         // Shown BEFORE saving an edit: "used by 3 Patterns: Volleyball, Summer, School year".
         // Blast radius is made visible, not prevented.
-        templates.MapGet("/{id}/usage", (string id) => Results.NoContent());
+        templates.MapGet("/{id}/usage", DayTemplateLifecycleHandlers.Usage);
 
         templates.MapPost("/{id}/event-prototypes", (string id) => Results.NoContent());
         templates.MapPatch("/{id}/event-prototypes/{prototypeId}", (string id, string prototypeId) => Results.NoContent());

@@ -117,4 +117,21 @@ public sealed class OpenApiDocumentTests : IDisposable
             .GetProperty("schema").GetProperty("$ref").GetString();
         Assert.Equal("#/components/schemas/TaskResponse", createdRef);
     }
+
+    [Fact]
+    public async Task Day_template_lifecycle_responses_are_typed_for_SPA_generation()
+    {
+        var doc = await GetDocumentAsync();
+        var paths = doc.GetProperty("paths");
+
+        var promotion = paths.GetProperty("/api/overrides/{date}/promote").GetProperty("post")
+            .GetProperty("responses").GetProperty("200").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
+        var stamp = paths.GetProperty("/api/overrides/{date}/stamp").GetProperty("put")
+            .GetProperty("responses").GetProperty("200").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
+
+        Assert.Equal("#/components/schemas/DayTemplateResponse", promotion);
+        Assert.Equal("#/components/schemas/DateOverrideResponse", stamp);
+    }
 }

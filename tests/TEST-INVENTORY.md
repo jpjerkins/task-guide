@@ -770,6 +770,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   assumes matches nothing and is not an error
 - `/health` is reachable without traversing `/api`
 - host creation refuses a future-version store, before any endpoint or the tick loop can start (#78)
+- malformed Day-template lifecycle route or body input is 400
+- Day-template lifecycle 200 shapes are typed in OpenAPI for SPA generation
 
 ## `TaskGuide.Web` (vitest)
 

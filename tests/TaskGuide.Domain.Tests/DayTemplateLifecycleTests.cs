@@ -115,6 +115,30 @@ public sealed class DayTemplateLifecycleTests
         Assert.True(unused);
     }
 
+    /// <summary>
+    /// `tests/TEST-INVENTORY.md`: promotion copies a one-off day's shape outward while retaining
+    /// an independent source Override. Later edits to either value must not propagate across it.
+    /// </summary>
+    [Fact]
+    public void Promoting_a_one_off_day_writes_the_source_dates_use_record_and_does_not_re_link()
+    {
+        var sourceWindow = Evening();
+        var source = new DateOverride(Today, [sourceWindow], null);
+        var proposed = new DayTemplate(Volleyball, "Volleyball Tuesday", [], []);
+
+        var (template, promotedSource) = DayTemplateLifecycle.Promote(source, proposed);
+        var editedTemplate = template with { Windows = [sourceWindow with { Name = "Edited template" }] };
+        var editedSource = promotedSource with { Windows = [sourceWindow with { Name = "Edited date" }] };
+
+        Assert.Equal(sourceWindow, Assert.Single(template.Windows));
+        Assert.Equal(sourceWindow, Assert.Single(promotedSource.Windows));
+        Assert.Equal("Edited template", Assert.Single(editedTemplate.Windows).Name);
+        Assert.Equal("Evening", Assert.Single(promotedSource.Windows).Name);
+        Assert.Equal("Edited date", Assert.Single(editedSource.Windows).Name);
+        Assert.Equal("Evening", Assert.Single(template.Windows).Name);
+        Assert.Equal(new DayTemplateUse(Volleyball, "Volleyball Tuesday"), promotedSource.Used);
+    }
+
     /// <summary>Beyond-inventory: a one-date span yields exactly that date.</summary>
     [Fact]
     public void An_Override_span_of_one_date_yields_exactly_that_date()

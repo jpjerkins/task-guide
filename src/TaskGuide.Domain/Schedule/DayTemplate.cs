@@ -90,4 +90,24 @@ public static class DayTemplateLifecycle
 
         return !stampedWithinHorizon;
     }
+
+    /// <summary>
+    /// Copies a one-off day's shape into its new named template and records that the source date
+    /// wore that template. The source remains an Override: promotion never re-links it.
+    /// </summary>
+    public static (DayTemplate Template, DateOverride Source) Promote(DateOverride source, DayTemplate template) =>
+        (template with { Windows = [.. source.Windows] }, source with { Used = new DayTemplateUse(template.Id, template.Name) });
+
+    /// <summary>
+    /// Lays a template's Windows onto a date. This is a value copy of the collection, while each
+    /// Window retains its id so a Fire row already recorded for the date still matches.
+    /// </summary>
+    public static DateOverride Stamp(DateOnly date, DayTemplate template) =>
+        new(date, [.. template.Windows], new DayTemplateUse(template.Id, template.Name));
+
+    /// <summary>Drops an `Unused` template; Overrides need no repair because they hold copies.</summary>
+    public static IReadOnlyList<DayTemplate> Delete(
+        DayTemplateId templateId,
+        IReadOnlyList<DayTemplate> templates) =>
+        [.. templates.Where(template => !template.Id.Equals(templateId))];
 }
