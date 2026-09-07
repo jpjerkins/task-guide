@@ -1,3 +1,5 @@
+using TaskGuide.Domain.Schedule;
+
 namespace TaskGuide.Api.Endpoints;
 
 /// <summary>
@@ -9,7 +11,7 @@ public static class DayEndpoints
     public static RouteGroupBuilder MapDayEndpoints(this RouteGroupBuilder api)
     {
         var days = api.MapGroup("/days").WithTags("Schedule");
-        days.MapGet("/{date}", (string date) => Results.NoContent());
+        days.MapGet("/{date}", (DateOnly date, IDayShapeReader shapes) => TypedResults.Ok(shapes.For(date)));
 
         return api;
     }

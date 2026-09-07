@@ -85,6 +85,18 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_tasks_with_status_unprocessed_returns_only_Unprocessed_Tasks()
+    {
+        await _client.PostAsJsonAsync("/api/tasks", new { title = "Active task", duration = 30 });
+        await _client.PostAsJsonAsync("/api/capture", new { title = "Needs processing", duration = (int?)null, source = "in-app" });
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks?status=unprocessed");
+
+        Assert.Single(list.EnumerateArray());
+        Assert.Equal("Needs processing", list[0].GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task A_posted_task_is_persisted_to_tasks_json_on_disk()
     {
         await _client.PostAsJsonAsync("/api/tasks", new { title = "Descale the kettle", duration = 30 });

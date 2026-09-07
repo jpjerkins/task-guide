@@ -1,3 +1,7 @@
+using TaskGuide.Application.Ports;
+using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Tags;
+
 namespace TaskGuide.Api.Endpoints;
 
 /// <summary>
@@ -11,17 +15,50 @@ public static class DimensionEndpoints
         var dimensions = api.MapGroup("/dimensions").WithTags("Dimensions");
 
         // Identity, label, algebra, value set, and — ordinal only — the two defaults.
-        dimensions.MapGet("/", () => Results.NoContent());
+        dimensions.MapGet("/", (DimensionRegistry registry) =>
+            TypedResults.Ok(registry.Dimensions.Select(ToResponse)));
 
         // Which Dimension will claim a string as it is typed, or plainly that nothing will. This
         // is the only moment the system can catch a mistyped Tag, which is otherwise invisible to
         // every mechanism in the model: `#garge` claims nothing, so it admits the Task to MORE
         // Windows than the Tag its author meant.
-        dimensions.MapGet("/claiming", (string tag) => Results.NoContent());
+        dimensions.MapGet("/claiming", (string tag, DimensionRegistry registry) =>
+            TypedResults.Ok(new ClaimingDimensionResponse(registry.Claiming(new TagValue(tag))?.Id.Value)));
 
         // The inert-tags staging area, with its count — tags resolving to no Dimension.
-        dimensions.MapGet("/loose-tags", () => Results.NoContent());
+        dimensions.MapGet("/loose-tags", (IStore store) =>
+        {
+            var tags = store.Read().Tasks.SelectMany(task => task.Tags.LooseTags).Select(tag => tag.Value).ToArray();
+            return TypedResults.Ok(new LooseTagsResponse(tags, tags.Length));
+        });
 
         return dimensions;
     }
+
+    private static DimensionResponse ToResponse(Dimension dimension) => dimension.Match(
+        categorical => new DimensionResponse(
+            categorical.Id.Value,
+            categorical.Label,
+            "categorical",
+            categorical.DeclaredValues.Select(value => value.Value).ToArray(),
+            TaskDefault: null,
+            WindowDefault: null),
+        ordinal => new DimensionResponse(
+            ordinal.Id.Value,
+            ordinal.Label,
+            "ordinal",
+            ordinal.OrderedValues.Select(value => value.Value).ToArray(),
+            ordinal.TaskDefault?.Value,
+            ordinal.WindowDefault?.Value));
 }
+
+public sealed record DimensionResponse(
+    string Id,
+    string Label,
+    string Algebra,
+    IReadOnlyList<string> Values,
+    string? TaskDefault,
+    string? WindowDefault);
+
+public sealed record ClaimingDimensionResponse(string? DimensionId);
+public sealed record LooseTagsResponse(IReadOnlyList<string> Tags, int Count);

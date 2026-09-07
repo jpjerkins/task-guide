@@ -24,8 +24,25 @@ public static class TaskEndpoints
         // Walking skeleton slice (#51): a Task is a title and a Duration. No matching, ranking,
         // Recurrence or Dimensions beyond the one (Duration) the skeleton needs to prove the
         // substrate end to end.
-        tasks.MapGet("/", (IStore store) =>
-            TypedResults.Ok(store.Read().Tasks.Select(ToResponse)));
+        tasks.MapGet("/", (
+            string? status,
+            IStore store,
+            DimensionRegistry registry,
+            StaleThresholds staleThresholds,
+            TimeProvider timeProvider,
+            DayBoundary boundary) =>
+        {
+            var view = store.Read();
+            var filtered = view.Tasks.AsEnumerable();
+            if (Enum.TryParse<Status>(status, ignoreCase: true, out var requestedStatus))
+            {
+                var now = timeProvider.GetUtcNow();
+                filtered = filtered.Where(task =>
+                    StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary) == requestedStatus);
+            }
+
+            return TypedResults.Ok(filtered.Select(ToResponse));
+        });
 
         tasks.MapPost("/", async Task<Results<Created<TaskResponse>, BadRequest<object>, ProblemHttpResult>> (CreateTaskRequest request, IStore store, IIdMinter minter, ILogger<TaskEndpointsLogCategory> logger, CancellationToken ct) =>
         {

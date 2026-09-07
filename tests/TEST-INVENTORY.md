@@ -739,6 +739,10 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `PUT /api/right-now/matching-on` writes through to that date's Override and does not stack
 - `PUT /api/right-now/matching-on` is refused on a landing page past its Reminder's day boundary
 - marking off is accepted on that same stale page
+- `GET /api/tasks?status=unprocessed` returns only `Unprocessed` Tasks
+- `GET /api/dimensions` returns the declared Dimension registry
+- `GET /api/dimensions/claiming` names the Dimension that claims a Tag
+- `GET /api/dimensions/loose-tags` returns the inert Tag staging area and count
 - `POST /api/tasks/{id}/completions` is refused on an `Unprocessed` Task
 - completing a derived Task writes its `(ruleId, triggerId, due)` derived-completion fact
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
