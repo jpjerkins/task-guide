@@ -383,6 +383,10 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - **it offers no Snooze at all** — not a disabled one
 - a non-runway windowless day fires nothing
 
+### Schedule authoring
+
+- an Event write precedes its generated Override write
+
 ### Delivery
 
 **Project:** spans two. The adapter half (*a Receipt is retried up to three times while Pushover
