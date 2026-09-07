@@ -29,12 +29,13 @@ public static class RightNowEndpoints
             IStore store,
             TimeProvider timeProvider,
             DayBoundary boundary,
+            DimensionRegistry registry,
             CancellationToken ct) =>
         {
             var dimensions = request.Dimensions.ToDictionary(
                 pair => new DimensionId(pair.Key),
                 pair => (IReadOnlyList<TagValue>)pair.Value.Select(value => new TagValue(value)).ToArray());
-            var result = await new MatchingOn(store, timeProvider, boundary).ExecuteAsync(
+            var result = await new MatchingOn(store, timeProvider, boundary, registry).ExecuteAsync(
                 new MatchingOnRequest(request.Date, new WindowId(request.WindowId), dimensions),
                 ct);
 

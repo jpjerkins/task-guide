@@ -738,6 +738,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   with the same line the disabled control shows
 - `PUT /api/right-now/matching-on` writes through to that date's Override and does not stack
 - `PUT /api/right-now/matching-on` is refused on a landing page past its Reminder's day boundary
+- `PUT /api/right-now/matching-on` refuses multiple values for an ordinal ceiling
 - marking off is accepted on that same stale page
 - `GET /api/tasks?status=unprocessed` returns only `Unprocessed` Tasks
 - `GET /api/dimensions` returns the declared Dimension registry

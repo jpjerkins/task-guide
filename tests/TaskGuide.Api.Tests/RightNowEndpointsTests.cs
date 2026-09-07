@@ -88,6 +88,23 @@ public sealed class RightNowEndpointsTests : IDisposable
         Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
     }
 
+    [Fact]
+    public async Task PUT_api_right_now_matching_on_refuses_multiple_values_for_an_ordinal_ceiling()
+    {
+        await SeedScheduleAsync(new AvailabilityWindow(
+            new WindowId("w_evening"), "Evening", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty));
+
+        var response = await _client.PutAsJsonAsync("/api/right-now/matching-on", new
+        {
+            date = new DateOnly(2030, 1, 7),
+            windowId = "w_evening",
+            dimensions = new Dictionary<string, string[]> { ["energy"] = ["low", "high"] },
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
+    }
+
     private async Task SeedScheduleAsync(AvailabilityWindow window)
     {
         var template = new DayTemplate(new DayTemplateId("dt_everyday"), "Everyday", [window], []);

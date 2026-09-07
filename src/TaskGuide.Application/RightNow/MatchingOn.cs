@@ -13,7 +13,7 @@ namespace TaskGuide.Application.RightNow;
 /// stamps the active Pattern's day template; subsequent adjustments replace that date's one
 /// Override rather than layering another one over it.
 /// </summary>
-public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBoundary boundary)
+public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBoundary boundary, DimensionRegistry registry)
 {
     public async Task<OneOf<MatchingOnApplied, MatchingOnRefused>> ExecuteAsync(
         MatchingOnRequest request,
@@ -21,6 +21,11 @@ public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBound
     {
         var result = await store.MutateAsync<MatchingOnRefused>(view =>
         {
+            if (Validate(request.Dimensions) is { } invalid)
+            {
+                return invalid;
+            }
+
             if (timeProvider.GetUtcNow() >= boundary.EndOf(request.Date))
             {
                 return new MatchingOnRefused("This reminder was for yesterday");
@@ -58,6 +63,33 @@ public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBound
             ?? throw new InvalidOperationException($"Active Pattern names missing Day template {templateId.Value}");
 
         return new OverrideSource(template.Windows, new DayTemplateUse(template.Id, template.Name));
+    }
+
+    private MatchingOnRefused? Validate(IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> dimensions)
+    {
+        foreach (var (id, values) in dimensions)
+        {
+            var dimension = registry.Dimensions.FirstOrDefault(candidate => candidate.Id.Equals(id));
+            if (dimension is null)
+            {
+                return new MatchingOnRefused($"Dimension '{id.Value}' is not declared");
+            }
+
+            if (values.Any(value => !dimension.Values.Contains(value)))
+            {
+                return new MatchingOnRefused($"A value does not belong to Dimension '{id.Value}'");
+            }
+
+            var hasMultipleOrdinalValues = dimension.Match(
+                _ => false,
+                _ => values.Count > 1);
+            if (hasMultipleOrdinalValues)
+            {
+                return new MatchingOnRefused($"Ordinal Dimension '{id.Value}' has one ceiling");
+            }
+        }
+
+        return null;
     }
 
     private sealed record OverrideSource(IReadOnlyList<AvailabilityWindow> Windows, DayTemplateUse? Used);
