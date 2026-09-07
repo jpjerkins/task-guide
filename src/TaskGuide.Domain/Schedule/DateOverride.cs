@@ -71,9 +71,10 @@ public sealed record OverrideSpanRequest(DateOnly From, DateOnly To, DayTemplate
 {
     public IEnumerable<DateOnly> Dates()
     {
-        for (var date = From; date <= To; date = date.AddDays(1))
+        for (var date = From; ; date = date.AddDays(1))
         {
             yield return date;
+            if (date == To) yield break;
         }
     }
 }

@@ -25,15 +25,15 @@ public static class OverrideEndpoints
         // ONE AUTHORING GESTURE, a start–end range, writing one Override per date — each
         // independently editable afterwards (#41). A range landing on already-overridden dates is
         // a replacement, confirmed in one batch before the write.
-        overrides.MapPost("/", () => Results.NoContent());
-        overrides.MapGet("/clobber-check", () => Results.NoContent());
+        overrides.MapPost("/", CreateAsync);
+        overrides.MapGet("/clobber-check", ClobberCheck);
 
         // Applying a named template is a STAMP, not a link, and the copy preserves each Window's
         // id — load-bearing for the Fire record when a date materialises mid-day.
         overrides.MapPut("/{date}/stamp", DayTemplateLifecycleHandlers.StampAsync);
 
         // Editing a stamped date directly makes it a one-off day; the use record survives that.
-        overrides.MapPatch("/{date}", (string date) => Results.NoContent());
+        overrides.MapPatch("/{date}", EditAsync);
         overrides.MapDelete("/{date}", (string date) => Results.NoContent());
 
         // Promotion copies the shape OUTWARD; the source date keeps its own copy and does not
@@ -42,6 +42,53 @@ public static class OverrideEndpoints
         overrides.MapPost("/{date}/promote", DayTemplateLifecycleHandlers.PromoteAsync);
 
         return api;
+    }
+
+    private static async Task<Results<Created<DateOverrideResponse[]>, BadRequest<object>, Conflict<object>>> CreateAsync(
+        OverrideSpanApiRequest request, IStore store, CancellationToken ct)
+    {
+        if (!DateOnly.TryParse(request.From, out var from) || !DateOnly.TryParse(request.To, out var to) || to < from ||
+            (request.TemplateId is not null && !DayTemplateLifecycleHandlers.IsDayTemplateId(request.TemplateId)))
+        {
+            return TypedResults.BadRequest<object>(new { error = "valid start and end dates are required" });
+        }
+
+        DayTemplateId? templateId = request.TemplateId is null ? null : new DayTemplateId(request.TemplateId);
+        var outcome = await new CreateOverrideSpan(store).ExecuteAsync(new OverrideSpanRequest(from, to, templateId), ct);
+        return outcome.Match<Results<Created<DateOverrideResponse[]>, BadRequest<object>, Conflict<object>>>(
+            _ => TypedResults.Created("/api/overrides", store.Read().Overrides
+                .Where(overrideDay => overrideDay.Date >= from && overrideDay.Date <= to)
+                .OrderBy(overrideDay => overrideDay.Date)
+                .Select(DayTemplateLifecycleHandlers.ToResponse)
+                .ToArray()),
+            refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
+    }
+
+    private static Results<Ok<IReadOnlyList<DateOnly>>, BadRequest<object>> ClobberCheck(string? from, string? to, IStore store)
+    {
+        if (!DateOnly.TryParse(from, out var start) || !DateOnly.TryParse(to, out var end) || end < start)
+        {
+            return TypedResults.BadRequest<object>(new { error = "valid start and end dates are required" });
+        }
+
+        return TypedResults.Ok<IReadOnlyList<DateOnly>>([.. store.Read().Overrides
+            .Where(overrideDay => overrideDay.Date >= start && overrideDay.Date <= end)
+            .Select(overrideDay => overrideDay.Date)
+            .OrderBy(date => date)]);
+    }
+
+    private static async Task<Results<Ok<DateOverrideResponse>, BadRequest<object>, Conflict<object>>> EditAsync(
+        string date, EditOverrideRequest request, IStore store, CancellationToken ct)
+    {
+        if (!DateOnly.TryParse(date, out var overrideDate) || request.Windows is null)
+        {
+            return TypedResults.BadRequest<object>(new { error = "a date and Windows are required" });
+        }
+
+        var outcome = await new EditOverride(store).ExecuteAsync(overrideDate, request.Windows, ct);
+        return outcome.Match<Results<Ok<DateOverrideResponse>, BadRequest<object>, Conflict<object>>>(
+            _ => TypedResults.Ok(DayTemplateLifecycleHandlers.ToResponse(store.Read().Overrides.Single(overrideDay => overrideDay.Date == overrideDate))),
+            refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
     }
 }
 
@@ -97,7 +144,7 @@ internal static class DayTemplateLifecycleHandlers
             .Select(pattern => pattern.Name));
     }
 
-    private static bool IsDayTemplateId(string? value) =>
+    internal static bool IsDayTemplateId(string? value) =>
         value is { Length: 29 }
         && value.StartsWith(DayTemplateId.Prefix, StringComparison.Ordinal)
         && value[DayTemplateId.Prefix.Length..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
@@ -105,7 +152,7 @@ internal static class DayTemplateLifecycleHandlers
     private static DayTemplateResponse ToResponse(DayTemplate template) =>
         new(template.Id.Value, template.Name, template.Windows, template.EventPrototypes);
 
-    private static DateOverrideResponse ToResponse(DateOverride dateOverride) =>
+    internal static DateOverrideResponse ToResponse(DateOverride dateOverride) =>
         new(
             dateOverride.Date,
             dateOverride.Windows,
@@ -114,6 +161,8 @@ internal static class DayTemplateLifecycleHandlers
 
 public sealed record PromoteDayRequest(string Name);
 public sealed record StampDayRequest(string TemplateId);
+public sealed record OverrideSpanApiRequest(string From, string To, string? TemplateId);
+public sealed record EditOverrideRequest(IReadOnlyList<AvailabilityWindow>? Windows);
 public sealed record DayTemplateResponse(string Id, string Name, IReadOnlyList<AvailabilityWindow> Windows, IReadOnlyList<EventPrototype> EventPrototypes);
 public sealed record DateOverrideResponse(DateOnly Date, IReadOnlyList<AvailabilityWindow> Windows, DayTemplateUseResponse? Used);
 public sealed record DayTemplateUseResponse(string TemplateId, string TemplateName);

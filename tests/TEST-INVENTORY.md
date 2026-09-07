@@ -750,6 +750,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
+- `PATCH /api/overrides/{date}` on a stamped date makes it a one-off day and its use record survives
+- an Override span ending at `DateOnly.MaxValue` writes its final date without overflow
 - `DELETE /api/patterns/{id}` is refused for the active Pattern
 - `GET /api/patterns/active/switch-impact` returns the orphan count **before** the switch
 - `PUT /api/overrides/{date}/stamp` copies the template's shape and **preserves each Window's id**
