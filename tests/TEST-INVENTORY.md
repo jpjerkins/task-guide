@@ -1069,6 +1069,136 @@ constraint 6.
 
 Until they land, those bullets are testable against fixtures and unreachable in the running app.
 `GET /api/day-templates` is the one that stops a screen existing rather than degrading it.
+### Web-Now
+
+The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and
+are asserted per surface rather than once: **a system-presented control must survive its own input
+events** (ADR-0006), and **there is no client-side clock** — every timing predicate is answered by
+the server and read here. The three shared controls (date entry, Recurrence, ordinal sliders) are
+specified under **Shared controls** above and are not restated here.
+
+#### Reminder landing page
+
+- the page renders the Window's own name, span and date — it is not a re-render of the push's text
+- **all** matches render, not the push's shortlist of three; the push is deliberately not at parity
+  with the page
+- a Window that matched nothing renders "Nothing fits" and states that no notification would have
+  fired, rather than an empty list
+- the Snooze control names the interval the server gave it; the `clamp(25%, 5, 30)` arithmetic is
+  never recomputed client-side
+- when the server reports Snooze unavailable the control is **suppressed, not hidden** — replaced by
+  a line stating why, and the line differs by case: "Snooze ends at midnight" near the boundary,
+  "This reminder was for yesterday" on a stale page
+- a rejected Snooze POST renders **the same line** the disabled state would have shown — a rejection
+  is just a slow tick, and no client-side clock decides either one
+- "Matching on" is gated by the same page-level predicate and carries its own suppression line; the
+  page never derives that gate from the device clock
+- mark off and Postpone stay live on a page past its Day boundary — they are facts about a Task, not
+  about the day
+- the footer renders the counts as a partition plus a disjoint orphan count ("6 to process · 3 stale
+  · 2 orphans"); zero-valued components are omitted and the whole line disappears when all are zero
+- a failed fetched-Dimension check renders its footer note ("Weather unavailable") beside the counts,
+  named generically off the response rather than special-cased to weather
+- "Matching on" renders the axes the Window declares distinctly from the axes it leaves to the
+  window-side default
+- toggling a "Matching on" chip re-reads the match list from the server; the rendered list is never
+  filtered client-side
+- the "Matching on" chipset survives its own press — same DOM nodes before and after, which is
+  ADR-0006 asserted at the vitest level rather than only in E2E
+- a fallback push's landing page has **no** Snooze control at all, rather than a disabled one — there
+  is no Window behind it to derive an interval from
+- an adjustment reports back that the date is now an Override, since the write is what protects a Day
+  template for 13 months
+
+#### Task list and status filters
+
+- the four status filters render with their counts, and the selected one is `aria-pressed`
+- Status is read off the wire; nothing in the SPA derives, orders or recomputes a label
+- a Task with no Duration renders a "no duration" marker in place of a Duration pill, and its
+  mark-off control is disabled — there is nothing yet to be done within
+- an Orphan badge renders only on an `Active` Task, so it never co-occurs with the unprocessed or
+  stale piles
+- the Orphan badge links into the window editor for the repair — the destination is Web-Authoring's,
+  the link is this lane's
+- a deferred Task is absent from every match-driven surface but present in this list, marked with its
+  surface date, so it stays findable
+- the "Not now" gesture appears on `Active` rows only, and never on a recurring or a derived Task
+- a postponed row **stays in place, greyed, showing its postpone date** rather than vanishing from
+  the list being read
+- a Postpone interval landing past the Deadline is labelled at the point of the tap ("a month · past
+  its deadline"), and the row says so too
+- Postpone offers three fixed intervals plus a "pick a date…" escape — the same shape the rail uses
+- an empty list renders "Nothing here.", never a blank region
+
+#### Task detail
+
+- renders title, notes, the Duration chipset, Deadline, and one value chipset per Dimension
+- the fit bar renders Opportunities as a count with its horizon in words — "in the next 7 days", or
+  "before it is due" when the Task carries a Deadline still ahead
+- **the two zeros are distinguished**: zero Opportunities with a zero Pattern-week count renders the
+  orphan reading and names the blocking axes; zero with a non-zero Pattern-week count renders "an
+  override or event has taken them all out of this stretch — nothing is wrong with the task"
+- an unknown Opportunities count (a failed fetched-Dimension check) renders as unknown, never as zero
+- the fit bar counts a non-`Active` Task as if `Active` and says so — it is not being matched at all
+  right now
+- the Dimensions section picks **values** on axes; no control here adds, removes or renames an axis
+- a Task's loose Tags render as kept-but-inert, distinct from the values that match
+- clearing Postpone here is how a postponed Task returns — the greyed row is placement, not a rescue
+  path, so there is no undo affordance on the row itself
+- a recurring Task offers Defer's **offset** form only; an absolute Defer is not authorable there
+- the Deadline date entry survives its own input event
+
+#### Quick capture
+
+- the sheet asks for a title and a Duration and nothing else — Duration is the only property the
+  capture path must supply
+- the sheet offers no Tag control: no capture path collects Tags
+- the capture carries a `source` identifying the app, which is the one value that earns no Receipt
+- a capture that cannot reach the server **fails loudly in the sheet**, which stays open with what was
+  typed — capture is never queued and nothing on the client holds it for later
+- the sheet renders the Duration bucket the server returned rather than the value it sent, since
+  snapping is the server's and always rounds up
+- "Add more details…" carries the typed title into task detail rather than discarding it
+
+#### "Right now" on demand
+
+- reached from the day view's "What fits right now?", and it never fires a notification
+- inside a live Window it seeds "Matching on" from that Window's values and lists its matches
+- between Windows it renders "Nothing open" with nothing seeded; widening a value mints an **ad-hoc
+  Window** on today, labelled as unplanned and as running to the next commitment
+- the ad-hoc Window states that it never fires — you are already standing in it
+- there is **no Snooze** on this screen: this is the "show me what fits now" feature the Snooze
+  re-matching rule was careful not to be
+- adjusting previews only; the sole write on this screen is minting the ad-hoc Window, and it happens
+  on request
+- an adjusted query matching nothing renders "Nothing fits that" and prompts widening, rather than an
+  empty list
+- the seeded live Window comes from the server's day shape; the screen never compares clock times to
+  decide what is open
+
+#### Today / day view
+
+- renders the date and the day's shape label as the nav subtitle
+- renders the live Window as a card with its span and an "N of M tasks fit" count; the card is absent
+  when nothing is live
+- the live-Window card opens that Window's landing page
+- lists the day's Windows, and the day's Events under their own heading
+- liveness and the day's shape both come from the server; the SPA never decides which Window is open
+- the footer counts render here by the same rule as the landing page
+- a day with no Windows still renders its shape and counts — a windowless day is exactly the day the
+  fallback push exists for, so it is the one that must not blank
+
+#### Unprocessed / stale triage
+
+- renders the two piles under their own headings, with both counts in the subtitle
+- an unprocessed row renders the five Duration buttons inline — the same five capture offers, because
+  supplying Duration *is* the processing
+- pressing one moves the Task out of the unprocessed pile without the screen being re-entered
+- the stale pile renders ordinary Task rows and offers no "un-stale" control: the response is reword,
+  slice smaller, or delete
+- an empty pile renders "Nothing to process." rather than being hidden — the heading is the nudge
+- nothing on this screen subscribes to a notification; these two piles nudge only through the
+  reminder footer
 
 ## `TaskGuide.E2E`
 
