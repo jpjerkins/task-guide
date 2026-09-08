@@ -46,7 +46,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    status?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -173,7 +175,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeferTaskRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -274,7 +280,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PostponeTaskRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -362,14 +372,38 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaptureRequest"];
+                };
+            };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Created */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["CaptureTaskResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
                 };
             };
         };
@@ -427,7 +461,11 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MatchingOnHttpRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -675,12 +713,30 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -731,134 +787,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": string[];
+                    };
                 };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/day-templates/{id}/windows": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
+                /** @description Bad Request */
+                400: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/day-templates/{id}/windows/{windowId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                    windowId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
+                    content: {
+                        "application/json": unknown;
                     };
-                    content?: never;
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                    windowId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/api/day-templates/{id}/windows/{windowId}/dependents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                    windowId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
                 };
             };
         };
@@ -961,6 +901,210 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/day-templates/{id}/windows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WindowRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AvailabilityWindow"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/day-templates/{id}/windows/{windowId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    windowId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    windowId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WindowRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AvailabilityWindow"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/day-templates/{id}/windows/{windowId}/dependents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    windowId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WindowValueDependentsResponse"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/patterns": {
         parameters: {
             query?: never;
@@ -982,7 +1126,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PatternResponse"][];
+                    };
                 };
             };
         };
@@ -994,14 +1140,29 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PatternRequest"];
+                };
+            };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Created */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PatternResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1032,12 +1193,30 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1052,14 +1231,38 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PatternRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PatternResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1074,7 +1277,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    to?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -1086,7 +1291,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["SwitchImpactResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1113,14 +1329,36 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SwitchActivePatternRequest"];
+                };
+            };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1164,14 +1402,38 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OverrideSpanApiRequest"];
+                };
+            };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Created */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DateOverrideResponse"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1241,14 +1503,38 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EditOverrideRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DateOverrideResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1263,7 +1549,10 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    from?: string;
+                    to?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -1275,7 +1564,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": string[];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1304,14 +1604,38 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StampDayRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DateOverrideResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1340,14 +1664,38 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PromoteDayRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DayTemplateResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1380,7 +1728,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DayShape"];
+                    };
                 };
             };
         };
@@ -1425,14 +1775,38 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateEventRequest"];
+                };
+            };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Created */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Event"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1451,7 +1825,11 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    date?: string;
+                    start?: string;
+                    end?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -1463,7 +1841,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AvailabilityWindow"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1580,14 +1969,27 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EditEventExceptionRequest"];
+                };
+            };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1604,12 +2006,21 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -1639,7 +2050,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DimensionResponse"][];
+                    };
                 };
             };
         };
@@ -1674,7 +2087,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ClaimingDimensionResponse"];
+                    };
                 };
             };
         };
@@ -1707,7 +2122,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["LooseTagsResponse"];
+                    };
                 };
             };
         };
@@ -1723,10 +2140,177 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AvailabilityWindow: {
+            id: components["schemas"]["WindowId"];
+            name: string;
+            /** Format: time */
+            start: string;
+            /** Format: time */
+            end: string;
+            tags: components["schemas"]["TagSet"];
+        };
+        BeforeOffset: {
+            /** Format: int32 */
+            n: number | string;
+            unit: components["schemas"]["OffsetUnit"];
+        };
+        CaptureRequest: {
+            title: string;
+            /** Format: int32 */
+            duration: null | number | string;
+            source: string;
+        };
+        CaptureTaskResponse: {
+            id: string;
+            title: string;
+            /** Format: int32 */
+            duration: null | number | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ClaimingDimensionResponse: {
+            dimensionId: null | string;
+        };
+        CreateEventRequest: {
+            date: string;
+            name: string;
+            start: string;
+            end: string;
+            tags: null | components["schemas"]["TagSet"];
+            absenceNotice: null | components["schemas"]["Offset"];
+            resolutions: null | components["schemas"]["EventOverlapResolutionRequest"][];
+        };
         CreateTaskRequest: {
             title: string;
             /** Format: int32 */
             duration: number | string;
+        };
+        DateOverrideResponse: {
+            /** Format: date */
+            date: string;
+            windows: components["schemas"]["AvailabilityWindow"][];
+            used: null | components["schemas"]["DayTemplateUseResponse"];
+        };
+        DayOfWeek: number;
+        DayShape: {
+            /** Format: date */
+            date: string;
+            windows: components["schemas"]["AvailabilityWindow"][];
+            events: components["schemas"]["Event"][];
+            isOverridden: boolean;
+        };
+        DayTemplateResponse: {
+            id: string;
+            name: string;
+            windows: components["schemas"]["AvailabilityWindow"][];
+            eventPrototypes: components["schemas"]["EventPrototype"][];
+        };
+        DayTemplateUseResponse: {
+            templateId: string;
+            templateName: string;
+        };
+        DeferTaskRequest: {
+            /** Format: date */
+            date: null | string;
+            /** Format: int32 */
+            offset: null | number | string;
+            unit: null | components["schemas"]["OffsetUnit"];
+        };
+        DimensionResponse: {
+            id: string;
+            label: string;
+            algebra: string;
+            values: string[];
+            taskDefault: null | string;
+            windowDefault: null | string;
+        };
+        EditEventExceptionRequest: {
+            deleted: boolean;
+            name: null | string;
+            start: null | string;
+            end: null | string;
+        };
+        EditOverrideRequest: {
+            windows: null | components["schemas"]["AvailabilityWindow"][];
+        };
+        Event: {
+            id: components["schemas"]["EventId"];
+            /** Format: date */
+            date: string;
+            name: string;
+            /** Format: time */
+            start: string;
+            /** Format: time */
+            end: string;
+            tags: components["schemas"]["TagSet"];
+            absenceNotice: null | components["schemas"]["Offset"];
+        };
+        EventId: {
+            value?: string;
+        };
+        EventOverlapResolutionRequest: {
+            windowId: string;
+            resolution: string;
+        };
+        EventPrototype: {
+            id: components["schemas"]["EventPrototypeId"];
+            name: string;
+            /** Format: time */
+            start: string;
+            /** Format: time */
+            end: string;
+            tags: components["schemas"]["TagSet"];
+            absenceNotice: null | components["schemas"]["Offset"];
+        };
+        EventPrototypeId: {
+            value?: string;
+        };
+        LastWeekdayBefore: {
+            weekday: components["schemas"]["DayOfWeek"];
+        };
+        LooseTag: {
+            value?: null | string;
+        };
+        LooseTagsResponse: {
+            tags: string[];
+            /** Format: int32 */
+            count: number | string;
+        };
+        MatchingOnHttpRequest: {
+            /** Format: date */
+            date: string;
+            windowId: string;
+            dimensions: {
+                [key: string]: string[];
+            };
+        };
+        Offset: {
+            value?: unknown;
+            /** Format: int32 */
+            index?: number | string;
+            isT0?: boolean;
+            isT1?: boolean;
+            asT0?: components["schemas"]["BeforeOffset"];
+            asT1?: components["schemas"]["LastWeekdayBefore"];
+        };
+        OffsetUnit: number;
+        OverrideSpanApiRequest: {
+            from: string;
+            to: string;
+            templateId: null | string;
+        };
+        PatternRequest: {
+            name: string;
+            days: string[];
+        };
+        PatternResponse: {
+            id: string;
+            name: string;
+            days: string[];
+        };
+        PostponeTaskRequest: {
+            /** Format: date */
+            date: string;
         };
         ProblemDetails: {
             type?: null | string;
@@ -1736,6 +2320,28 @@ export interface components {
             detail?: null | string;
             instance?: null | string;
         };
+        PromoteDayRequest: {
+            name: string;
+        };
+        StampDayRequest: {
+            templateId: string;
+        };
+        SwitchActivePatternRequest: {
+            patternId: string;
+        };
+        SwitchImpactResponse: {
+            /** Format: int32 */
+            newlyOrphaned: number | string;
+        };
+        TagSet: {
+            dimensions: {
+                [key: string]: components["schemas"]["TagValue"][];
+            };
+            looseTags: components["schemas"]["LooseTag"][];
+        };
+        TagValue: {
+            value?: null | string;
+        };
         TaskResponse: {
             id: string;
             title: string;
@@ -1743,6 +2349,23 @@ export interface components {
             duration: null | number | string;
             /** Format: date-time */
             createdAt: string;
+        };
+        WindowId: {
+            value?: string;
+        };
+        WindowRequest: {
+            name: string;
+            /** Format: time */
+            start: string;
+            /** Format: time */
+            end: string;
+            tags: components["schemas"]["TagSet"];
+        };
+        WindowValueDependentsResponse: {
+            dimensionId: string;
+            value: string;
+            /** Format: int32 */
+            dependentTasks: number | string;
         };
     };
     responses: never;
