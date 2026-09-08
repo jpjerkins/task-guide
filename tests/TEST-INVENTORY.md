@@ -799,6 +799,17 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - host creation refuses a future-version store, before any endpoint or the tick loop can start (#78)
 - malformed Day-template lifecycle route or body input is 400
 - Day-template lifecycle 200 shapes are typed in OpenAPI for SPA generation
+- `GET /api/day-templates` returns every Day template with its Windows and Event prototypes
+- `GET /api/day-templates/{id}` returns one template and 404 for an unknown id
+- `DayTemplateResponse.unused` is derived on read and **is false while a dormant Pattern
+  references it** — the naive `Patterns.Active`-only reading is the case this catches
+- `GET /api/dimensions` names each Dimension's window value source (`authored` / `derived` /
+  `fetched`)
+- `GET /api/day-templates/{id}/windows/{windowId}/preview` counts the eligible Tasks a Window
+  would admit on a date and names the first four, **capped separately from the count**
+- `GET /api/day-templates/{id}/affected-dates` names the next fortnight's dates the template
+  governs and **excludes Overridden ones** — an Override is a by-value copy a template edit never
+  reaches
 
 ## `TaskGuide.Web` (vitest)
 
