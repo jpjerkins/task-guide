@@ -51,6 +51,22 @@ public sealed class ReadEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_dimensions_names_each_Dimensions_window_value_source()
+    {
+        var response = await _client.GetAsync("/api/dimensions");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var dimensions = await response.Content.ReadFromJsonAsync<JsonElement>();
+        string SourceOf(string id) => dimensions.EnumerateArray()
+            .Single(dimension => dimension.GetProperty("id").GetString() == id)
+            .GetProperty("source").GetString()!;
+
+        Assert.Equal("derived", SourceOf("duration"));
+        Assert.Equal("fetched", SourceOf("weather"));
+        Assert.Equal("authored", SourceOf("location"));
+    }
+
+    [Fact]
     public async Task GET_api_dimensions_claiming_names_the_Dimension_that_claims_a_Tag()
     {
         var response = await _client.GetAsync("/api/dimensions/claiming?tag=garage");

@@ -42,14 +42,21 @@ public static class DimensionEndpoints
             "categorical",
             categorical.DeclaredValues.Select(value => value.Value).ToArray(),
             TaskDefault: null,
-            WindowDefault: null),
+            WindowDefault: null,
+            Source: SourceOf(categorical.WindowSource)),
         ordinal => new DimensionResponse(
             ordinal.Id.Value,
             ordinal.Label,
             "ordinal",
             ordinal.OrderedValues.Select(value => value.Value).ToArray(),
             ordinal.TaskDefault?.Value,
-            ordinal.WindowDefault?.Value));
+            ordinal.WindowDefault?.Value,
+            Source: SourceOf(ordinal.WindowSource)));
+
+    // A plain switch expression over this enum's three named members still trips CS8524 (an
+    // enum's underlying int admits values no case names), so this reads the member name instead
+    // — exhaustive by construction, and it happens to match "authored"/"derived"/"fetched" verbatim.
+    private static string SourceOf(WindowValueSource source) => source.ToString().ToLowerInvariant();
 }
 
 public sealed record DimensionResponse(
@@ -58,7 +65,8 @@ public sealed record DimensionResponse(
     string Algebra,
     IReadOnlyList<string> Values,
     string? TaskDefault,
-    string? WindowDefault);
+    string? WindowDefault,
+    string Source);
 
 public sealed record ClaimingDimensionResponse(string? DimensionId);
 public sealed record LooseTagsResponse(IReadOnlyList<string> Tags, int Count);

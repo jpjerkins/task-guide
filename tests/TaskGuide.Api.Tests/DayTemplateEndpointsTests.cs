@@ -6,8 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
+using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
+using TaskGuide.Domain.Tasks;
+using TaskGuide.Domain.Time;
 using Xunit;
 
 namespace TaskGuide.Api.Tests;
@@ -135,6 +138,104 @@ public sealed class DayTemplateEndpointsTests : IDisposable
         Assert.Equal(["Summer volleyball"], response.EnumerateArray().Select(value => value.GetString() ?? throw new InvalidOperationException("Usage names must be strings")).ToArray());
     }
 
+    [Fact]
+    public async Task GET_api_day_templates_returns_every_Day_template_with_its_Windows_and_Event_prototypes()
+    {
+        var withShape = new DayTemplate(
+            Volleyball, "Volleyball", [Window("w_practice", "Practice")], [Prototype("ep_dinner", "Team dinner")]);
+        var bare = new DayTemplate(Other, "Other", [], []);
+        await WriteAsync(new DayTemplatesWrite([withShape, bare]));
+
+        var response = await _client.GetFromJsonAsync<JsonElement>("/api/day-templates");
+
+        var array = response.EnumerateArray().ToArray();
+        Assert.Equal(2, array.Length);
+        var shaped = array.Single(template => template.GetProperty("id").GetString() == Volleyball.Value);
+        Assert.Equal("Practice", shaped.GetProperty("windows")[0].GetProperty("name").GetString());
+        Assert.Equal("Team dinner", shaped.GetProperty("eventPrototypes")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task GET_api_day_templates_id_returns_one_template_and_404_for_an_unknown_id()
+    {
+        var template = new DayTemplate(Volleyball, "Volleyball", [], []);
+        await WriteAsync(new DayTemplatesWrite([template]));
+
+        var found = await _client.GetAsync($"/api/day-templates/{Volleyball.Value}");
+        var notFound = await _client.GetAsync($"/api/day-templates/{Missing.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, found.StatusCode);
+        var body = await found.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Volleyball", body.GetProperty("name").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
+    }
+
+    [Fact]
+    public async Task DayTemplateResponse_unused_is_derived_on_read_and_is_false_while_a_dormant_Pattern_references_it()
+    {
+        var referencedByDormant = new DayTemplate(Used, "Referenced by dormant", [], []);
+        var untouched = new DayTemplate(Unused, "Untouched", [], []);
+        var activeTemplate = new DayTemplate(Volleyball, "Active", [], []);
+        var active = Pattern("p_active", "Active", activeTemplate.Id);
+        var dormant = Pattern("p_dormant", "Dormant", referencedByDormant.Id);
+        await WriteAsync(
+            new DayTemplatesWrite([referencedByDormant, untouched, activeTemplate]),
+            new PatternsWrite(new PatternBook(active.Id, [active, dormant])));
+
+        var response = await _client.GetFromJsonAsync<JsonElement>("/api/day-templates");
+
+        var array = response.EnumerateArray().ToArray();
+        Assert.False(array.Single(t => t.GetProperty("id").GetString() == referencedByDormant.Id.Value).GetProperty("unused").GetBoolean());
+        Assert.True(array.Single(t => t.GetProperty("id").GetString() == untouched.Id.Value).GetProperty("unused").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GET_api_day_templates_id_windows_windowId_preview_counts_the_eligible_Tasks_the_Window_would_admit_on_a_date_and_names_the_first_four()
+    {
+        var window = Window("w_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Practice", new TimeOnly(10, 0), new TimeOnly(11, 0));
+        var template = new DayTemplate(Volleyball, "Volleyball", [window], []);
+        var tasks = new[]
+        {
+            TaskWithDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA1", "Fit A", "30"),
+            TaskWithDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA2", "Fit B", "10"),
+            TaskWithDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA3", "Fit C", "2"),
+            TaskWithDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA4", "Fit D", "60"),
+            TaskWithDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA5", "Fit E", "2"),
+            TaskWithDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA6", "Too Long", "longer"),
+            TaskWithoutDuration("t_01ARZ3NDEKTSV4RRFFQ69G5FA7", "No Duration Yet"),
+        };
+        await WriteAsync(new DayTemplatesWrite([template]), new TasksWrite(tasks));
+
+        var response = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/day-templates/{Volleyball.Value}/windows/{window.Id.Value}/preview?date=2026-09-07");
+
+        Assert.Equal(5, response.GetProperty("count").GetInt32());
+        var titles = response.GetProperty("titles").EnumerateArray().Select(value => value.GetString() ?? "").ToArray();
+        Assert.Equal(["Fit A", "Fit B", "Fit C", "Fit D"], titles);
+    }
+
+    [Fact]
+    public async Task GET_api_day_templates_id_affected_dates_names_the_next_fortnights_dates_the_template_governs_and_excludes_Overridden_ones()
+    {
+        var boundary = new DayBoundary(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId));
+        var today = boundary.DateOf(DateTimeOffset.UtcNow);
+        var target = new DayTemplate(Volleyball, "Volleyball", [], []);
+        var other = new DayTemplate(Other, "Other", [], []);
+        var active = Pattern("p_active", "Active", target.Id);
+        await WriteAsync(
+            new DayTemplatesWrite([target, other]),
+            new PatternsWrite(new PatternBook(active.Id, [active])),
+            new OverridesWrite([new DateOverride(today, [], new DayTemplateUse(target.Id, target.Name))]));
+
+        var response = await _client.GetFromJsonAsync<JsonElement>($"/api/day-templates/{Volleyball.Value}/affected-dates");
+
+        var dates = response.EnumerateArray().Select(value => DateOnly.Parse(value.GetString()!)).ToArray();
+        Assert.DoesNotContain(today, dates);
+        Assert.Contains(today.AddDays(7), dates);
+        Assert.Equal(13, dates.Length);
+        Assert.Equal(dates.OrderBy(date => date).ToArray(), dates);
+    }
+
     private async Task WriteAsync(params object[] writes)
     {
         var store = _factory.Services.GetRequiredService<IStore>();
@@ -144,6 +245,23 @@ public sealed class DayTemplateEndpointsTests : IDisposable
     private static AvailabilityWindow Window(string id, string name) => new(
         new WindowId(id), name, new TimeOnly(10, 0), new TimeOnly(20, 0), TagSet.Empty);
 
+    private static AvailabilityWindow Window(string id, string name, TimeOnly start, TimeOnly end) => new(
+        new WindowId(id), name, start, end, TagSet.Empty);
+
+    private static EventPrototype Prototype(string id, string name) => new(
+        new EventPrototypeId(id), name, new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
+
     private static Pattern Pattern(string id, string name, DayTemplateId templateId) => new(
         new PatternId(id), name, [.. Enumerable.Repeat(templateId, 7)]);
+
+    private static TaskItem TaskWithDuration(string id, string title, string duration) => new(
+        new TaskId(id), title, null,
+        new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+        {
+            [KnownDimensions.Duration] = [new TagValue(duration)],
+        }, []),
+        null, null, null, null, DateTimeOffset.UtcNow);
+
+    private static TaskItem TaskWithoutDuration(string id, string title) => new(
+        new TaskId(id), title, null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
 }

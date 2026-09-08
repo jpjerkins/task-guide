@@ -95,7 +95,7 @@ public static class OverrideEndpoints
 internal static class DayTemplateLifecycleHandlers
 {
     public static async Task<Results<Ok<DayTemplateResponse>, BadRequest<object>, Conflict<object>>> PromoteAsync(
-        string date, PromoteDayRequest request, IStore store, IIdMinter minter, CancellationToken ct)
+        string date, PromoteDayRequest request, IStore store, IIdMinter minter, TimeProvider clock, DayBoundary boundary, CancellationToken ct)
     {
         if (!DateOnly.TryParse(date, out var sourceDate) || string.IsNullOrWhiteSpace(request.Name))
         {
@@ -105,7 +105,11 @@ internal static class DayTemplateLifecycleHandlers
         var template = new DayTemplate(minter.NextDayTemplateId(), request.Name, [], []);
         var result = await new PromoteOneOffDay(store).ExecuteAsync(sourceDate, template, ct);
         return result.Match<Results<Ok<DayTemplateResponse>, BadRequest<object>, Conflict<object>>>(
-            promoted => TypedResults.Ok(ToResponse(promoted)),
+            promoted =>
+            {
+                var view = store.Read();
+                return TypedResults.Ok(ToResponse(promoted, view.Patterns.Patterns, view.Overrides, boundary.DateOf(clock.GetUtcNow())));
+            },
             refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
     }
 
@@ -149,8 +153,17 @@ internal static class DayTemplateLifecycleHandlers
         && value.StartsWith(DayTemplateId.Prefix, StringComparison.Ordinal)
         && value[DayTemplateId.Prefix.Length..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
 
-    private static DayTemplateResponse ToResponse(DayTemplate template) =>
-        new(template.Id.Value, template.Name, template.Windows, template.EventPrototypes);
+    internal static DayTemplateResponse ToResponse(
+        DayTemplate template,
+        IReadOnlyList<Pattern> allPatterns,
+        IReadOnlyList<DateOverride> overrides,
+        DateOnly today) =>
+        new(
+            template.Id.Value,
+            template.Name,
+            template.Windows,
+            template.EventPrototypes,
+            DayTemplateLifecycle.IsUnused(template.Id, allPatterns, overrides, today));
 
     internal static DateOverrideResponse ToResponse(DateOverride dateOverride) =>
         new(
@@ -163,6 +176,11 @@ public sealed record PromoteDayRequest(string Name);
 public sealed record StampDayRequest(string TemplateId);
 public sealed record OverrideSpanApiRequest(string From, string To, string? TemplateId);
 public sealed record EditOverrideRequest(IReadOnlyList<AvailabilityWindow>? Windows);
-public sealed record DayTemplateResponse(string Id, string Name, IReadOnlyList<AvailabilityWindow> Windows, IReadOnlyList<EventPrototype> EventPrototypes);
+public sealed record DayTemplateResponse(
+    string Id,
+    string Name,
+    IReadOnlyList<AvailabilityWindow> Windows,
+    IReadOnlyList<EventPrototype> EventPrototypes,
+    bool Unused);
 public sealed record DateOverrideResponse(DateOnly Date, IReadOnlyList<AvailabilityWindow> Windows, DayTemplateUseResponse? Used);
 public sealed record DayTemplateUseResponse(string TemplateId, string TemplateName);
