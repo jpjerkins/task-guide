@@ -33,6 +33,25 @@ public sealed class DerivedTaskComposerTests
     }
 
     [Fact]
+    public void An_Override_or_deleted_Event_exception_appears_through_the_read_seam()
+    {
+        var date = new DateOnly(2026, 9, 13);
+        var shapes = new FakeDayShapeReader();
+        shapes.Seed(date, new DayShape(date, [], [], IsOverridden: true));
+        var composer = new DerivedTaskComposer([new AbsenceRule()], shapes, Boundary, new FixedTimeProvider(Now));
+
+        var fromOverride = composer.Compose(AbsenceView(date, shapes)
+            .WithOverrides([new DateOverride(date, [], Used: null)])
+            .Build());
+        var fromDeletedException = composer.Compose(AbsenceView(date, shapes)
+            .WithEventExceptions([new EventException(date, Ministry.Id, Deleted: true, null, null, null)])
+            .Build());
+
+        Assert.Equal("Tell Student ministry you'll be out", Assert.Single(fromOverride).Title);
+        Assert.Equal("Tell Student ministry you'll be out", Assert.Single(fromDeletedException).Title);
+    }
+
+    [Fact]
     public async Task A_TasksWrite_after_a_Compose_backed_read_contains_only_stored_Tasks()
     {
         var @event = TaggedEvent();
@@ -67,6 +86,23 @@ public sealed class DerivedTaskComposerTests
 
     private static DerivedTaskComposer Composer() =>
         new([TagDeclaredRule.TimeOff], new FakeDayShapeReader(), Boundary, new FixedTimeProvider(Now));
+
+    private static FakeStoreViewBuilder AbsenceView(DateOnly date, FakeDayShapeReader shapes)
+    {
+        var sunday = new DayTemplateId("dt_sunday");
+        var weekday = new DayTemplateId("dt_weekday");
+        var pattern = new Pattern(new PatternId("p_active"), "Term time", [sunday, weekday, weekday, weekday, weekday, weekday, weekday]);
+        return new FakeStoreViewBuilder()
+            .WithDayTemplates([
+                new DayTemplate(sunday, "Sunday", [], [Ministry]),
+                new DayTemplate(weekday, "Weekday", [], []),
+            ])
+            .WithPatterns(new PatternBook(pattern.Id, [pattern]));
+    }
+
+    private static readonly EventPrototype Ministry = new(
+        new EventPrototypeId("ep_ministry"), "Student ministry", new TimeOnly(9, 0), new TimeOnly(11, 0),
+        TagSet.Empty, new BeforeOffset(1, OffsetUnit.Weeks));
 
     private static Event TaggedEvent() => new(
         new EventId("evt_trip"),

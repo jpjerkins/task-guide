@@ -347,6 +347,7 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - a tag-declared Event obligation appears in the runtime task list without being stored
 - a tag-declared Event obligation appears in firing
 - a derived completion entry suppresses the matching derived Task
+- an Override or deleted Event exception appears through the read seam
 - a TasksWrite after a Compose-backed read contains only stored Tasks
 - completing a derived Task writes a derived completion without persisting the Task
 - **a coalesced run whose first absence has passed survives while a later one remains** — the
