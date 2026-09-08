@@ -1,18 +1,19 @@
 using OneOf;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Tasks;
 
 namespace TaskGuide.Application.Tasks;
 
 /// <summary>Persists the absolute date selected by the reactive “Not now” gesture.</summary>
-public sealed class PostponeTask(IStore store)
+public sealed class PostponeTask(IStore store, DerivedTaskComposer derivedTasks)
 {
     public async Task<OneOf<Postponed, PostponeRefused>> ExecuteAsync(TaskId id, DateOnly until, CancellationToken cancellationToken)
     {
         var result = await store.MutateAsync<PostponeRefused>(view =>
         {
-            var task = view.Tasks.SingleOrDefault(candidate => candidate.Id.Equals(id));
+            var task = derivedTasks.Compose(view).SingleOrDefault(candidate => candidate.Id.Equals(id));
             if (task is null)
             {
                 return new PostponeRefused("Task was not found");

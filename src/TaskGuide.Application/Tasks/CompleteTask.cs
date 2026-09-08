@@ -1,5 +1,6 @@
 using OneOf;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Tasks;
@@ -13,13 +14,14 @@ public sealed class CompleteTask(
     DimensionRegistry registry,
     StaleThresholds staleThresholds,
     TimeProvider timeProvider,
-    DayBoundary boundary)
+    DayBoundary boundary,
+    DerivedTaskComposer derivedTasks)
 {
     public async Task<OneOf<CompletionRecorded, CompletionRefused>> ExecuteAsync(TaskId id, CancellationToken cancellationToken)
     {
         var result = await store.MutateAsync<CompletionRefused>(view =>
         {
-            var task = view.Tasks.SingleOrDefault(candidate => candidate.Id.Equals(id));
+            var task = derivedTasks.Compose(view).SingleOrDefault(candidate => candidate.Id.Equals(id));
             if (task is null)
             {
                 return new CompletionRefused("Task was not found");

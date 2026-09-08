@@ -1,8 +1,10 @@
 using TaskGuide.Application.Firing;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Firing;
 using TaskGuide.Domain.Notifications;
+using TaskGuide.Domain.Rules;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
@@ -50,6 +52,21 @@ public sealed class TickPlannerTests
         var plan = Planner(shapes).Plan(View(Task("t_garage", location: "garage")), Now, EmptyFetched, []);
 
         Assert.Empty(plan.Fires);
+    }
+
+    [Fact]
+    public void A_tag_declared_Event_obligation_appears_in_firing()
+    {
+        var shapes = Shapes(Window("w_morning", 9, 10));
+        var @event = new Event(
+            new EventId("evt_trip"), Today.AddDays(21), "Family trip", new TimeOnly(9, 0), new TimeOnly(10, 0),
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [new LooseTag("timeoff")]), null);
+        var composer = new DerivedTaskComposer([TagDeclaredRule.TimeOff], shapes, Boundary, new FixedTimeProvider(Now));
+
+        var plan = Planner(shapes, composer).Plan(
+            new FakeStoreViewBuilder().WithEvents([@event]).Build(), Now, EmptyFetched, []);
+
+        Assert.Equal("Ask off work", Assert.Single(plan.Fires).Shortlist.Single().Title);
     }
 
     [Fact]
@@ -140,7 +157,11 @@ public sealed class TickPlannerTests
     }
 
     private static TickPlanner Planner(FakeDayShapeReader shapes) =>
-        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, new Uri("https://not-the-real-host.invalid/"));
+        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, new Uri("https://not-the-real-host.invalid/"),
+            new DerivedTaskComposer([], shapes, Boundary, TimeProvider.System));
+
+    private static TickPlanner Planner(FakeDayShapeReader shapes, DerivedTaskComposer composer) =>
+        new(shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, new Uri("https://not-the-real-host.invalid/"), composer);
 
     private static FakeStoreView View(params TaskItem[] tasks) =>
         new FakeStoreViewBuilder().WithTasks(tasks).WithFires(Today, new DayFires(Today, [])).Build();
@@ -180,4 +201,9 @@ public sealed class TickPlannerTests
 
     private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> EmptyFetched =
         new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 }

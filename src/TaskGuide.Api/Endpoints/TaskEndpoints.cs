@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
 using OneOf;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Application.Tasks;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -30,10 +31,11 @@ public static class TaskEndpoints
             DimensionRegistry registry,
             StaleThresholds staleThresholds,
             TimeProvider timeProvider,
-            DayBoundary boundary) =>
+            DayBoundary boundary,
+            DerivedTaskComposer derivedTasks) =>
         {
             var view = store.Read();
-            var filtered = view.Tasks.AsEnumerable();
+            var filtered = derivedTasks.Compose(view).AsEnumerable();
             if (Enum.TryParse<Status>(status, ignoreCase: true, out var requestedStatus))
             {
                 var now = timeProvider.GetUtcNow();
@@ -95,7 +97,7 @@ public static class TaskEndpoints
         tasks.MapGet("/{id}", (string id) => Results.NoContent());
         // An absolute date is for a one-off Task; recurring Tasks carry a moving, per-instance
         // offset from their generated deadline instead.
-        tasks.MapPatch("/{id}", async Task<IResult> (string id, DeferTaskRequest request, IStore store, CancellationToken ct) =>
+        tasks.MapPatch("/{id}", async Task<IResult> (string id, DeferTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
         {
             if (!IsTaskId(id))
             {
@@ -108,7 +110,7 @@ public static class TaskEndpoints
                 return TypedResults.BadRequest(new { error = "supply either date or offset and unit" });
             }
 
-            var result = await new DeferTask(store).ExecuteAsync(new TaskId(id), defer, ct);
+            var result = await new DeferTask(store, derivedTasks).ExecuteAsync(new TaskId(id), defer, ct);
             return result.Match<IResult>(
                 _ => TypedResults.NoContent(),
                 refusal => TypedResults.Conflict(new { error = refusal.Reason }));
@@ -124,6 +126,7 @@ public static class TaskEndpoints
             StaleThresholds staleThresholds,
             TimeProvider timeProvider,
             DayBoundary boundary,
+            DerivedTaskComposer derivedTasks,
             CancellationToken ct) =>
         {
             if (!IsTaskId(id))
@@ -131,7 +134,7 @@ public static class TaskEndpoints
                 return TypedResults.BadRequest(new { error = "id must be a Task id" });
             }
 
-            var result = await new CompleteTask(store, registry, staleThresholds, timeProvider, boundary)
+            var result = await new CompleteTask(store, registry, staleThresholds, timeProvider, boundary, derivedTasks)
                 .ExecuteAsync(new TaskId(id), ct);
             return result.Match<IResult>(
                 _ => TypedResults.NoContent(),
@@ -141,14 +144,14 @@ public static class TaskEndpoints
 
         // "Not now." Stored as an absolute date; "two weeks" is a UI shorthand resolved at write
         // time. Offered on Active rows only — never on recurring or derived Tasks.
-        tasks.MapPut("/{id}/postpone", async Task<IResult> (string id, PostponeTaskRequest request, IStore store, CancellationToken ct) =>
+        tasks.MapPut("/{id}/postpone", async Task<IResult> (string id, PostponeTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
         {
             if (!IsTaskId(id))
             {
                 return TypedResults.BadRequest(new { error = "id must be a Task id" });
             }
 
-            var result = await new PostponeTask(store).ExecuteAsync(new TaskId(id), request.Date, ct);
+            var result = await new PostponeTask(store, derivedTasks).ExecuteAsync(new TaskId(id), request.Date, ct);
             return result.Match<IResult>(
                 _ => TypedResults.NoContent(),
                 refusal => TypedResults.Conflict(new { error = refusal.Reason }));

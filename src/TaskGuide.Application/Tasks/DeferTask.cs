@@ -1,18 +1,19 @@
 using OneOf;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Tasks;
 
 namespace TaskGuide.Application.Tasks;
 
 /// <summary>Changes the fact describing when a Task may first surface.</summary>
-public sealed class DeferTask(IStore store)
+public sealed class DeferTask(IStore store, DerivedTaskComposer derivedTasks)
 {
     public async Task<OneOf<Deferred, DeferRefused>> ExecuteAsync(TaskId id, Defer defer, CancellationToken cancellationToken)
     {
         var result = await store.MutateAsync<DeferRefused>(view =>
         {
-            var task = view.Tasks.SingleOrDefault(candidate => candidate.Id.Equals(id));
+            var task = derivedTasks.Compose(view).SingleOrDefault(candidate => candidate.Id.Equals(id));
             if (task is null)
             {
                 return new DeferRefused("Task was not found");

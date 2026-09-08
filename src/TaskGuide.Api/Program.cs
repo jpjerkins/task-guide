@@ -2,9 +2,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskGuide.Api.Endpoints;
 using TaskGuide.Application.Firing;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
+using TaskGuide.Domain.Rules;
 using TaskGuide.Domain.Tasks;
 using TaskGuide.Domain.Time;
 using TaskGuide.Infrastructure.BackgroundServices;
@@ -58,6 +60,11 @@ builder.Services.AddSingleton<IIdMinter, UlidIdMinter>();
 builder.Services.AddSingleton<IDayShapeReader, DayShapeReader>();
 builder.Services.AddSingleton(new DayBoundary(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId)));
 builder.Services.AddSingleton<ClockTimeResolution>();
+builder.Services.AddSingleton(provider => new DerivedTaskComposer(
+    [new AbsenceRule(), TagDeclaredRule.TimeOff, TagDeclaredRule.PlaneTickets, TagDeclaredRule.PlaceToStay],
+    provider.GetRequiredService<IDayShapeReader>(),
+    provider.GetRequiredService<DayBoundary>(),
+    provider.GetRequiredService<TimeProvider>()));
 // CONTEXT.md leaves these numbers unspecified ("aged past a threshold", "N consecutive missed
 // instances"); 60 days / 3 match what the Domain tests already assume, so they're config here
 // rather than a second place those numbers could drift from the tests.
@@ -82,7 +89,8 @@ builder.Services.AddSingleton(provider => new TickPlanner(
     // localhost: this Uri's only consumer is the `url` on a Pushover push, so it is opened on the
     // phone and nowhere else. localhost there means the phone itself, and a forgotten override
     // would ship plausible-looking dead links. Override per-environment if the tailnet is renamed.
-    new Uri(builder.Configuration["Firing:LandingPage"] ?? "https://pi5.taile6b761.ts.net/")));
+    new Uri(builder.Configuration["Firing:LandingPage"] ?? "https://pi5.taile6b761.ts.net/"),
+    provider.GetRequiredService<DerivedTaskComposer>()));
 builder.Services.AddSingleton<TickExecutor>();
 builder.Services.AddSingleton<ITickLoop, TickService>();
 builder.Services.AddHostedService<TickLoop>();

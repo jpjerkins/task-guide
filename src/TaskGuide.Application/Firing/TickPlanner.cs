@@ -1,4 +1,5 @@
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Firing;
 using TaskGuide.Domain.Matching;
@@ -18,7 +19,8 @@ public sealed class TickPlanner(
     ClockTimeResolution resolution,
     DayBoundary boundary,
     StaleThresholds staleThresholds,
-    Uri landingPage)
+    Uri landingPage,
+    DerivedTaskComposer derivedTasks)
 {
     private readonly IDayShapeReader _shapes = shapes;
     private readonly DimensionRegistry _registry = registry;
@@ -26,6 +28,7 @@ public sealed class TickPlanner(
     private readonly DayBoundary _boundary = boundary;
     private readonly StaleThresholds _staleThresholds = staleThresholds;
     private readonly Uri _landingPage = landingPage;
+    private readonly DerivedTaskComposer _derivedTasks = derivedTasks;
 
     public TickPlan Plan(
         IStoreView view,
@@ -33,6 +36,7 @@ public sealed class TickPlanner(
         IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
         IReadOnlyList<DimensionId> failedFetches)
     {
+        var tasks = _derivedTasks.Compose(view);
         var date = _boundary.DateOf(now);
         var shape = _shapes.For(date);
         var fires = view.FiresOn(date).Rows;
@@ -55,7 +59,7 @@ public sealed class TickPlanner(
             }
 
             var duration = DurationCeiling(resolved, now);
-            var matches = view.Tasks
+            var matches = tasks
                 .Where(task => StatusRules.IsEligible(
                     task,
                     view.CompletionsFor(task.Id),
@@ -108,7 +112,7 @@ public sealed class TickPlanner(
             intents.Add(Fallback.Intent(fallbackCarrier, events, footer, failedFetches, _landingPage, _boundary.EndOf(date)));
         }
 
-        return new TickPlan(intents.ToArray(), Glance(view, date, shape, now, fetched, failedFetches));
+        return new TickPlan(intents.ToArray(), Glance(view, tasks, date, shape, now, fetched, failedFetches));
     }
 
     /// <summary>
@@ -116,12 +120,13 @@ public sealed class TickPlanner(
     /// decision because an adapter cannot inspect the store-derived Status.
     /// </summary>
     public bool NeedsWeather(IStoreView view, DateTimeOffset now) =>
-        view.Tasks.Any(task =>
+        _derivedTasks.Compose(view).Any(task =>
             task.Tags.On(KnownDimensions.Weather).Count > 0
             && StatusRules.Of(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, now, _boundary) is Status.Active);
 
     private GlanceState? Glance(
         IStoreView view,
+        IReadOnlyList<TaskItem> tasks,
         DateOnly date,
         DayShape shape,
         DateTimeOffset now,
@@ -129,14 +134,14 @@ public sealed class TickPlanner(
         IReadOnlyList<DimensionId> failedFetches)
     {
         var counter = new OpportunityCounter(_shapes, _registry, _resolution, _boundary);
-        var count = view.Tasks.Count(task => StatusRules.Of(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, now, _boundary) is not Status.Done);
+        var count = tasks.Count(task => StatusRules.Of(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, now, _boundary) is not Status.Done);
         var live = shape.Windows
             .Select(window => _resolution.ResolveWindow(date, window))
             .FirstOrDefault(window => window is not null && FiringPolicy.IsWindowDue(window.Window, window.Start, now) && FiringPolicy.IsWindowAlive(window.Window, window.End, now));
 
         if (live is not null)
         {
-            var matches = Matches(view, live, now, now, fetched, failedFetches);
+            var matches = Matches(view, tasks, live, now, now, fetched, failedFetches);
             if (matches.Count > 0)
             {
                 return new GlanceState(count, new InsideWindow(live, Rank(matches, counter, now, fetched, failedFetches), matches.Count));
@@ -146,7 +151,7 @@ public sealed class TickPlanner(
         var next = NextWindow(date, now);
         if (next is null) return null;
 
-        var nextMatches = Matches(view, next, next.Start, now, fetched, failedFetches);
+        var nextMatches = Matches(view, tasks, next, next.Start, now, fetched, failedFetches);
         return new GlanceState(count, new NextWindow(next, Rank(nextMatches, counter, now, fetched, failedFetches)));
     }
 
@@ -166,12 +171,13 @@ public sealed class TickPlanner(
 
     private List<TaskItem> Matches(
         IStoreView view,
+        IReadOnlyList<TaskItem> tasks,
         ResolvedWindow window,
         DateTimeOffset evaluationAt,
         DateTimeOffset statusAt,
         IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> fetched,
         IReadOnlyList<DimensionId> failedFetches) =>
-        view.Tasks
+        tasks
             .Where(task => StatusRules.IsEligible(task, view.CompletionsFor(task.Id), _registry, _staleThresholds, statusAt, _boundary))
             .Where(task => Matcher.Fits(task, new MatchContext(window.Window, DurationCeiling(window, evaluationAt), fetched, failedFetches), _registry))
             .ToList();

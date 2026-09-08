@@ -341,6 +341,14 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - a moved instance on an **Overridden** date still does not derive — the moved case driven through
   the absence check rather than around it
 - a renamed instance the shape still carries derives nothing
+
+### Derived-task composition
+
+- a tag-declared Event obligation appears in the runtime task list without being stored
+- a tag-declared Event obligation appears in firing
+- a derived completion entry suppresses the matching derived Task
+- a TasksWrite after a Compose-backed read contains only stored Tasks
+- completing a derived Task writes a derived completion without persisting the Task
 - **a coalesced run whose first absence has passed survives while a later one remains** — the
   run's last date is what says the obligation has expired; the Deadline stays anchored to the first
 - a run wholly in the past still stops being derived, as does a lone absence the day after it

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Tasks;
 using Xunit;
@@ -82,6 +83,28 @@ public sealed class TaskEndpointsTests : IDisposable
 
         Assert.Single(list.EnumerateArray());
         Assert.Equal("Take the bins out", list[0].GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task A_tag_declared_Event_obligation_appears_in_the_runtime_task_list_without_being_stored()
+    {
+        var @event = new Event(
+            new EventId("evt_01ARZ3NDEKTSV4RRFFQ69G5FAX"),
+            DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30),
+            "Family trip",
+            new TimeOnly(9, 0),
+            new TimeOnly(10, 0),
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [new LooseTag("timeoff")]),
+            AbsenceNotice: null);
+        var store = _factory.Services.GetRequiredService<IStore>();
+        await store.MutateAsync<Never>(
+            _ => new StoreMutation([new EventsWrite([@event])]),
+            CancellationToken.None);
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+
+        Assert.Equal("Ask off work", Assert.Single(list.EnumerateArray()).GetProperty("title").GetString());
+        Assert.Empty(store.Read().Tasks);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using TaskGuide.Application.Firing;
 using TaskGuide.Application.Ports;
+using TaskGuide.Application.Rules;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Firing;
@@ -98,13 +99,15 @@ public sealed class GlanceSendingTests
     public async Task no_weather_tagged_active_task_no_api_call()
     {
         var boundary = new DayBoundary(TimeZoneInfo.Utc);
+        var shapes = new FakeDayShapeReader();
         var planner = new TickPlanner(
-            new FakeDayShapeReader(),
+            shapes,
             KnownDimensions.Default,
             new ClockTimeResolution(boundary),
             boundary,
             new StaleThresholds(TimeSpan.FromDays(30), 3),
-            new Uri("https://not-the-real-host.invalid/"));
+            new Uri("https://not-the-real-host.invalid/"),
+            new DerivedTaskComposer([], shapes, boundary, TimeProvider.System));
         var store = new FakeStore(new FakeStoreViewBuilder().WithTasks([ActiveTaskWithoutWeather()]).Build());
         var weather = new FakeWeatherSource();
         var executor = new TickExecutor(
