@@ -177,7 +177,22 @@ public static class TaskEndpoints
         task.Tags.SingleOn(KnownDimensions.Duration) is { } duration ? int.Parse(duration.Value) : null;
 
     private static bool IsTaskId(string id) =>
+        IsMintedTaskId(id) || IsDerivedTaskId(id);
+
+    private static bool IsMintedTaskId(string id) =>
         id.Length == 28 && id.StartsWith(TaskId.Prefix, StringComparison.Ordinal) && id[2..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
+
+    private static bool IsDerivedTaskId(string id)
+    {
+        const string prefix = "t_derived_";
+        if (!id.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var separator = id.IndexOf('_', prefix.Length);
+        return separator > prefix.Length && separator < id.Length - 1;
+    }
 
     private static Defer? ToDefer(DeferTaskRequest request) =>
         request switch

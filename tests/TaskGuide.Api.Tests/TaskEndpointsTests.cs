@@ -161,7 +161,7 @@ public sealed class TaskEndpointsTests : IDisposable
         {
             Recurrence = new Recurrence(RecurrenceAnchor.Calendar, new EveryNDays(1), null),
         };
-        var derived = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAX") with
+        var derived = Task("t_derived_absence_event_1") with
         {
             Provenance = new DerivedProvenance(new RuleId("absence"), "event_1"),
         };
@@ -175,10 +175,27 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task PATCH_api_tasks_id_is_refused_on_a_derived_Task()
+    {
+        var derived = Task("t_derived_absence_event_1") with
+        {
+            Provenance = new DerivedProvenance(new RuleId("absence"), "event_1"),
+        };
+        await SeedTasksAsync(derived);
+
+        var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Patch, $"/api/tasks/{derived.Id.Value}")
+        {
+            Content = JsonContent.Create(new { date = new DateOnly(2026, 9, 8) }),
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Completing_a_derived_Task_writes_its_ruleId_triggerId_due_derived_completion_fact()
     {
         var due = new DateOnly(2026, 9, 8);
-        var derived = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAX") with
+        var derived = Task("t_derived_absence_event_1") with
         {
             Deadline = due,
             Provenance = new DerivedProvenance(new RuleId("absence"), "event_1"),
@@ -192,6 +209,14 @@ public sealed class TaskEndpointsTests : IDisposable
         Assert.Equal(new RuleId("absence"), derivedCompletion.RuleId);
         Assert.Equal("event_1", derivedCompletion.TriggerId);
         Assert.Equal(due, derivedCompletion.Due);
+    }
+
+    [Fact]
+    public async Task POST_api_tasks_id_completions_rejects_a_malformed_Task_id()
+    {
+        var response = await _client.PostAsync("/api/tasks/t_derived_absence_/completions", content: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private async Task SeedTasksAsync(params TaskItem[] tasks)

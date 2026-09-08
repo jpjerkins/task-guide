@@ -759,6 +759,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/dimensions/loose-tags` returns the inert Tag staging area and count
 - `POST /api/tasks/{id}/completions` is refused on an `Unprocessed` Task
 - completing a derived Task writes its `(ruleId, triggerId, due)` derived-completion fact
+- `POST /api/tasks/{id}/completions` rejects a malformed Task id
+- `PATCH /api/tasks/{id}` is refused on a derived Task
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
