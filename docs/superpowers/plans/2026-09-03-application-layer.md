@@ -36,7 +36,10 @@ These bind every ticket. A reviewer checks each one.
    report. Not required on adapter or endpoint tickets, where it mostly measures the fake.
 3. **Test names come verbatim from `tests/TEST-INVENTORY.md`**, snake_cased into C# method names.
    Any test added beyond the inventory gets a new line appended to the inventory in the same commit.
-4. **`CONTEXT.md` wins over the inventory** wherever the inventory paraphrases.
+4. **`CONTEXT.md` wins over the inventory** wherever the inventory paraphrases — **and over the
+   prototypes in `docs/prototypes/`, which are design artifacts, not spec.** Several tickets point
+   at a prototype for markup and visual language; port those, not the rules. Two rule divergences
+   in `ui-screens.prototype.html` are already known and are noted in its own header (#100).
 5. **Never read `CONTEXT.md` whole** — 122 KB. Read only the `sed -n 'A,Bp'` ranges your ticket names.
 6. **Stay in your file lane.** Touch only the files your ticket's *Owns* block names, plus your own
    new test files. If your lane genuinely needs a change in another lane's file, **report it rather

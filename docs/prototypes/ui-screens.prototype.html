@@ -7,6 +7,26 @@
   switchable via ?variant=A|B|C and the floating bottom bar.
   Ticket: https://github.com/jpjerkins/task-guide/issues/12
   In-memory data only. No persistence, no tests, no error handling.
+
+  IT IS A DESIGN ARTIFACT, NOT A SPEC. Where it disagrees with CONTEXT.md, CONTEXT.md wins —
+  same rule the plan's global constraint 4 states over tests/TEST-INVENTORY.md. Port the markup
+  and the visual language; do not port the rules. Two divergences are known and were caught
+  reproducing themselves in a test list (#100):
+
+    * `fitBar` -> `horizonWindows` clamps an overdue Task's horizon with Math.max(0, ...), so a
+      passed Deadline collapses the span to zero days. CONTEXT.md § Deadline: once the Deadline
+      has passed the horizon DROPS its deadline bound and reverts to a rolling 7 days. Without
+      that, Opportunities reads 0 and the Task renders as an Orphan — "the exact opposite of the
+      truth", and a defect § Deadline records as already repaired once.
+
+    * `asActive` flips status only, so a Task with no Duration (durMins(null) > q.mins is false)
+      matches every Window. CONTEXT.md § Scarcity and ADR-0007 reject both papering-overs by
+      name: for an `Unprocessed` Task orphan-ness is UNDEFINED, not a count. Matching's two
+      inputs are Tags and Duration, and `Unprocessed` IS the absence of the second. The server
+      is correct here by construction — KnownDimensions gives Duration `TaskDefault: null`, so
+      Matcher.OrdinalFits throws rather than matching an ungated Task.
+
+  Neither is worth fixing in a file that ships nothing; both are worth knowing before porting.
 -->
 
 <style>
