@@ -899,27 +899,36 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - **Structure is asserted, never eyeballed.** Each surface's test asserts the prototype's element
   and class structure, out of the frozen class set in `index.css`. A missing class is a report,
   not a new class.
-- **Nothing is computed in the browser.** Match counts, orphan counts, `Unused`, a Day template's
-  affected-date count, and every timing predicate arrive on the wire and are rendered. A test that
-  needs one supplies it as a fixture response; a component that derives one is the defect.
+- **No fact is invented in the browser, and there is no client clock.** Every timing predicate,
+  every orphan count and every derived flag is answered by the server and rendered; a test that
+  needs one supplies it as a fixture response. Arithmetic *over what the server already sent* is
+  not a violation — the overlap options' head/tail guards are computed from the Windows
+  `/api/events/overlap-check` returns, because there is no endpoint that ranks them and #108 says
+  to port `overlapOptions`. The line is between deriving a fact the server owns and doing sums on
+  facts it handed over.
 - **ADR-0006 per surface.** The shared controls' own survival tests belong to #111; what is listed
   here is each authoring surface's own `<select>`, time field, date field and slider — asserted as
   the *same DOM node* before and after its own input event.
 
 **Window editor (#105)** — `windowEditor(ref)` ~766, `refWindow(ref, materialiseIt)` ~754
 
-- the editor renders the name field, the start and end time fields, one chipset per authored
-  Dimension, the read-only weather chipset, the match preview, and the remove button
+- the editor renders the name field, the start and end time fields, one chipset per Dimension a
+  Window may declare, the read-only fetched-Dimension chipset, the match preview, and the remove
+  button
 - an ordinal Dimension's chipset presses exactly the set value, or the window-side default when
   the window declares nothing on that axis; a categorical chipset presses every declared value
-- the weather chipset is read-only — no buttons, the date's fetched value marked, and the note
-  saying a window never declares weather
+- the fetched Dimension's chipset is read-only — no buttons, the date's fetched value marked, and
+  the note saying a Window never declares weather (needs the source marker — see *What this list
+  needs* below)
 - a time field displays `3p`, `7:30a`, `12p` — never `15:00` — and accepts the same forms typed
   back, plus `3 p`, `3.30p` and bare `15`
 - a rejected time (`12:75`, `25`) leaves the field showing what was typed and commits nothing
+- an end at or before the start is refused the same way, and commits nothing — the API refuses it
+  too (`end <= start` is a 400), so the field is the first of two gates, never the only one
 - the time field survives its own input event — same DOM node before and after
 - the match preview renders the server's count and the first four titles, and its zero state
-  renders the silence note rather than an empty list
+  renders the silence note rather than an empty list (needs a preview read — see *What this list
+  needs* below)
 - the span note states the derived ceiling and the derived snooze, and neither is editable
 - removing arms on the first press and commits on the second; the armed label names the
   affected-day count for a template-scoped window and the single date for a date-scoped one
@@ -945,9 +954,11 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   choice is shared by every list that renders one
 - the usage list names every Pattern referencing the template, and is shown before saving an edit
 - the affected-dates list names the dates in the next fortnight that follow this template, and
-  states that every future one changes too
+  states that every future one changes too (needs a read that answers it in one call — see *What
+  this list needs* below)
 - a template the server reports `Unused` offers deletion; one that is not, does not — the flag is
-  read, never derived here
+  read, never derived here, and `DELETE /api/day-templates/{id}` is gated on it server-side
+  regardless (needs the flag on `DayTemplateResponse` — see *What this list needs* below)
 - the delete confirmation names the Event prototypes the template carries, and does not gate on
   them
 - the dated-exceptions list lists only the next fortnight's dates carrying an Override or an
@@ -971,10 +982,12 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   confirmation does not name the Day templates the deletion strands
 
 **Override a date (#107)** — `materialise(dateKey, why)` ~543, `stamp(dateKey, tplId)` ~553,
-`revertDate(dateKey)` ~560, `promoteSheet(dateKey)` / `promote(dateKey, name)` ~987
+`revertDate(dateKey)` ~560, `promoteSheet(dateKey)` ~987 / `promote(dateKey, name)` ~565
 
-- the rail renders the fixed ±10-day span around today, marks the selected date, and dots only the
-  dates carrying an Override or an Event
+- the rail renders the fixed ±10-day span around today — **21 buttons**, ten back through ten
+  forward — marks the selected date, and dots only the dates carrying an Override or an Event.
+  `CONTEXT.md` 721–788 and `src/TaskGuide.Web/README.md` both say ±10 days and win over the
+  prototype's `W.date()` loop (~1111), which renders eleven, yesterday through +9
 - selecting a rail date changes the shown date without adding a rail entry — the rail never grows
 - *Pick a date…* opens the shared `DateEntry` and selecting a date beyond the rail shows that date,
   still without growing the rail
@@ -998,20 +1011,28 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   resolution list at all
 - an overlapping event renders the clash warning naming the window and its span, and names every
   further window it also overlaps
-- **replace** is always offered
-- **truncate** is offered only when the event starts after the window does, and its label states
-  the resulting span and the resulting length
-- **split** is offered as *split it around the event* only when the event sits inside the window,
-  and its label names both resulting spans
-- **split** degrades to *push it to after the event* when the event covers the window's start
-- no split of either form is offered when the event runs to or past the window's end — the tail
-  would be empty
-- an event's time fields take the same lenient forms as a window's and survive their own input
-  events
-- choosing a resolution sends the date, the window id and the chosen resolution, and the surface
-  states that the date becomes a one-off day
-- the resolution set is closed — a test asserts that no option outside replace / truncate / split
-  is ever rendered
+- **replace** is always offered, and sends `replace`
+- *truncate it to …* is offered only when the event starts after the window does, states the
+  resulting span and length, and sends **`truncateEnd`** — it moves the window's end, not its start
+- *split it around the event* is offered only when the event sits inside the window, names both
+  resulting spans, and sends **`split`**
+- *push it to after the event* is offered when the event covers the window's start but leaves a
+  tail, and sends **`truncateStart`** — not `split`. The prototype's `overlapOptions` labels both
+  of the last two `v:"split"`; the wire does not, and `CanResolve` refuses the mismatch with a 409
+- no option of either split form is offered when the event runs to or past the window's end — the
+  tail would be empty
+- an event's time fields take the same lenient forms as a window's, refuse an end at or before the
+  start, and survive their own input events
+- **every** overlapping window gets its own resolution, and they are sent together in the
+  `POST /api/events` body — the create is refused with *Every overlapping Window needs a
+  resolution* otherwise, so a two-window clash that offers options for only the first (the
+  prototype's `cl[0]`) is unresolvable. The test covers two overlapping windows resolved
+  differently in one create
+- the create sends the event and its resolutions as one request, and the surface states that the
+  date becomes a one-off day
+- the resolution set is closed at the four wire values — `replace`, `truncateStart`,
+  `truncateEnd`, `split` (`OverlapResolution`) — and a test asserts that nothing else is ever sent,
+  and that no option whose guard is false is ever rendered
 
 **Read-only dimensions viewer (#112)** — `dimensionsScreen(back, backLabel)` ~948 in
 `ui-screens.prototype.html`; `identityFields()` ~502, `timingFields()` ~513, `brief(v)` ~679 in
@@ -1020,12 +1041,34 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - the viewer renders every Dimension the registry returns, in the registry's order, with each
   one's values
 - an ordinal Dimension renders through the shared `OrdinalSlider` in its read-only presentation —
-  ticks, hint and toggle present, every control disabled
+  ticks and hint present, the leave-at-the-default toggle present only where a default is declared
+  (per § *Shared controls*), every control disabled
 - a categorical Dimension renders its values as a read-only chipset — no button, no pressed state
   to toggle
-- a fetched Dimension renders as fetched and never authored, alongside the authored ones
-- no editing affordance appears anywhere on the screen — no commit, no toggle, no draft
+- a fetched Dimension renders as fetched and never authored, alongside the authored ones (needs
+  the source marker — see *What this list needs* below)
+- nothing on the screen commits — no control is enabled, no draft is held, and the tag-entry
+  prototype's `toggleCat` / `setOrd` / `commitDraft` affordances are absent (they are #102's)
 - an empty registry renders the empty state rather than a bare frame
+
+**What this list needs from the API that does not exist yet (#104)**
+
+Five bullets above name server-supplied data the wire does not currently carry. They are stated as
+requirements rather than softened away, because softening them would specify a surface that quietly
+computes what the server owns. **No lane edits an endpoint to close these** — the Schedule and
+Capture lanes are merged and no open ticket owns these files, so this is a report, per plan
+constraint 6.
+
+| Needed | Today | Blocks |
+|---|---|---|
+| `GET /api/day-templates` and `GET /{id}` | `Results.NoContent()` stubs (`DayTemplateEndpoints.cs:13-14`) | #105's editor and #106's shape picker have **no source of shapes at all** |
+| `unused` on `DayTemplateResponse` | absent; `DELETE /{id}` is gated on it server-side | the delete affordance in #105 |
+| A source marker (`WindowValueSource` — authored / derived / fetched) on `DimensionResponse` | absent; the prototype reads its own fixture field `src` | the window editor's weather chipset, #112's fetched row |
+| A window match preview (count + first titles) | no endpoint; `windows/{id}/dependents` is the Drift warning | the window editor's preview |
+| A template's affected dates for the next fortnight | `/api/days/{date}` answers one date | the scope banner's count, the affected-dates list |
+
+Until they land, those bullets are testable against fixtures and unreachable in the running app.
+`GET /api/day-templates` is the one that stops a screen existing rather than degrading it.
 
 ## `TaskGuide.E2E`
 
