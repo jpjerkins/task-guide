@@ -1069,6 +1069,7 @@ constraint 6.
 
 Until they land, those bullets are testable against fixtures and unreachable in the running app.
 `GET /api/day-templates` is the one that stops a screen existing rather than degrading it.
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and
@@ -1082,8 +1083,12 @@ specified under **Shared controls** above and are not restated here.
 - the page renders the Window's own name, span and date — it is not a re-render of the push's text
 - **all** matches render, not the push's shortlist of three; the push is deliberately not at parity
   with the page
-- a Window that matched nothing renders "Nothing fits" and states that no notification would have
-  fired, rather than an empty list
+- a Window that matched nothing renders "Nothing fits" rather than an empty list, and the empty
+  state splits on whether a Reminder actually fired: the ordinary silent case says no notification
+  would have fired, while an **unconditional Event-runway fire** and an **empty Snooze re-fire** both
+  land here having genuinely pushed, and must not claim otherwise
+- an `Unprocessed` Task in the footer count is repairable inline — one Task plus the same five
+  Duration buttons capture offers — because this page, not the notification, is where triage lives
 - the Snooze control names the interval the server gave it; the `clamp(25%, 5, 30)` arithmetic is
   never recomputed client-side
 - when the server reports Snooze unavailable the control is **suppressed, not hidden** — replaced by
@@ -1103,8 +1108,9 @@ specified under **Shared controls** above and are not restated here.
   window-side default
 - toggling a "Matching on" chip re-reads the match list from the server; the rendered list is never
   filtered client-side
-- the "Matching on" chipset survives its own press — same DOM nodes before and after, which is
-  ADR-0006 asserted at the vitest level rather than only in E2E
+- the "Matching on" chipset survives its own press — same DOM nodes before and after. A `<button>`
+  group presents no OS popup, so this is re-render hygiene rather than ADR-0006 itself; the ADR's
+  own scope is the system-presented controls asserted below
 - a fallback push's landing page has **no** Snooze control at all, rather than a disabled one — there
   is no Window behind it to derive an interval from
 - an adjustment reports back that the date is now an Override, since the write is what protects a Day
@@ -1118,16 +1124,24 @@ specified under **Shared controls** above and are not restated here.
   mark-off control is disabled — there is nothing yet to be done within
 - an Orphan badge renders only on an `Active` Task, so it never co-occurs with the unprocessed or
   stale piles
-- the Orphan badge links into the window editor for the repair — the destination is Web-Authoring's,
-  the link is this lane's
+- the Orphan badge deep-links into the window editor **pre-filtered to the distinct Day templates
+  the *active* Pattern references that do not yet declare a value on that Tag's Dimension** — never
+  dormant ones, since fixing those would not help today. The destination is Web-Authoring's, the
+  link and its filter are this lane's
 - a deferred Task is absent from every match-driven surface but present in this list, marked with its
   surface date, so it stays findable
-- the "Not now" gesture appears on `Active` rows only, and never on a recurring or a derived Task
+- the "Not now" gesture is gated on **eligibility**, not on the `Active` label alone: a deferred
+  Task is Status `Active` and is listed here, and there is no `Deferred` status to gate on, so
+  gating on Status would offer the gesture on a Task whose Defer has not elapsed — the case CONTEXT
+  § Postpone relies on being unrepresentable ("`max(CreatedAt, Defer)` needs no third term")
+- the gesture never appears on a recurring or a derived Task
 - a postponed row **stays in place, greyed, showing its postpone date** rather than vanishing from
   the list being read
 - a Postpone interval landing past the Deadline is labelled at the point of the tap ("a month · past
   its deadline"), and the row says so too
 - Postpone offers three fixed intervals plus a "pick a date…" escape — the same shape the rail uses
+- Postpone's "pick a date…" escape survives its own input event — ADR-0006 § Scope names this
+  surface explicitly, and it is the one system-presented picker this screen opens
 - an empty list renders "Nothing here.", never a blank region
 
 #### Task detail
@@ -1136,11 +1150,25 @@ specified under **Shared controls** above and are not restated here.
 - the fit bar renders Opportunities as a count with its horizon in words — "in the next 7 days", or
   "before it is due" when the Task carries a Deadline still ahead
 - **the two zeros are distinguished**: zero Opportunities with a zero Pattern-week count renders the
-  orphan reading and names the blocking axes; zero with a non-zero Pattern-week count renders "an
-  override or event has taken them all out of this stretch — nothing is wrong with the task"
+  orphan reading; zero with a non-zero Pattern-week count renders "an override or event has taken
+  them all out of this stretch — nothing is wrong with the task"
+- the orphan reading itself splits: where single axes are to blame it **names them** ("no window
+  declares *X* or *Y* — relax one, or declare it on a window"), and where every value appears on some
+  Window but the conjunction has no home it says so instead of rendering an empty blame list
+- an **overdue** Task's fit bar reverts to the plain rolling 7 days and reads "in the next 7 days":
+  once the Deadline has passed the horizon drops its deadline bound, and without that the span
+  collapses, Opportunities reads 0 and the Task renders as an Orphan — the exact opposite of the truth
 - an unknown Opportunities count (a failed fetched-Dimension check) renders as unknown, never as zero
-- the fit bar counts a non-`Active` Task as if `Active` and says so — it is not being matched at all
-  right now
+- a **deferred or postponed** Task renders Opportunities as **absent — the lack of a value, not a
+  zero** — so it reaches neither zero reading; its Pattern-week count stays defined, because orphan
+  detection ignores the clock gates and asks whether any Window could *ever* admit the Task
+- an `Unprocessed` Task's fit bar renders orphan-ness as **undefined**, not as a count: matching's
+  two inputs are Tags and Duration, and `Unprocessed` *is* the absence of the second, so the count
+  would be computed from a missing operand. Neither papering-over ships — matching nothing flags a
+  **false Orphan**, matching everything is confident and flips the moment a Duration arrives. The
+  repair is the five Duration buttons, not a number
+- a `Stale` Task's fit bar renders no orphan badge either — computable but useless, since the Task
+  cannot fire regardless and the repair may well be delete
 - the Dimensions section picks **values** on axes; no control here adds, removes or renames an axis
 - a Task's loose Tags render as kept-but-inert, distinct from the values that match
 - clearing Postpone here is how a postponed Task returns — the greyed row is placement, not a rescue
@@ -1167,10 +1195,15 @@ specified under **Shared controls** above and are not restated here.
 - between Windows it renders "Nothing open" with nothing seeded; widening a value mints an **ad-hoc
   Window** on today, labelled as unplanned and as running to the next commitment
 - the ad-hoc Window states that it never fires — you are already standing in it
+- the minted Window's start and its end at the next commitment both come from the **server's** day
+  shape; the SPA never reads the device clock to bound a span it is about to write, since that write
+  is an Override and pins a Day template for 13 months
 - there is **no Snooze** on this screen: this is the "show me what fits now" feature the Snooze
   re-matching rule was careful not to be
-- adjusting previews only; the sole write on this screen is minting the ad-hoc Window, and it happens
-  on request
+- **adjusting writes through** here exactly as on the landing page: inside a live Window a toggle
+  materialises that date's Override, and between Windows it mints the ad-hoc Window. There is no
+  preview-only second semantics for a control that writes on every other surface — this is what keeps
+  *"the original Window's Dimension values"* literally true for a later Snooze
 - an adjusted query matching nothing renders "Nothing fits that" and prompts widening, rather than an
   empty list
 - the seeded live Window comes from the server's day shape; the screen never compares clock times to
