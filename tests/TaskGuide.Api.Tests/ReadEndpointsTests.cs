@@ -59,7 +59,7 @@ public sealed class ReadEndpointsTests : IDisposable
         var dimensions = await response.Content.ReadFromJsonAsync<JsonElement>();
         string SourceOf(string id) => dimensions.EnumerateArray()
             .Single(dimension => dimension.GetProperty("id").GetString() == id)
-            .GetProperty("source").GetString()!;
+            .GetProperty("source").GetString() ?? throw new InvalidOperationException("A window value source must be a string");
 
         Assert.Equal("derived", SourceOf("duration"));
         Assert.Equal("fetched", SourceOf("weather"));

@@ -229,7 +229,7 @@ public sealed class DayTemplateEndpointsTests : IDisposable
 
         var response = await _client.GetFromJsonAsync<JsonElement>($"/api/day-templates/{Volleyball.Value}/affected-dates");
 
-        var dates = response.EnumerateArray().Select(value => DateOnly.Parse(value.GetString()!)).ToArray();
+        var dates = response.EnumerateArray().Select(value => DateOnly.Parse(value.GetString() ?? throw new InvalidOperationException("An affected date must be a string"))).ToArray();
         Assert.DoesNotContain(today, dates);
         Assert.Contains(today.AddDays(7), dates);
         Assert.Equal(13, dates.Length);
