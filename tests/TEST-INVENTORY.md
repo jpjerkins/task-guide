@@ -890,6 +890,143 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   typed, not the previous committed value re-inserted ahead of it — clearing "3" and typing "12"
   commits 12, never 312
 
+### Web-Authoring
+
+The seven authoring surfaces (#105–#108, #112), ported from
+`docs/prototypes/schedule-editing.prototype.html` — and `tag-entry.prototype.html` for the
+dimensions viewer. Three rules cut across every line below, so they are not repeated per surface:
+
+- **Structure is asserted, never eyeballed.** Each surface's test asserts the prototype's element
+  and class structure, out of the frozen class set in `index.css`. A missing class is a report,
+  not a new class.
+- **Nothing is computed in the browser.** Match counts, orphan counts, `Unused`, a Day template's
+  affected-date count, and every timing predicate arrive on the wire and are rendered. A test that
+  needs one supplies it as a fixture response; a component that derives one is the defect.
+- **ADR-0006 per surface.** The shared controls' own survival tests belong to #111; what is listed
+  here is each authoring surface's own `<select>`, time field, date field and slider — asserted as
+  the *same DOM node* before and after its own input event.
+
+**Window editor (#105)** — `windowEditor(ref)` ~766, `refWindow(ref, materialiseIt)` ~754
+
+- the editor renders the name field, the start and end time fields, one chipset per authored
+  Dimension, the read-only weather chipset, the match preview, and the remove button
+- an ordinal Dimension's chipset presses exactly the set value, or the window-side default when
+  the window declares nothing on that axis; a categorical chipset presses every declared value
+- the weather chipset is read-only — no buttons, the date's fetched value marked, and the note
+  saying a window never declares weather
+- a time field displays `3p`, `7:30a`, `12p` — never `15:00` — and accepts the same forms typed
+  back, plus `3 p`, `3.30p` and bare `15`
+- a rejected time (`12:75`, `25`) leaves the field showing what was typed and commits nothing
+- the time field survives its own input event — same DOM node before and after
+- the match preview renders the server's count and the first four titles, and its zero state
+  renders the silence note rather than an empty list
+- the span note states the derived ceiling and the derived snooze, and neither is editable
+- removing arms on the first press and commits on the second; the armed label names the
+  affected-day count for a template-scoped window and the single date for a date-scoped one
+- a window reference that no longer resolves renders the gone state rather than throwing
+
+**Scope banner (#105)** — `scopeBanner(ref, flat)` ~730, `refCtx(ref)` ~748
+
+- a `tpl:` reference banners the shape's name, the count of affected dates in the next fortnight
+  with up to four of them named, and the Patterns using the shape
+- a `date:` reference on a date with no Override banners *this date only*, and says the first
+  change copies the day off its shape
+- a `date:` reference on an existing Override banners that Override's label instead
+- the banner is rendered before the first edit, not after it — a test asserts it is present on
+  first render of the editor
+
+**Day-template editor and usage list (#105)** — `shapeRow(t, on, act, extra)` ~946,
+`datesList(backScreen)` ~1043, `affectedDates(tplId)` ~631
+
+- a shape row renders the name, the window count, the first start through the last end, and the
+  current-shape pill only when it is the current one
+- a shape with no windows renders *no windows — a deliberately silent day*, not an empty row
+- the view toggle switches a shape row between the strip silhouette and the time pills, and the
+  choice is shared by every list that renders one
+- the usage list names every Pattern referencing the template, and is shown before saving an edit
+- the affected-dates list names the dates in the next fortnight that follow this template, and
+  states that every future one changes too
+- a template the server reports `Unused` offers deletion; one that is not, does not — the flag is
+  read, never derived here
+- the delete confirmation names the Event prototypes the template carries, and does not gate on
+  them
+- the dated-exceptions list lists only the next fortnight's dates carrying an Override or an
+  Event, marks each as a stamped copy or a one-off day, names the date's Events, and renders the
+  nothing-departs empty state otherwise
+
+**Pattern editor and switcher (#106)** — `patternSheet()` ~832, `shapePickerSheet(p)` ~959,
+`weekCanvas(days)` ~1062
+
+- the week canvas renders seven day rows in weekday order, marking today
+- a day row's head opens the shape picker for that weekday; the picker groups shapes as already
+  in this season / used by other seasons / not in use, omitting an empty group
+- the picker presses the weekday's current shape, and choosing another assigns the slot by
+  reference — the Pattern stores a pointer, so the test asserts the id sent, not copied windows
+- the switcher lists every Pattern, marks the active one, and renders each one's orphan count
+  **before** the switch; a zero count renders *every active task still has a home*
+- the orphan count comes from the server per Pattern — the switcher renders counts for Patterns it
+  has not switched to, and never computes fit in the browser
+- selecting the active Pattern's row commits nothing
+- a non-active Pattern offers deletion confirmed by name; the active one offers none, and the
+  confirmation does not name the Day templates the deletion strands
+
+**Override a date (#107)** — `materialise(dateKey, why)` ~543, `stamp(dateKey, tplId)` ~553,
+`revertDate(dateKey)` ~560, `promoteSheet(dateKey)` / `promote(dateKey, name)` ~987
+
+- the rail renders the fixed ±10-day span around today, marks the selected date, and dots only the
+  dates carrying an Override or an Event
+- selecting a rail date changes the shown date without adding a rail entry — the rail never grows
+- *Pick a date…* opens the shared `DateEntry` and selecting a date beyond the rail shows that date,
+  still without growing the rail
+- the rail's date control survives its own input event — same DOM node before and after
+- stamping a Day template onto a date renders the copies-the-windows-in note, and sends the stamp
+  for that date alone
+- stamping onto a date that already carries an Override confirms the clobber before writing
+- reverting a date removes its Override and the date reads as following the pattern again
+- promotion names the new shape, lists the windows it will carry, and states that the source date
+  keeps its own copy; after it, the source date still reads as its own shape and not as a link
+- range authoring takes a start and an end and writes one Override per date in the range — the
+  same stamp repeated, never a second mechanism and never a multi-day object
+- a range landing on dates that already carry an Override names every one of them in a single
+  confirmation before the write, not one prompt per date
+- a range whose end precedes its start is refused, and nothing is written
+
+**Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
+`clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
+
+- an event overlapping no window renders the add button and the nothing-to-resolve note, and no
+  resolution list at all
+- an overlapping event renders the clash warning naming the window and its span, and names every
+  further window it also overlaps
+- **replace** is always offered
+- **truncate** is offered only when the event starts after the window does, and its label states
+  the resulting span and the resulting length
+- **split** is offered as *split it around the event* only when the event sits inside the window,
+  and its label names both resulting spans
+- **split** degrades to *push it to after the event* when the event covers the window's start
+- no split of either form is offered when the event runs to or past the window's end — the tail
+  would be empty
+- an event's time fields take the same lenient forms as a window's and survive their own input
+  events
+- choosing a resolution sends the date, the window id and the chosen resolution, and the surface
+  states that the date becomes a one-off day
+- the resolution set is closed — a test asserts that no option outside replace / truncate / split
+  is ever rendered
+
+**Read-only dimensions viewer (#112)** — `dimensionsScreen(back, backLabel)` ~948 in
+`ui-screens.prototype.html`; `identityFields()` ~502, `timingFields()` ~513, `brief(v)` ~679 in
+`tag-entry.prototype.html`
+
+- the viewer renders every Dimension the registry returns, in the registry's order, with each
+  one's values
+- an ordinal Dimension renders through the shared `OrdinalSlider` in its read-only presentation —
+  ticks, hint and toggle present, every control disabled
+- a categorical Dimension renders its values as a read-only chipset — no button, no pressed state
+  to toggle
+- a fetched Dimension renders as fetched and never authored, alongside the authored ones
+- no editing affordance appears anywhere on the screen — no commit, no toggle, no draft
+- an empty registry renders the empty state rather than a bare frame
+
 ## `TaskGuide.E2E`
 
 - the landing page loads (#74 ARM64/Debian 12 Playwright smoke check)
