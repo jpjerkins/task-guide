@@ -3,6 +3,8 @@ import { sendJson } from '../api/client'
 import type { components } from '../api/schema'
 
 export type EventWindow = components['schemas']['AvailabilityWindow']
+type CreateEventRequest = components['schemas']['CreateEventRequest']
+type EventOverlapResolutionRequest = components['schemas']['EventOverlapResolutionRequest']
 
 interface EventCreateSheetProps {
   date: string
@@ -11,76 +13,88 @@ interface EventCreateSheetProps {
   onCreated: () => void | Promise<void>
 }
 
-type Resolution = 'replace' | 'truncateStart' | 'truncateEnd' | 'split'
+const resolutionValues = ['replace', 'truncateStart', 'truncateEnd', 'split'] as const satisfies readonly EventOverlapResolutionRequest['resolution'][]
+type Resolution = (typeof resolutionValues)[number]
 
-function minutes(time: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(time)
-  if (match === null) return null
-
-  const hours = Number(match[1])
-  const mins = Number(match[2])
-  return hours <= 23 && mins <= 59 ? hours * 60 + mins : null
+interface EventTimes {
+  start: string
+  end: string
+  startMinutes: number
+  endMinutes: number
 }
 
-function overlapResolution(window: EventWindow, start: string, end: string): Resolution | null {
-  const windowStart = minutes(window.start)
-  const windowEnd = minutes(window.end)
-  const eventStart = minutes(start)
-  const eventEnd = minutes(end)
-  if (windowStart === null || windowEnd === null || eventStart === null || eventEnd === null
-    || windowStart >= eventEnd || eventStart >= windowEnd) {
+interface Overlap extends EventTimes {
+  window: EventWindow
+  windowStart: string
+  windowEnd: string
+  windowStartMinutes: number
+  windowEndMinutes: number
+}
+
+function parseTime(value: string): string | null {
+  const time = value.trim().toLowerCase().replace(/[\s.]/g, (character) => character === '.' ? ':' : '')
+  const match = /^(\d{1,2}):?(\d{2})?\s*(am|pm|a|p)?$/.exec(time)
+  if (match === null) return null
+
+  let hours = Number(match[1])
+  const mins = match[2] === undefined ? 0 : Number(match[2])
+  const amPm = match[3]?.[0]
+  if (mins > 59) return null
+  if (amPm !== undefined) {
+    if (hours < 1 || hours > 12) return null
+    hours = (hours % 12) + (amPm === 'p' ? 12 : 0)
+  } else if (hours > 23) return null
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
+}
+
+function toMinutes(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3))
+}
+
+function eventTimes(start: string, end: string): EventTimes | null {
+  const normalizedStart = parseTime(start)
+  const normalizedEnd = parseTime(end)
+  if (normalizedStart === null || normalizedEnd === null) return null
+  const startMinutes = toMinutes(normalizedStart)
+  const endMinutes = toMinutes(normalizedEnd)
+  return startMinutes < endMinutes ? { start: normalizedStart, end: normalizedEnd, startMinutes, endMinutes } : null
+}
+
+function overlapFor(window: EventWindow, event: EventTimes): Overlap | null {
+  const windowStart = parseTime(window.start)
+  const windowEnd = parseTime(window.end)
+  if (windowStart === null || windowEnd === null) return null
+  const windowStartMinutes = toMinutes(windowStart)
+  const windowEndMinutes = toMinutes(windowEnd)
+  if (windowStartMinutes >= event.endMinutes || event.startMinutes >= windowEndMinutes) {
     return null
   }
-  return 'replace'
+  return { ...event, window, windowStart, windowEnd, windowStartMinutes, windowEndMinutes }
 }
 
 function windowId(window: EventWindow): string | null {
   return window.id.value ?? null
 }
 
-function optionsFor(window: EventWindow, start: string, end: string): Resolution[] {
-  const windowStart = minutes(window.start)
-  const windowEnd = minutes(window.end)
-  const eventStart = minutes(start)
-  const eventEnd = minutes(end)
-  if (windowStart === null || windowEnd === null || eventStart === null || eventEnd === null) return []
-
+function optionsFor(overlap: Overlap): Resolution[] {
   const options: Resolution[] = ['replace']
-  if (eventStart > windowStart) options.push('truncateEnd')
-  if (eventStart > windowStart && eventEnd < windowEnd) options.push('split')
-  else if (eventEnd < windowEnd) options.push('truncateStart')
+  if (overlap.startMinutes > overlap.windowStartMinutes) options.push('truncateEnd')
+  if (overlap.startMinutes > overlap.windowStartMinutes && overlap.endMinutes < overlap.windowEndMinutes) options.push('split')
+  else if (overlap.endMinutes < overlap.windowEndMinutes) options.push('truncateStart')
   return options
 }
 
-function optionLabel(option: Resolution, window: EventWindow, start: string, end: string): string {
+function optionCopy(option: Resolution, overlap: Overlap): { label: string; description: string } {
+  const { window, start, end, windowStart, windowEnd, startMinutes, windowStartMinutes, windowEndMinutes } = overlap
   switch (option) {
     case 'replace':
-      return `Replace the window — ${window.name}`
+      return { label: `Replace the window — ${window.name}`, description: `${window.name} disappears that day` }
     case 'truncateEnd':
-      return `Truncate it to ${window.start}–${start} — ${window.name}`
+      return { label: `Truncate it to ${windowStart}–${start} — ${window.name}`, description: `Fires at ${windowStart} as before; ${startMinutes - windowStartMinutes} min instead of ${windowEndMinutes - windowStartMinutes}` }
     case 'split':
-      return `Split it around the event — ${window.start}–${start} and ${end}–${window.end} — ${window.name}`
+      return { label: `Split it around the event — ${windowStart}–${start} and ${end}–${windowEnd} — ${window.name}`, description: `${windowStart}–${start} and ${end}–${windowEnd} — two windows, two fires` }
     case 'truncateStart':
-      return `Push it to after the event — ${end}–${window.end} — ${window.name}`
-  }
-}
-
-function optionDescription(option: Resolution, window: EventWindow, start: string, end: string): string {
-  const windowStart = minutes(window.start)
-  const windowEnd = minutes(window.end)
-  const eventStart = minutes(start)
-  const eventEnd = minutes(end)
-  if (windowStart === null || windowEnd === null || eventStart === null || eventEnd === null) return ''
-
-  switch (option) {
-    case 'replace':
-      return `${window.name} disappears that day`
-    case 'truncateEnd':
-      return `Fires at ${window.start} as before; ${eventStart - windowStart} min instead of ${windowEnd - windowStart}`
-    case 'split':
-      return `${window.start}–${start} and ${end}–${window.end} — two windows, two fires`
-    case 'truncateStart':
-      return `${end}–${window.end}; the event covers its whole start`
+      return { label: `Push it to after the event — ${end}–${windowEnd} — ${window.name}`, description: `${end}–${windowEnd}; the event covers its whole start` }
   }
 }
 
@@ -96,18 +110,19 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
   const [resolutions, setResolutions] = useState<Record<string, Resolution>>({})
   const [submitting, setSubmitting] = useState(false)
 
-  const startMinutes = minutes(start)
-  const endMinutes = minutes(end)
-  const validTimeRange = startMinutes !== null && endMinutes !== null && startMinutes < endMinutes
-  const overlaps = validTimeRange
-    ? windows.filter((window) => overlapResolution(window, start, end) !== null)
-    : []
-  const allOverlapsResolved = overlaps.every((window) => {
-    const id = windowId(window)
+  const event = eventTimes(start, end)
+  const overlaps = event === null
+    ? []
+    : windows.flatMap((window) => {
+      const overlap = overlapFor(window, event)
+      return overlap === null ? [] : [overlap]
+    })
+  const allOverlapsResolved = overlaps.every((overlap) => {
+    const id = windowId(overlap.window)
     const resolution = id === null ? undefined : resolutions[id]
-    return resolution !== undefined && optionsFor(window, start, end).includes(resolution)
+    return resolution !== undefined && optionsFor(overlap).includes(resolution)
   })
-  const canSubmit = name.trim().length > 0 && validTimeRange && allOverlapsResolved && !submitting
+  const canSubmit = name.trim().length > 0 && event !== null && allOverlapsResolved && !submitting
   const firstOverlap = overlaps[0]
 
   async function submit() {
@@ -115,20 +130,21 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
 
     setSubmitting(true)
     try {
-      const resolved = overlaps.flatMap((window) => {
-        const id = windowId(window)
+      const resolved: EventOverlapResolutionRequest[] = overlaps.flatMap((overlap) => {
+        const id = windowId(overlap.window)
         const resolution = id === null ? undefined : resolutions[id]
         return id === null || resolution === undefined ? [] : [{ windowId: id, resolution }]
       })
-      await sendJson('POST', '/api/events', {
+      const request: CreateEventRequest = {
         date,
         name: name.trim(),
-        start,
-        end,
+        start: event.start,
+        end: event.end,
         tags: null,
         absenceNotice: null,
         resolutions: resolved.length === 0 ? null : resolved,
-      })
+      }
+      await sendJson('POST', '/api/events', request)
       await onCreated()
     } finally {
       setSubmitting(false)
@@ -152,32 +168,35 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
             <span>to</span>
             <input aria-label="End" className="field time" value={end} onChange={(event) => setEnd(event.target.value)} />
           </div>
-          {!validTimeRange && <div className="hint">End time must be after the start time.</div>}
+          {event === null && <div className="hint">End time must be after the start time.</div>}
         </div>
         {firstOverlap !== undefined && (
           <>
             <div className="scope shared">
               <span className="g">⚠</span>
               <span>
-                This clashes with <b>{firstOverlap.name}</b>, {firstOverlap.start}–{firstOverlap.end}. A date has <b>one shape</b>, so the window has to give way somehow.
-                {overlaps.length > 1 && <> It also overlaps <b>{overlaps.slice(1).map((window) => window.name).join(', ')}</b>.</>}
+                This clashes with <b>{firstOverlap.window.name}</b>, {firstOverlap.windowStart}–{firstOverlap.windowEnd}. A date has <b>one shape</b>, so the window has to give way somehow.
+                {overlaps.length > 1 && <> It also overlaps <b>{overlaps.slice(1).map((overlap) => overlap.window.name).join(', ')}</b>.</>}
               </span>
             </div>
-            {overlaps.map((window) => {
-              const id = windowId(window)
+            {overlaps.map((overlap) => {
+              const id = windowId(overlap.window)
               return (
-                <div className="stack" key={id ?? window.name}>
-                  {optionsFor(window, start, end).map((option) => (
+                <div className="stack" key={id ?? overlap.window.name}>
+                  {optionsFor(overlap).map((option) => {
+                    const copy = optionCopy(option, overlap)
+                    return (
                     <button
                       className="btn wide"
                       key={option}
                       onClick={() => id !== null && setResolutions((current) => ({ ...current, [id]: option }))}
                       aria-pressed={id !== null && resolutions[id] === option}
                     >
-                      {optionLabel(option, window, start, end)}<br />
-                      <span>{optionDescription(option, window, start, end)}</span>
+                      {copy.label}<br />
+                      <span>{copy.description}</span>
                     </button>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })}

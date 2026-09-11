@@ -110,6 +110,22 @@ describe('EventCreateSheet', () => {
     expect(screen.getByRole('button', { name: 'Add event' })).toBeDisabled()
   })
 
+  it("an event's time fields accept the same lenient forms as a window and send canonical times", async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: { value: 'event-1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<EventCreateSheet date="2026-09-07" windows={[]} onCancel={() => {}} onCreated={() => {}} />)
+    await user.type(screen.getByLabelText('Name'), 'Breakfast')
+    await user.clear(screen.getByLabelText('Start'))
+    await user.type(screen.getByLabelText('Start'), '6')
+    await user.clear(screen.getByLabelText('End'))
+    await user.type(screen.getByLabelText('End'), '630')
+
+    await user.click(screen.getByRole('button', { name: 'Add event' }))
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ start: '06:00', end: '06:30' })
+  })
+
   it("an event's time fields refuse an end at or before the start, and survive their own input events", () => {
     render(<EventCreateSheet date="2026-09-07" windows={[]} onCancel={() => {}} onCreated={() => {}} />)
     const end = screen.getByLabelText('End')
