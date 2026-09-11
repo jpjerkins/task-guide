@@ -109,6 +109,11 @@ public static class DayTemplateEndpoints
     /// "What would surface here": the count and first four titles of the eligible Tasks this
     /// Window would admit on a date, assembled the same way `TickPlanner` actually matches —
     /// derived obligations composed in, eligibility gated, then <see cref="Matcher.Fits"/>.
+    /// Eligibility is gated at the instant the Window would start on the previewed date, not the
+    /// wall clock, so previewing a future date answers "what matches there" rather than "now".
+    /// <b>Known residual limitation:</b> derived obligations from <see cref="DerivedTaskComposer"/>
+    /// still anchor to its own injected clock, not the previewed date — re-anchoring that lives
+    /// in Application/Rules/, outside this endpoint's ownership.
     /// </summary>
     private static Results<Ok<WindowMatchPreviewResponse>, BadRequest<object>> Preview(
         string id,
@@ -119,7 +124,6 @@ public static class DayTemplateEndpoints
         DimensionRegistry registry,
         ClockTimeResolution resolution,
         StaleThresholds staleThresholds,
-        TimeProvider clock,
         DayBoundary boundary)
     {
         if (!DayTemplateLifecycleHandlers.IsDayTemplateId(id) || !IsWindowId(windowId) || !DateOnly.TryParse(date, out var onDate))
@@ -137,13 +141,13 @@ public static class DayTemplateEndpoints
             return TypedResults.BadRequest<object>(new { error = "a known Day template and Window are required" });
         }
 
-        var now = clock.GetUtcNow();
+        var previewInstant = resolution.Resolve(onDate, window.Start);
         var buckets = DurationBucketsOf(registry);
         var ceiling = buckets.Count > 0 ? window.DurationCeiling(onDate, resolution, buckets) : default;
         var context = new MatchContext(window, ceiling, EveryFetchedValueOf(registry), FailedFetches: []);
 
         var matched = derivedTasks.Compose(view)
-            .Where(task => StatusRules.IsEligible(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary))
+            .Where(task => StatusRules.IsEligible(task, view.CompletionsFor(task.Id), registry, staleThresholds, previewInstant, boundary))
             .Where(task => Matcher.Fits(task, context, registry))
             .ToArray();
 

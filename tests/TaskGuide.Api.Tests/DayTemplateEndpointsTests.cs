@@ -215,6 +215,24 @@ public sealed class DayTemplateEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_day_templates_id_windows_windowId_preview_evaluates_eligibility_on_the_previewed_date_not_today()
+    {
+        var window = Window("w_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Practice", new TimeOnly(10, 0), new TimeOnly(11, 0));
+        var template = new DayTemplate(Volleyball, "Volleyball", [window], []);
+        var deferDate = new DateOnly(2026, 9, 10);
+        var task = TaskWithDurationAndDefer("t_01ARZ3NDEKTSV4RRFFQ69G5FA1", "Fit A", "30", deferDate);
+        await WriteAsync(new DayTemplatesWrite([template]), new TasksWrite([task]));
+
+        var onDefer = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/day-templates/{Volleyball.Value}/windows/{window.Id.Value}/preview?date=2026-09-10");
+        var beforeDefer = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/day-templates/{Volleyball.Value}/windows/{window.Id.Value}/preview?date=2026-09-07");
+
+        Assert.Contains("Fit A", onDefer.GetProperty("titles").EnumerateArray().Select(v => v.GetString()));
+        Assert.DoesNotContain("Fit A", beforeDefer.GetProperty("titles").EnumerateArray().Select(v => v.GetString()));
+    }
+
+    [Fact]
     public async Task GET_api_day_templates_id_affected_dates_names_the_next_fortnights_dates_the_template_governs_and_excludes_Overridden_ones()
     {
         var boundary = new DayBoundary(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId));
@@ -261,6 +279,14 @@ public sealed class DayTemplateEndpointsTests : IDisposable
             [KnownDimensions.Duration] = [new TagValue(duration)],
         }, []),
         null, null, null, null, DateTimeOffset.UtcNow);
+
+    private static TaskItem TaskWithDurationAndDefer(string id, string title, string duration, DateOnly deferDate) => new(
+        new TaskId(id), title, null,
+        new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+        {
+            [KnownDimensions.Duration] = [new TagValue(duration)],
+        }, []),
+        null, new AbsoluteDefer(deferDate), null, null, DateTimeOffset.UtcNow);
 
     private static TaskItem TaskWithoutDuration(string id, string title) => new(
         new TaskId(id), title, null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
