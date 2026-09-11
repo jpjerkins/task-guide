@@ -256,7 +256,7 @@ public sealed class DayTemplateEndpointsTests : IDisposable
         Assert.Equal(14, entries.Length);
         Assert.Equal(entries.Select(e => e.Date).OrderBy(date => date).ToArray(), entries.Select(e => e.Date).ToArray());
         Assert.Contains(entries, e => e.Date == overriddenDate && e.Overridden);
-        Assert.Contains(entries, e => e.Date == today && !e.Overridden);
+        Assert.Contains(entries, e => e.Date == today.AddDays(1) && !e.Overridden);
     }
 
     private async Task WriteAsync(params object[] writes)
