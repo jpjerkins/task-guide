@@ -1092,6 +1092,28 @@ constraint 6.
 Until they land, those bullets are testable against fixtures and unreachable in the running app.
 `GET /api/day-templates` is the one that stops a screen existing rather than degrading it.
 
+**Override range module and escape props (#107 amendment; markup awaits #125)**
+
+The presentation-free slice uses `OverrideRange.ts` and `OverrideDateSelection.ts`. The public
+seams are the existing HTTP client and props for the real shared `DateEntry`. `authorOverrideSpan`
+passes every server-returned clobber date to one asynchronous confirmation callback; `false`
+cancels. It submits the checked span once to `POST /api/overrides` and returns the server's dated
+window copies. It never resolves the `used` record as a template link or fans out requests.
+Server-side copy isolation remains covered by the schedule tests; browser tests guard the wire
+contract, not a simulated server implementation. No rail, banner, confirmation presentation,
+screen registration, or CSS is implemented here. Those remain required before #107 can open a PR.
+
+Additional tests at this subsection's end (existing range and input-node tests remain above):
+
+- a single date span uses the same check and span POST and needs no confirmation when nothing is clobbered
+- an incomplete or invalid calendar date is refused before checking or writing (parameterized: blank, February 30, month 13, unpadded month, year zero)
+- confirmation applies only to the span and template that were checked
+- an absent clobber check response is not permission to write
+- a failed clobber check surfaces the error without confirmation or write (parameterized: 400, 500)
+- a failed span POST surfaces the error without retrying individual dates
+- picking a date beyond the rail changes the selection without growing or recentering its fixed Chicago span
+- clearing the escape keeps the shown date and fixed rail span
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and
