@@ -113,10 +113,15 @@ public static class DayTemplateEndpoints
 
     /// <summary>
     /// "What would surface here": the count and first four titles of the eligible Tasks this
-    /// Window would admit on a date, assembled the same way `TickPlanner` actually matches —
-    /// derived obligations composed in, eligibility gated, then <see cref="Matcher.Fits"/>.
-    /// Eligibility is gated at the instant the Window would start on the previewed date, not the
-    /// wall clock, so previewing a future date answers "what matches there" rather than "now".
+    /// Window would admit on a date — derived obligations composed in, eligibility gated, then
+    /// <see cref="Matcher.Fits"/>. Eligibility is gated at the instant the Window would start on
+    /// the previewed date, not the wall clock, so previewing a future date answers "what matches
+    /// there" rather than "now".
+    /// <para>
+    /// The Duration ceiling deliberately uses the Window's full resolved length, not `TickPlanner`'s
+    /// remaining-time rule (<c>window.End - now</c>, <c>TickPlanner.cs</c>): this asks what the
+    /// Window admits as authored, not what a fire at some instant would still have room for.
+    /// </para>
     /// <b>Known residual limitation:</b> derived obligations from <see cref="DerivedTaskComposer"/>
     /// still anchor to its own injected clock, not the previewed date — re-anchoring that lives
     /// in Application/Rules/, outside this endpoint's ownership.
