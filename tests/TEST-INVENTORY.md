@@ -807,9 +807,13 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   `fetched`)
 - `GET /api/day-templates/{id}/windows/{windowId}/preview` counts the eligible Tasks a Window
   would admit on a date and names the first four, **capped separately from the count**
-- `GET /api/day-templates/{id}/affected-dates` names the next fortnight's dates the template
-  governs and **excludes Overridden ones** — an Override is a by-value copy a template edit never
-  reaches
+- `GET /api/day-templates/{id}/windows/{windowId}/preview` gates eligibility **at the instant the
+  Window would start on the previewed date, not the wall clock** — a Task deferred until the
+  previewed date is present in the preview, and absent when previewing an earlier date
+- `GET /api/day-templates/{id}/affected-dates` reports **every one of the next fortnight's dates**
+  the template governs, ascending, each flagged with whether it holds an Override — an Override
+  shields its date's Windows from a template edit but not its Event prototypes, so overridden
+  dates are flagged, not omitted
 
 ## `TaskGuide.Web` (vitest)
 
