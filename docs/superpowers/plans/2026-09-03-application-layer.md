@@ -400,19 +400,23 @@ Both lanes are bound by the two rules the UI cannot break: **a system-presented 
 its own input events**, and **there is no client-side clock** — every timing predicate is answered by
 the server.
 
-**The prototypes are the design, and the design already shipped.** `docs/prototypes/` holds three
-of them, and their stylesheet was ported wholesale into `src/TaskGuide.Web/src/index.css` during
-0b-4 — 369 lines against the prototype's 351, same class vocabulary. A Web ticket is therefore a
+**The prototypes are the design, and the design already shipped.** `index.css` is the merged
+stylesheet vocabulary of `ui-screens.prototype.html` and `schedule-editing.prototype.html`;
+where their shared selectors differ cosmetically, it takes the later schedule-editing value.
+It also retains the app-shell and live-state selectors that prototypes cannot express, plus the
+selective tag-entry rules used by existing shared controls. `tag-entry.prototype.html` is
+deliberately not ported wholesale: #112 owns that conflict window. A Web ticket is therefore a
 **port of known markup into React**, never a design task, which is what makes these lanes safe to
 delegate. Every Web ticket names the prototype functions it ports, by file and line:
 `ui-screens.prototype.html` for the Now surfaces, `schedule-editing.prototype.html` for the
-authoring ones, `tag-entry.prototype.html` for dimension presentation.
+authoring ones, and `tag-entry.prototype.html` for dimension presentation.
 
 So a fifth rule joins constraint 6, and it exists for the same reason: **`index.css` is frozen.**
-No new classes, no inline styles, no `style={{…}}`. A screen that appears to need a class which
-does not exist is a *report, not an edit* — name the missing class and what it would be for, and
-stop. Inventing CSS is how a design drifts away from its prototype one screen at a time, and it
-is invisible in review because every individual invention looks reasonable.
+No new classes, no inline styles, no `style={{…}}`. A screen that appears to need a class outside
+the merged two-prototype vocabulary is a *report, not an edit* — name the class and what it would
+be for in a new integration ticket. Inventing CSS is how a design drifts away from its prototype
+one screen at a time, and it is invisible in review because every individual invention looks
+reasonable.
 
 Two corollaries. **The rendered DOM matches the prototype's element and class structure**, asserted
 in the tests, so a review never depends on someone looking at a screenshot. And **port the markup,
