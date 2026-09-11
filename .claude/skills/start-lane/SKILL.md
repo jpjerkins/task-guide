@@ -226,6 +226,10 @@ finding's round trip. A finding that survives all four is reported with its prov
 finding that does not survive is dropped — and when the justification was hard to find, say where it
 finally turned up, so the next reviewer reaches it sooner.
 
+**Receiving a finding:** before applying it, re-read the source it cites and apply the source's
+wording, not the reviewer's paraphrase — in #100 a paraphrase was sound in substance and still
+wrong in the spec's terms ("counted as if Active" where § Scarcity says _undefined_).
+
 **Restate this gate in the brief of any subagent you dispatch to review.** The subagent never sees
 this skill, and step 4a applies here too: hand it the decisions you already hold as findings, not as
 a reading list.
