@@ -1048,6 +1048,8 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - the resolution set is closed at the four wire values — `replace`, `truncateStart`,
   `truncateEnd`, `split` (`OverlapResolution`) — and a test asserts that nothing else is ever sent,
   and that no option whose guard is false is ever rendered
+- changing an Event's times after choosing a resolution disables create when that resolution is no
+  longer offered, so a stale resolution is never sent
 
 **Read-only dimensions viewer (#112)** — `dimensionsScreen(back, backLabel)` ~948 in
 `ui-screens.prototype.html`; `identityFields()` ~502, `timingFields()` ~513, `brief(v)` ~679 in
