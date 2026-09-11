@@ -82,6 +82,25 @@ describe('EventCreateSheet', () => {
     expect(screen.queryByRole('button', { name: /split it around the event/i })).not.toBeInTheDocument()
   })
 
+  it('changing the times after a selection blocks submission when that resolution is no longer offered', async () => {
+    const user = userEvent.setup()
+    render(<EventCreateSheet date="2026-09-07" windows={[windows[0]]} onCancel={() => {}} onCreated={() => {}} />)
+    await user.type(screen.getByLabelText('Name'), 'School pickup')
+    await user.clear(screen.getByLabelText('Start'))
+    await user.type(screen.getByLabelText('Start'), '10:00')
+    await user.clear(screen.getByLabelText('End'))
+    await user.type(screen.getByLabelText('End'), '11:00')
+    await user.click(screen.getByRole('button', { name: /split it around the event/i }))
+
+    expect(screen.getByRole('button', { name: 'Add event' })).toBeEnabled()
+
+    await user.clear(screen.getByLabelText('End'))
+    await user.type(screen.getByLabelText('End'), '12:00')
+
+    expect(screen.queryByRole('button', { name: /split it around the event/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add event' })).toBeDisabled()
+  })
+
   it("an event's time fields refuse an end at or before the start, and survive their own input events", () => {
     render(<EventCreateSheet date="2026-09-07" windows={[]} onCancel={() => {}} onCreated={() => {}} />)
     const end = screen.getByLabelText('End')

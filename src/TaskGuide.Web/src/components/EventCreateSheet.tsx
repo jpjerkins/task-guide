@@ -80,7 +80,8 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
     : []
   const allOverlapsResolved = overlaps.every((window) => {
     const id = windowId(window)
-    return id !== null && resolutions[id] !== undefined
+    const resolution = id === null ? undefined : resolutions[id]
+    return resolution !== undefined && optionsFor(window, start, end).includes(resolution)
   })
   const canSubmit = name.trim().length > 0 && validTimeRange && allOverlapsResolved && !submitting
 
