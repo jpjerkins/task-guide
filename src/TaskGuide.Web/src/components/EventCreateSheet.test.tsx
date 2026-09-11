@@ -20,11 +20,16 @@ beforeEach(() => vi.restoreAllMocks())
 
 describe('EventCreateSheet', () => {
   it('an event overlapping no window renders the add button and the nothing-to-resolve note, and no resolution list at all', () => {
-    render(<EventCreateSheet date="2026-09-07" windows={windows} onCancel={() => {}} onCreated={() => {}} />)
+    const { container } = render(<EventCreateSheet date="2026-09-07" windows={windows} onCancel={() => {}} onCreated={() => {}} />)
 
     expect(screen.getByRole('button', { name: 'Add event' })).toBeInTheDocument()
     expect(screen.getByText(/nothing to resolve/i)).toBeInTheDocument()
     expect(screen.queryByText(/replace the window/i)).not.toBeInTheDocument()
+    expect(container.querySelector('.veil > .sheet')).toBeInTheDocument()
+    expect(container.querySelectorAll('input.field.time')).toHaveLength(2)
+    expect(screen.getByText('to')).toBeInTheDocument()
+    expect(container.querySelector('.btn-row > .btn.primary.wide')).toBeInTheDocument()
+    expect(container.querySelector('.note')).toBeInTheDocument()
   })
 
   it('every overlapping window gets its own resolution, and they are sent together in the POST /api/events body', async () => {
@@ -33,15 +38,19 @@ describe('EventCreateSheet', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: { value: 'event-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<EventCreateSheet date="2026-09-07" windows={windows} onCancel={() => {}} onCreated={onCreated} />)
+    const { container } = render(<EventCreateSheet date="2026-09-07" windows={windows} onCancel={() => {}} onCreated={onCreated} />)
     await user.type(screen.getByLabelText('Name'), 'School pickup')
     await user.clear(screen.getByLabelText('Start'))
     await user.type(screen.getByLabelText('Start'), '08:30')
     await user.clear(screen.getByLabelText('End'))
     await user.type(screen.getByLabelText('End'), '14:00')
 
-    expect(screen.getByText(/Morning, 09:00–12:00/i)).toBeInTheDocument()
-    expect(screen.getByText(/Afternoon, 13:00–16:00/i)).toBeInTheDocument()
+    const clash = container.querySelector('.scope.shared')
+    expect(clash).toHaveTextContent('Morning, 09:00–12:00')
+    expect(clash).toHaveTextContent('Afternoon')
+    expect(container.querySelector('.scope.shared .g')).toHaveTextContent('⚠')
+    expect(screen.getByText(/Morning disappears that day/i)).toBeInTheDocument()
+    expect(screen.getByText(/the event covers its whole start/i)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /replace the window.*morning/i }))
     await user.click(screen.getByRole('button', { name: /push it to after the event.*afternoon/i }))

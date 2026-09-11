@@ -1050,6 +1050,8 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   and that no option whose guard is false is ever rendered
 - changing an Event's times after choosing a resolution disables create when that resolution is no
   longer offered, so a stale resolution is never sent
+- the Event sheet's DOM preserves the prototype's veil/sheet, time-field, scope banner, note and
+  button-row class structure
 
 **Read-only dimensions viewer (#112)** — `dimensionsScreen(back, backLabel)` ~948 in
 `ui-screens.prototype.html`; `identityFields()` ~502, `timingFields()` ~513, `brief(v)` ~679 in
