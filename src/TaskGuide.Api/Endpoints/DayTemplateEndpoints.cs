@@ -137,7 +137,7 @@ public static class DayTemplateEndpoints
         StaleThresholds staleThresholds,
         DayBoundary boundary)
     {
-        if (!DayTemplateLifecycleHandlers.IsDayTemplateId(id) || !IsWindowId(windowId) || !DateOnly.TryParse(date, out var onDate))
+        if (!DayTemplateLifecycleHandlers.IsDayTemplateId(id) || !WindowEndpoints.IsWindowId(windowId) || !DateOnly.TryParse(date, out var onDate))
         {
             return TypedResults.BadRequest<object>(new { error = "a Day template id, Window id, and date are required" });
         }
@@ -166,11 +166,6 @@ public static class DayTemplateEndpoints
             matched.Length,
             matched.Select(task => task.Title).Take(4).ToArray()));
     }
-
-    private static bool IsWindowId(string? value) =>
-        value is { Length: 28 }
-        && value.StartsWith(WindowId.Prefix, StringComparison.Ordinal)
-        && value[WindowId.Prefix.Length..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
 
     /// <summary>
     /// Every value a fetched axis declares, so that axis constrains nothing — this preview asks

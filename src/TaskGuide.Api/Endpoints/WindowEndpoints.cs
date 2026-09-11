@@ -125,7 +125,7 @@ public static class WindowEndpoints
         !string.IsNullOrWhiteSpace(request.Name)
         && request.End > request.Start;
 
-    private static bool IsWindowId(string? value) =>
+    internal static bool IsWindowId(string? value) =>
         value is { Length: 28 }
         && value.StartsWith(WindowId.Prefix, StringComparison.Ordinal)
         && value[WindowId.Prefix.Length..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
