@@ -53,10 +53,17 @@ public static class DimensionEndpoints
             ordinal.WindowDefault?.Value,
             Source: SourceOf(ordinal.WindowSource)));
 
-    // A plain switch expression over this enum's three named members still trips CS8524 (an
-    // enum's underlying int admits values no case names), so this reads the member name instead
-    // — exhaustive by construction, and it happens to match "authored"/"derived"/"fetched" verbatim.
-    private static string SourceOf(WindowValueSource source) => source.ToString().ToLowerInvariant();
+    // The discard arm is the enum idiom (an enum's underlying int admits values no case names, so
+    // the compiler demands it), not a sign this is unreachable. The three strings are the wire
+    // contract, deliberately not derived from the member names — renaming a member, or adding a
+    // multi-word one, must not silently change or invent an API value.
+    private static string SourceOf(WindowValueSource source) => source switch
+    {
+        WindowValueSource.Authored => "authored",
+        WindowValueSource.Derived => "derived",
+        WindowValueSource.Fetched => "fetched",
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unknown WindowValueSource"),
+    };
 }
 
 public sealed record DimensionResponse(
