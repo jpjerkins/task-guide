@@ -36,8 +36,11 @@ public static class DayTemplateEndpoints
         templates.MapGet("/{id}/usage", DayTemplateLifecycleHandlers.Usage);
 
         // The scope banner's blast-radius count and list: the next fortnight's dates this
-        // template actually governs. An Override is a by-value copy (`DayTemplate`'s own doc),
-        // so a date already overridden is excluded — a template edit never reaches it.
+        // template actually governs, each flagged with whether it holds an Override. An Override
+        // is a by-value copy of the Windows (`DayTemplate`'s own doc), so a Window edit never
+        // reaches an overridden date — but the active Pattern's Event prototypes still layer onto
+        // it (`DayShapeReader.For`), so an overridden date is reported, not omitted. Blast radius
+        // is made visible, not prevented.
         templates.MapGet("/{id}/affected-dates", AffectedDates);
 
         templates.MapPost("/{id}/event-prototypes", (string id) => Results.NoContent());
@@ -80,10 +83,12 @@ public static class DayTemplateEndpoints
     }
 
     /// <summary>
-    /// The 14 dates from today the active Pattern names this template for, excluding any date
-    /// that already holds an Override — the by-value copy a template edit never reaches.
+    /// The 14 dates from today the active Pattern names this template for, each flagged with
+    /// whether it holds an Override. No date is dropped: an Override shields its date from a
+    /// Window edit (it keeps its own copied Windows) but not from an Event-prototype edit —
+    /// <c>DayShapeReader.For</c> always layers the template's Event prototypes on top.
     /// </summary>
-    private static Results<Ok<IReadOnlyList<DateOnly>>, BadRequest<object>> AffectedDates(
+    private static Results<Ok<IReadOnlyList<AffectedDateResponse>>, BadRequest<object>> AffectedDates(
         string id, IStore store, TimeProvider clock, DayBoundary boundary)
     {
         if (!DayTemplateLifecycleHandlers.IsDayTemplateId(id))
@@ -97,9 +102,10 @@ public static class DayTemplateEndpoints
         var overriddenDates = view.Overrides.Select(dateOverride => dateOverride.Date).ToHashSet();
         var active = view.Patterns.Active;
 
-        IReadOnlyList<DateOnly> dates = Enumerable.Range(0, 14)
+        IReadOnlyList<AffectedDateResponse> dates = Enumerable.Range(0, 14)
             .Select(today.AddDays)
-            .Where(date => active[date.DayOfWeek] == templateId && !overriddenDates.Contains(date))
+            .Where(date => active[date.DayOfWeek] == templateId)
+            .Select(date => new AffectedDateResponse(date, overriddenDates.Contains(date)))
             .ToArray();
 
         return TypedResults.Ok(dates);
@@ -187,3 +193,4 @@ public static class DayTemplateEndpoints
 }
 
 public sealed record WindowMatchPreviewResponse(int Count, IReadOnlyList<string> Titles);
+public sealed record AffectedDateResponse(DateOnly Date, bool Overridden);

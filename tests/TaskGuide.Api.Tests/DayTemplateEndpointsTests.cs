@@ -233,25 +233,30 @@ public sealed class DayTemplateEndpointsTests : IDisposable
     }
 
     [Fact]
-    public async Task GET_api_day_templates_id_affected_dates_names_the_next_fortnights_dates_the_template_governs_and_excludes_Overridden_ones()
+    public async Task GET_api_day_templates_id_affected_dates_reports_every_governed_date_and_flags_the_Overridden_ones()
     {
         var boundary = new DayBoundary(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId));
         var today = boundary.DateOf(DateTimeOffset.UtcNow);
+        var overriddenDate = today.AddDays(7);
         var target = new DayTemplate(Volleyball, "Volleyball", [], []);
         var other = new DayTemplate(Other, "Other", [], []);
         var active = Pattern("p_active", "Active", target.Id);
         await WriteAsync(
             new DayTemplatesWrite([target, other]),
             new PatternsWrite(new PatternBook(active.Id, [active])),
-            new OverridesWrite([new DateOverride(today, [], new DayTemplateUse(target.Id, target.Name))]));
+            new OverridesWrite([new DateOverride(overriddenDate, [], new DayTemplateUse(target.Id, target.Name))]));
 
         var response = await _client.GetFromJsonAsync<JsonElement>($"/api/day-templates/{Volleyball.Value}/affected-dates");
 
-        var dates = response.EnumerateArray().Select(value => DateOnly.Parse(value.GetString() ?? throw new InvalidOperationException("An affected date must be a string"))).ToArray();
-        Assert.DoesNotContain(today, dates);
-        Assert.Contains(today.AddDays(7), dates);
-        Assert.Equal(13, dates.Length);
-        Assert.Equal(dates.OrderBy(date => date).ToArray(), dates);
+        var entries = response.EnumerateArray()
+            .Select(value => (
+                Date: DateOnly.Parse(value.GetProperty("date").GetString() ?? throw new InvalidOperationException("An affected date must be a string")),
+                Overridden: value.GetProperty("overridden").GetBoolean()))
+            .ToArray();
+        Assert.Equal(14, entries.Length);
+        Assert.Equal(entries.Select(e => e.Date).OrderBy(date => date).ToArray(), entries.Select(e => e.Date).ToArray());
+        Assert.Contains(entries, e => e.Date == overriddenDate && e.Overridden);
+        Assert.Contains(entries, e => e.Date == today && !e.Overridden);
     }
 
     private async Task WriteAsync(params object[] writes)
