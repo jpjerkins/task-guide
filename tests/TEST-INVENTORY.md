@@ -766,6 +766,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `POST /api/overrides` over a range writes one Override per date
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
 - `PATCH /api/overrides/{date}` on a stamped date makes it a one-off day and its use record survives
+- `DELETE /api/overrides/{date}` removes that date's Override
+- `DELETE /api/overrides/{date}` is a conflict for a date with no Override, and 400 for an
+  unparseable date
 - an Override span ending at `DateOnly.MaxValue` writes its final date without overflow
 - `DELETE /api/patterns/{id}` is refused for the active Pattern
 - `GET /api/patterns/active/switch-impact` returns the orphan count **before** the switch

@@ -59,6 +59,24 @@ public sealed class EditOverride(IStore store)
     }
 }
 
+public sealed class DeleteOverride(IStore store)
+{
+    public async Task<DeleteOverrideOutcome> ExecuteAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        var outcome = await store.MutateAsync<OverrideNotFound>(view =>
+        {
+            var existing = view.Overrides.SingleOrDefault(candidate => candidate.Date == date);
+            if (existing is null) return new OverrideNotFound("Override was not found");
+
+            return OneOf<StoreMutation, OverrideNotFound>.FromT0(new StoreMutation([
+                new OverridesWrite([.. view.Overrides.Where(candidate => candidate.Date != date)]),
+            ]));
+        }, cancellationToken);
+
+        return outcome.Match<DeleteOverrideOutcome>(_ => new OverrideDeleted(), refusal => refusal);
+    }
+}
+
 [GenerateOneOf]
 public partial class OverrideSpanOutcome : OneOfBase<OverrideSpanApplied, OverrideSpanRefused>;
 
@@ -70,3 +88,8 @@ public partial class EditOverrideOutcome : OneOfBase<OverrideEdited, OverrideNot
 
 public sealed record OverrideEdited;
 public sealed record OverrideNotFound(string Reason);
+
+[GenerateOneOf]
+public partial class DeleteOverrideOutcome : OneOfBase<OverrideDeleted, OverrideNotFound>;
+
+public sealed record OverrideDeleted;

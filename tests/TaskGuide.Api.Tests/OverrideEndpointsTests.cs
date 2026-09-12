@@ -76,6 +76,34 @@ public sealed class OverrideEndpointsTests : IDisposable
         Assert.Equal(new DayTemplateUse(template.Id, template.Name), edited.Used);
     }
 
+    [Fact]
+    public async Task DELETE_api_overrides_date_removes_the_Override()
+    {
+        var date = new DateOnly(2026, 12, 25);
+        await WriteAsync(new OverridesWrite([new DateOverride(date, [], null)]));
+
+        var response = await _client.DeleteAsync($"/api/overrides/{date:yyyy-MM-dd}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
+    }
+
+    [Fact]
+    public async Task DELETE_api_overrides_date_for_a_date_with_no_Override_is_a_conflict()
+    {
+        var response = await _client.DeleteAsync("/api/overrides/2026-12-25");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DELETE_api_overrides_date_rejects_an_unparseable_date()
+    {
+        var response = await _client.DeleteAsync("/api/overrides/not-a-date");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private async Task WriteAsync(params object[] writes)
     {
         var store = _factory.Services.GetRequiredService<IStore>();

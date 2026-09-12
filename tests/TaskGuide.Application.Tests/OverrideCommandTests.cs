@@ -53,6 +53,32 @@ public sealed class OverrideCommandTests
         Assert.Equal(stamped.Used, edited.Used);
     }
 
+    [Fact]
+    public async Task Deleting_an_Override_removes_it()
+    {
+        var date = new DateOnly(2026, 12, 25);
+        var other = new DateOnly(2026, 12, 26);
+        var store = new FakeStore(new FakeStoreViewBuilder().WithOverrides([
+            new DateOverride(date, [], null),
+            new DateOverride(other, [], null),
+        ]).Build());
+
+        var result = await new DeleteOverride(store).ExecuteAsync(date, CancellationToken.None);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(other, Assert.Single(store.Read().Overrides).Date);
+    }
+
+    [Fact]
+    public async Task Deleting_an_Override_for_a_date_with_none_is_refused()
+    {
+        var store = new FakeStore();
+
+        var result = await new DeleteOverride(store).ExecuteAsync(new DateOnly(2026, 12, 25), CancellationToken.None);
+
+        Assert.True(result.IsT1);
+    }
+
     private static AvailabilityWindow Window(string id) => new(
         new WindowId(id), "Family time", new TimeOnly(10, 0), new TimeOnly(20, 0), TagSet.Empty);
 }

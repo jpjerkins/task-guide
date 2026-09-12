@@ -34,7 +34,7 @@ public static class OverrideEndpoints
 
         // Editing a stamped date directly makes it a one-off day; the use record survives that.
         overrides.MapPatch("/{date}", EditAsync);
-        overrides.MapDelete("/{date}", (string date) => Results.NoContent());
+        overrides.MapDelete("/{date}", DeleteAsync);
 
         // Promotion copies the shape OUTWARD; the source date keeps its own copy and does not
         // re-link, but it DOES get a use record — otherwise "keep this" produces something born
@@ -88,6 +88,20 @@ public static class OverrideEndpoints
         var outcome = await new EditOverride(store).ExecuteAsync(overrideDate, request.Windows, ct);
         return outcome.Match<Results<Ok<DateOverrideResponse>, BadRequest<object>, Conflict<object>>>(
             _ => TypedResults.Ok(DayTemplateLifecycleHandlers.ToResponse(store.Read().Overrides.Single(overrideDay => overrideDay.Date == overrideDate))),
+            refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
+    }
+
+    private static async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> DeleteAsync(
+        string date, IStore store, CancellationToken ct)
+    {
+        if (!DateOnly.TryParse(date, out var overrideDate))
+        {
+            return TypedResults.BadRequest<object>(new { error = "a date is required" });
+        }
+
+        var outcome = await new DeleteOverride(store).ExecuteAsync(overrideDate, ct);
+        return outcome.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
+            _ => TypedResults.NoContent(),
             refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
     }
 }
