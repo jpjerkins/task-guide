@@ -1092,7 +1092,7 @@ constraint 6.
 Until they land, those bullets are testable against fixtures and unreachable in the running app.
 `GET /api/day-templates` is the one that stops a screen existing rather than degrading it.
 
-**Override range module and escape props (#107 amendment; markup awaits #125)**
+**Override range module and escape props (#107 amendment)**
 
 The presentation-free slice uses `OverrideRange.ts` and `OverrideDateSelection.ts`. The public
 seams are the existing HTTP client and props for the real shared `DateEntry`. `authorOverrideSpan`
@@ -1100,8 +1100,9 @@ passes every server-returned clobber date to one asynchronous confirmation callb
 cancels. It submits the checked span once to `POST /api/overrides` and returns the server's dated
 window copies. It never resolves the `used` record as a template link or fans out requests.
 Server-side copy isolation remains covered by the schedule tests; browser tests guard the wire
-contract, not a simulated server implementation. No rail, banner, confirmation presentation,
-screen registration, or CSS is implemented here. Those remain required before #107 can open a PR.
+contract, not a simulated server implementation. The rail, scope banner, confirmation, stamp,
+range, revert and promotion sheets now have UI tests and a Schedule screen registration. The
+stylesheet is unchanged; #125 supplied its classes and #128 supplied the real DELETE endpoint.
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 
@@ -1113,6 +1114,28 @@ Additional tests at this subsection's end (existing range and input-node tests r
 - a failed span POST surfaces the error without retrying individual dates
 - picking a date beyond the rail changes the selection without growing or recentering its fixed Chicago span
 - clearing the escape keeps the shown date and fixed rail span
+
+**Override screen integration additions (#107)**
+
+- cancelling replacement keeps the range form and writes nothing
+- a failed stamp keeps the picker open and reports the error inside it
+- an Event marks its rail date and the selected date lists the resolved Event
+- the date view opens the existing Event editor for the selected date
+- an Override sheet takes focus and Escape cancels without changing its content
+- Tab stays inside an Override sheet and busy sheets cannot be cancelled
+- registers Override a date on the schedule tab
+
+The existing Override bullets are also exercised through the screen: rail/escape stability,
+prototype `.weekstrip`, `.scope.one`, `.pickrow` and promotion-sheet structure, stamp COPY copy,
+all dates named before a range write, inverted-range disabled state, and post-revert day reads.
+
+Remaining cross-ticket display limitations: `DayShape` contains windows, events and
+`isOverridden`, but no template-use name; `GET /api/overrides/{date}` is still a 204 read stub.
+The banner therefore says “Override” when no write response supplied its saved name; it never
+looks up a template to resolve copied windows. The template picker lists the real template read
+without prototype fixture-based season grouping. Window editing and matching-preview controls
+belong to #105; this screen displays the date windows as the prototype promotion list does.
+These limitations are reported on #107, not represented as completed cross-ticket features.
 
 ### Web-Now
 

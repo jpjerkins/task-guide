@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { ComponentProps } from 'react'
 import type { DateEntry } from './shared/DateEntry'
 
-// Props for the existing shared control only. The rail and escape presentation wait for #125.
+// Keep date-control state independent of the fixed rail span; render through the shared DateEntry.
 export function useOverrideDateSelection(now: Date = new Date()) {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(now)
   const [selectedDate, setSelectedDate] = useState(today)
