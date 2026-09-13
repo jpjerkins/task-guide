@@ -75,14 +75,14 @@ public sealed class ReminderPageReadTests
             null, new DateTimeOffset(2026, 9, 5, 23, 45, 0, TimeSpan.Zero), 0, null);
         var insideDayStore = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [lateFired])).Build());
         var insideDayPage = await Page(insideDayStore, Shapes(lateWindow), new DateTimeOffset(2026, 9, 5, 23, 56, 0, TimeSpan.Zero), "w_late");
-        Assert.Equal("Snooze ends at midnight", Assert.IsType<WindowContext>(insideDayPage.Context.Value).SnoozeSuppression);
+        Assert.Equal("Snooze ends at midnight", Assert.IsType<WindowContext>(insideDayPage.Context.Value).Snooze?.Suppression);
 
         var eveningWindow = Window("w_evening", 22, 23);
         var eveningFired = new FireRow(eveningWindow.Id, FireKind.Window, eveningWindow.Name, eveningWindow.Start, eveningWindow.End,
             null, new DateTimeOffset(2026, 9, 5, 22, 0, 0, TimeSpan.Zero), 0, null);
         var pastBoundaryStore = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [eveningFired])).Build());
         var pastBoundaryPage = await Page(pastBoundaryStore, Shapes(eveningWindow), new DateTimeOffset(2026, 9, 6, 0, 5, 0, TimeSpan.Zero), "w_evening");
-        Assert.Equal("This reminder was for yesterday", Assert.IsType<WindowContext>(pastBoundaryPage.Context.Value).SnoozeSuppression);
+        Assert.Equal("This reminder was for yesterday", Assert.IsType<WindowContext>(pastBoundaryPage.Context.Value).Snooze?.Suppression);
     }
 
     [Fact]
@@ -91,14 +91,16 @@ public sealed class ReminderPageReadTests
         var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
 
         var shortWindow = Window("w_short", 9, 0, 9, 10);
-        var shortStore = new FakeStore(new FakeStoreViewBuilder().Build());
+        var shortFired = new FireRow(shortWindow.Id, FireKind.Window, shortWindow.Name, shortWindow.Start, shortWindow.End, null, now, 0, null);
+        var shortStore = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [shortFired])).Build());
         var shortPage = await Page(shortStore, Shapes(shortWindow), now, "w_short");
-        Assert.Equal(5, Assert.IsType<WindowContext>(shortPage.Context.Value).SnoozeIntervalMinutes);
+        Assert.Equal(5, Assert.IsType<WindowContext>(shortPage.Context.Value).Snooze?.IntervalMinutes);
 
         var longWindow = Window("w_long", 9, 13);
-        var longStore = new FakeStore(new FakeStoreViewBuilder().Build());
+        var longFired = new FireRow(longWindow.Id, FireKind.Window, longWindow.Name, longWindow.Start, longWindow.End, null, now, 0, null);
+        var longStore = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [longFired])).Build());
         var longPage = await Page(longStore, Shapes(longWindow), now, "w_long");
-        Assert.Equal(30, Assert.IsType<WindowContext>(longPage.Context.Value).SnoozeIntervalMinutes);
+        Assert.Equal(30, Assert.IsType<WindowContext>(longPage.Context.Value).Snooze?.IntervalMinutes);
     }
 
     [Fact]
@@ -208,6 +210,93 @@ public sealed class ReminderPageReadTests
     }
 
     [Fact]
+    public async Task A_Window_page_with_no_fire_behind_it_carries_no_Snooze_so_the_control_and_the_POST_agree()
+    {
+        var window = Window("w_silent", 9, 10);
+        var shapes = Shapes(window);
+        var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
+        var store = new FakeStore(new FakeStoreViewBuilder().Build());
+
+        var page = await Page(store, shapes, now, "w_silent");
+
+        Assert.Null(Assert.IsType<WindowContext>(page.Context.Value).Snooze);
+    }
+
+    [Fact]
+    public async Task The_Windows_name_and_span_come_from_the_days_shape_as_it_stands_falling_back_to_the_fire_records_when_the_Window_is_gone_from_it()
+    {
+        var adjusted = new AvailabilityWindow(new WindowId("w_morning"), "Morning (adjusted)", new TimeOnly(9, 30), new TimeOnly(10, 30), TagSet.Empty);
+        var shapes = Shapes(adjusted);
+        var now = Resolution.Resolve(Today, new TimeOnly(9, 30));
+        var stale = new FireRow(adjusted.Id, FireKind.Window, "Morning", new TimeOnly(9, 0), new TimeOnly(10, 0), null, now, 0, null);
+        var store = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [stale])).Build());
+
+        var page = await Page(store, shapes, now, "w_morning");
+
+        var context = Assert.IsType<WindowContext>(page.Context.Value);
+        Assert.Equal("Morning (adjusted)", context.Name);
+        Assert.Equal(new TimeOnly(9, 30), context.Start);
+        Assert.Equal(new TimeOnly(10, 30), context.End);
+
+        // Once the Window is gone from the shape entirely, the fire record's own span is all
+        // that is left to read one from.
+        var noLongerInShape = await Page(store, new FakeDayShapeReader(), now, "w_morning");
+        var fallbackContext = Assert.IsType<WindowContext>(noLongerInShape.Context.Value);
+        Assert.Equal("Morning", fallbackContext.Name);
+        Assert.Equal(new TimeOnly(9, 0), fallbackContext.Start);
+        Assert.Equal(new TimeOnly(10, 0), fallbackContext.End);
+    }
+
+    [Fact]
+    public async Task Weather_is_not_fetched_for_a_fallback_page_and_a_page_for_another_date_reads_that_dates_forecast_rather_than_current_conditions()
+    {
+        var activeWeatherTask = Task("t_weather", weather: "dry");
+        var carrier = new Event(new EventId("evt_trip"), Today, "Family trip", new TimeOnly(9, 0), new TimeOnly(10, 0), TagSet.Empty, null);
+        var fallbackFired = new FireRow(null, FireKind.Fallback, null, null, null, null,
+            Resolution.Resolve(Today, new TimeOnly(11, 0)), null, carrier.Id);
+        var fallbackWeather = new FakeWeatherSource();
+        var fallbackStore = new FakeStore(new FakeStoreViewBuilder()
+            .WithTasks([activeWeatherTask]).WithEvents([carrier])
+            .WithFires(Today, new DayFires(Today, [fallbackFired])).Build());
+        await Page(fallbackStore, new FakeDayShapeReader(), Resolution.Resolve(Today, new TimeOnly(11, 0)), "fallback", fallbackWeather);
+        Assert.Equal(0, fallbackWeather.CurrentCallCount);
+        Assert.Empty(fallbackWeather.ForecastCalls);
+
+        var futureDate = Today.AddDays(3);
+        var window = Window("w_morning", 9, 10);
+        var futureWeather = new FakeWeatherSource();
+        futureWeather.SetForecast(new Known<IReadOnlyList<TagValue>>([new TagValue("dry")]));
+        var futureShapes = new FakeDayShapeReader();
+        futureShapes.Seed(futureDate, new DayShape(futureDate, [window], [], false));
+        var futureStore = new FakeStore(new FakeStoreViewBuilder().WithTasks([activeWeatherTask]).Build());
+        var futurePage = await PageOn(futureStore, futureShapes, futureDate, Resolution.Resolve(Today, new TimeOnly(9, 0)), "w_morning", futureWeather);
+
+        Assert.Equal(0, futureWeather.CurrentCallCount);
+        Assert.Equal((futureDate, new TimeOnly(9, 0)), Assert.Single(futureWeather.ForecastCalls));
+        Assert.Equal([new TagValue("dry")], futurePage.MatchingOn.Defaulted[KnownDimensions.Weather]);
+    }
+
+    [Fact]
+    public async Task An_ordinal_axis_is_declared_only_when_the_Window_carries_exactly_one_value_on_it()
+    {
+        var window = new AvailabilityWindow(new WindowId("w_morning"), "Morning", new TimeOnly(9, 0), new TimeOnly(10, 0),
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                // Two values on an ordinal axis: malformed by the model (one value per side), so
+                // Matcher.WindowOrdinalValue's SingleOn would already fall back to WindowDefault.
+                [KnownDimensions.MentalEnergy] = [new TagValue("low"), new TagValue("high")],
+            }, []));
+        var shapes = Shapes(window);
+        var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
+        var store = new FakeStore(new FakeStoreViewBuilder().Build());
+
+        var page = await Page(store, shapes, now, "w_morning");
+
+        Assert.False(page.MatchingOn.Declared.ContainsKey(KnownDimensions.MentalEnergy));
+        Assert.Equal([new TagValue("low")], page.MatchingOn.Defaulted[KnownDimensions.MentalEnergy]);
+    }
+
+    [Fact]
     public async Task A_fire_row_with_no_span_and_no_Window_left_in_the_days_shape_is_not_a_page()
     {
         var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
@@ -241,10 +330,10 @@ public sealed class ReminderPageReadTests
 
     private static Task<ReminderPage> Page(
         FakeStore store, FakeDayShapeReader shapes, DateTimeOffset now, string windowKey, FakeWeatherSource? weather = null) =>
-        PageAsync(store, shapes, now, windowKey, weather);
+        PageOn(store, shapes, Today, now, windowKey, weather);
 
-    private static async Task<ReminderPage> PageAsync(
-        FakeStore store, FakeDayShapeReader shapes, DateTimeOffset now, string windowKey, FakeWeatherSource? weather)
+    private static async Task<ReminderPage> PageOn(
+        FakeStore store, FakeDayShapeReader shapes, DateOnly date, DateTimeOffset now, string windowKey, FakeWeatherSource? weather = null)
     {
         var timeProvider = new FixedTimeProvider(now);
         var composer = new DerivedTaskComposer([], shapes, Boundary, timeProvider);
@@ -254,7 +343,7 @@ public sealed class ReminderPageReadTests
             store, shapes, KnownDimensions.Default, Resolution, Boundary, Thresholds, composer, planner,
             weather ?? new FakeWeatherSource(), timeProvider);
 
-        var outcome = await service.ExecuteAsync(Today, windowKey, CancellationToken.None);
+        var outcome = await service.ExecuteAsync(date, windowKey, CancellationToken.None);
         return Assert.IsType<ReminderPage>(outcome.Value);
     }
 

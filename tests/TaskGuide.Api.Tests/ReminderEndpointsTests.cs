@@ -175,6 +175,29 @@ public sealed class ReminderEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_reminders_date_windowId_carries_a_longer_Tasks_Duration_as_its_bucket_value_rather_than_failing_on_it()
+    {
+        var date = new DateOnly(2026, 9, 12);
+        await WriteAsync(_factory, new OverridesWrite([new DateOverride(date, [Window("w_long", 9, 0, 10, 0)], null)]));
+        await WriteAsync(_factory, new TasksWrite([NewTask("t_longer", "longer")]));
+
+        var doc = await GetAsync("/api/reminders/2026-09-12/w_long");
+
+        var match = Assert.Single(doc.GetProperty("matches").EnumerateArray());
+        Assert.Equal("longer", match.GetProperty("duration").GetString());
+    }
+
+    [Fact]
+    public async Task GET_api_reminders_date_windowId_offers_no_Snooze_on_a_Window_that_never_fired()
+    {
+        await WriteAsync(_factory, new OverridesWrite([new DateOverride(new DateOnly(2026, 9, 13), [Window("w_never_fired", 9, 0, 10, 0)], null)]));
+
+        var doc = await GetAsync("/api/reminders/2026-09-13/w_never_fired");
+
+        Assert.Equal(JsonValueKind.Null, doc.GetProperty("snooze").ValueKind);
+    }
+
+    [Fact]
     public async Task GET_api_reminders_date_windowId_is_404_when_neither_a_fire_row_nor_the_days_shape_knows_that_Window_and_400_for_an_unparseable_date()
     {
         var notFound = await _client.GetAsync("/api/reminders/2026-09-05/nope");

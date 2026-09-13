@@ -70,7 +70,8 @@ public static class ReminderEndpoints
         var (windowName, windowStart, windowEnd, snooze, fallbackEventName) = page.Context.Match(
             window => (
                 (string?)window.Name, (TimeOnly?)window.Start, (TimeOnly?)window.End,
-                (SnoozeOffer?)new SnoozeOffer(window.SnoozeIntervalMinutes, window.SnoozeSuppression), (string?)null),
+                window.Snooze is { } offer ? (SnoozeOffer?)new SnoozeOffer(offer.IntervalMinutes, offer.Suppression) : null,
+                (string?)null),
             fallback => ((string?)null, (TimeOnly?)null, (TimeOnly?)null, (SnoozeOffer?)null, (string?)fallback.EventName));
 
         return new ReminderPageResponse(
@@ -99,10 +100,10 @@ public static class ReminderEndpoints
     private static IReadOnlyDictionary<string, string[]> ToAxes(IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> axes) =>
         axes.ToDictionary(pair => pair.Key.Value, pair => pair.Value.Select(value => value.Value).ToArray());
 
-    private static TaskResponse ToTaskResponse(TaskItem task) => new(
+    private static ReminderTaskResponse ToTaskResponse(TaskItem task) => new(
         task.Id.Value,
         task.Title,
-        task.Tags.SingleOn(KnownDimensions.Duration) is { } duration ? int.Parse(duration.Value) : null,
+        task.Tags.SingleOn(KnownDimensions.Duration)?.Value,
         task.CreatedAt);
 }
 
@@ -112,12 +113,22 @@ public sealed record ReminderPageResponse(
     SnoozeOffer? Snooze,
     string? FallbackEventName,
     string? FiredAs,
-    IReadOnlyList<TaskResponse> Matches,
+    IReadOnlyList<ReminderTaskResponse> Matches,
     bool IsLive,
     string? StaleLine,
     MatchingOnResponse MatchingOn,
     FooterCountsResponse Footer,
     IReadOnlyList<string> FailedFetches);
+
+/// <summary>
+/// A Task's own Duration bucket, verbatim — never an int. Duration is a `TagValue` (`"60"`,
+/// `"longer"`, or absent), so this is the shape the Web-Now Task-list bullets actually need:
+/// null means `Unprocessed` (disable mark-off), any string means "processed, show this bucket".
+/// <see cref="TaskResponse"/>'s <c>int? Duration</c> is a different endpoint's contract and is
+/// not reused here — its own `int.Parse` throws on `"longer"`, which this type exists to avoid
+/// repeating.
+/// </summary>
+public sealed record ReminderTaskResponse(string Id, string Title, string? Duration, DateTimeOffset CreatedAt);
 
 public sealed record SnoozeOffer(int IntervalMinutes, string? Suppression);
 

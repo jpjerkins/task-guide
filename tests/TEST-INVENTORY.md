@@ -608,6 +608,12 @@ directly.
 - "Matching on" splits the axes the Window declares from the axes left to the window-side default
 - the read writes nothing
 - a fire row with no span and no Window left in the day's shape is not a page
+- a Window page with no fire behind it carries no Snooze, so the control and the POST agree
+- the Window's name and span come from the day's shape as it stands, falling back to the fire
+  record's when the Window is gone from it
+- weather is not fetched for a fallback page, and a page for another date reads that date's
+  forecast rather than current conditions
+- an ordinal axis is declared only when the Window carries exactly one value on it
 
 ---
 
@@ -857,6 +863,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/reminders/{date}/{windowId}` is 404 when neither a fire row nor the day's shape knows
   that Window, and 400 for an unparseable date
 - `GET /api/reminders/{date}/{windowId}` 200 shape is typed in OpenAPI for SPA generation
+- `GET /api/reminders/{date}/{windowId}` carries a `longer` Task's Duration as its bucket value
+  rather than failing on it
+- `GET /api/reminders/{date}/{windowId}` offers no Snooze on a Window that never fired
 
 ## `TaskGuide.Web` (vitest)
 
