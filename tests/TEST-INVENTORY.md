@@ -590,6 +590,24 @@ directly.
 - an unrecognised payload as the very first write leaves `LastWriteSucceeded` untouched,
   matching `JsonStore` (#116)
 
+### The Reminder landing page read (#129)
+
+- all matches are returned ranked, not the push's shortlist of three
+- Duration's ceiling is re-derived from the time actually remaining, and floors at the smallest
+  bucket once the span is spent
+- the page-level liveness gate is one predicate: past the Reminder's Day boundary the page is not
+  live and carries "This reminder was for yesterday"
+- the Snooze suppression line comes from the same rule the Snooze command refuses with: "Snooze
+  ends at midnight" inside the day, "This reminder was for yesterday" past it
+- the Snooze interval is `clamp(25%, 5, 30)`, computed server-side
+- a fallback page has no Window behind it and so carries no Snooze
+- an empty Window page names no fire when none fired, and names the fire when an unconditional
+  fire, an empty Snooze re-fire or a fallback push genuinely pushed
+- the footer carries the disjoint partition plus the orphan count
+- a failed weather fetch is reported as its Dimension id rather than as a string
+- "Matching on" splits the axes the Window declares from the axes left to the window-side default
+- the read writes nothing
+
 ---
 
 ## Sequential · `TaskGuide.Storage.Tests`
@@ -820,6 +838,24 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   the template governs, ascending, each flagged with whether it holds an Override — an Override
   shields its date's Windows from a template edit but not its Event prototypes, so overridden
   dates are flagged, not omitted
+- `GET /api/reminders/{date}/{windowId}` returns the Window's own name, span and date, and **all**
+  matches rather than the push's three
+- `GET /api/reminders/{date}/{windowId}` re-derives Duration's ceiling from the time actually
+  remaining, so a page opened late offers no Task longer than the span left
+- `GET /api/reminders/{date}/{windowId}` carries the Snooze interval the server computed, and its
+  suppression line is the one the rejected POST returns
+- `GET /api/reminders/{date}/{windowId}` past the Reminder's Day boundary reports the page not live,
+  with "This reminder was for yesterday"
+- `GET /api/reminders/{date}/fallback` carries no Snooze at all
+- `GET /api/reminders/{date}/{windowId}` names which fire actually happened, so an empty page tells
+  the silent case apart from an unconditional fire, an empty Snooze re-fire and a fallback push
+- `GET /api/reminders/{date}/{windowId}` carries the footer counts and names a failed
+  fetched-Dimension check by its Dimension id
+- `GET /api/reminders/{date}/{windowId}` splits "Matching on" into the axes the Window declares and
+  the axes left to the window-side default
+- `GET /api/reminders/{date}/{windowId}` is 404 when neither a fire row nor the day's shape knows
+  that Window, and 400 for an unparseable date
+- `GET /api/reminders/{date}/{windowId}` 200 shape is typed in OpenAPI for SPA generation
 
 ## `TaskGuide.Web` (vitest)
 
