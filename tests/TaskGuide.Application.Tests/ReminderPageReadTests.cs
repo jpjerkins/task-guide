@@ -183,7 +183,15 @@ public sealed class ReminderPageReadTests
     public async Task Matching_on_splits_the_axes_the_Window_declares_from_the_axes_left_to_the_window_side_default()
     {
         var window = new AvailabilityWindow(new WindowId("w_morning"), "Morning", new TimeOnly(9, 0), new TimeOnly(10, 0),
-            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>> { [KnownDimensions.Location] = [new TagValue("home")] }, []));
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Location] = [new TagValue("home")],
+                // A stray authored value on a Derived axis — AvailabilityWindow's own doc says
+                // there is no window-side Duration Tag to author, but Matcher would never read
+                // it even if one were there (WindowOrdinalValue only reads Derived off the
+                // ceiling), so this must still land in Defaulted, not Declared.
+                [KnownDimensions.Duration] = [new TagValue("30")],
+            }, []));
         var shapes = Shapes(window);
         var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
         var store = new FakeStore(new FakeStoreViewBuilder().Build());
@@ -192,10 +200,29 @@ public sealed class ReminderPageReadTests
 
         Assert.Equal([new TagValue("home")], page.MatchingOn.Declared[KnownDimensions.Location]);
         Assert.False(page.MatchingOn.Defaulted.ContainsKey(KnownDimensions.Location));
+        Assert.False(page.MatchingOn.Declared.ContainsKey(KnownDimensions.Duration));
         Assert.Equal([new TagValue("60")], page.MatchingOn.Defaulted[KnownDimensions.Duration]);
         Assert.Equal([new TagValue("low")], page.MatchingOn.Defaulted[KnownDimensions.MentalEnergy]);
         Assert.Empty(page.MatchingOn.Defaulted[KnownDimensions.WithWhom]);
         Assert.Empty(page.MatchingOn.Defaulted[KnownDimensions.Weather]);
+    }
+
+    [Fact]
+    public async Task A_fire_row_with_no_span_and_no_Window_left_in_the_days_shape_is_not_a_page()
+    {
+        var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
+        var fired = new FireRow(new WindowId("w_gone"), FireKind.Window, null, null, null, null, now, null, null);
+        var store = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [fired])).Build());
+
+        var outcome = await new ReadReminderPage(
+            store, new FakeDayShapeReader(), KnownDimensions.Default, Resolution, Boundary, Thresholds,
+            new DerivedTaskComposer([], new FakeDayShapeReader(), Boundary, new FixedTimeProvider(now)),
+            new TickPlanner(new FakeDayShapeReader(), KnownDimensions.Default, Resolution, Boundary, Thresholds,
+                new Uri("https://not-the-real-host.invalid/"), new DerivedTaskComposer([], new FakeDayShapeReader(), Boundary, new FixedTimeProvider(now))),
+            new FakeWeatherSource(), new FixedTimeProvider(now))
+            .ExecuteAsync(Today, "w_gone", CancellationToken.None);
+
+        Assert.IsType<ReminderNotFound>(outcome.Value);
     }
 
     [Fact]

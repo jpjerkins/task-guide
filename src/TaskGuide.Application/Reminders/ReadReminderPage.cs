@@ -103,10 +103,17 @@ public sealed class ReadReminderPage(
         }
         else
         {
-            var name = fireRow?.WindowName ?? shapeWindow!.Name;
-            var start = fireRow?.WindowStart ?? shapeWindow!.Start;
-            var end = fireRow?.WindowEnd ?? shapeWindow!.End;
-            var interval = SnoozePolicy.IntervalFor(end.ToTimeSpan() - start.ToTimeSpan());
+            var start = fireRow?.WindowStart ?? shapeWindow?.Start;
+            var end = fireRow?.WindowEnd ?? shapeWindow?.End;
+            if (start is not { } windowStart || end is not { } windowEnd)
+            {
+                // A row with no span and no Window left in the shape to read one from: there is
+                // no span to derive a Snooze interval from and no Window page to render.
+                return new ReminderNotFound();
+            }
+
+            var name = fireRow?.WindowName ?? shapeWindow?.Name ?? "";
+            var interval = SnoozePolicy.IntervalFor(windowEnd.ToTimeSpan() - windowStart.ToTimeSpan());
 
             if (shapeWindow is not null)
             {
@@ -114,7 +121,7 @@ public sealed class ReadReminderPage(
             }
 
             context = new WindowContext(
-                name, start, end,
+                name, windowStart, windowEnd,
                 (int)interval.TotalMinutes,
                 ReminderSuppression.SnoozeLine(now, interval, dayBoundary));
         }
@@ -186,10 +193,20 @@ public sealed class ReadReminderPage(
 
         foreach (var dimension in registry.Dimensions)
         {
-            var authored = window.Tags.On(dimension.Id);
-            if (authored.Count > 0)
+            // A Derived or Fetched axis is the window-side default by construction — Matcher
+            // never reads its window-side value off Tags (WindowCategoricalValues /
+            // WindowOrdinalValue), so it can never be "declared" whatever the Tags hold.
+            var declaredValues = dimension.Match(
+                categorical => categorical.WindowSource == WindowValueSource.Fetched
+                    ? (IReadOnlyList<TagValue>)[]
+                    : window.Tags.On(categorical.Id),
+                ordinal => ordinal.WindowSource == WindowValueSource.Derived
+                    ? (IReadOnlyList<TagValue>)[]
+                    : window.Tags.On(ordinal.Id));
+
+            if (declaredValues.Count > 0)
             {
-                declared[dimension.Id] = authored;
+                declared[dimension.Id] = declaredValues;
                 continue;
             }
 

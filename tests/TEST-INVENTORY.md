@@ -607,6 +607,7 @@ directly.
 - a failed weather fetch is reported as its Dimension id rather than as a string
 - "Matching on" splits the axes the Window declares from the axes left to the window-side default
 - the read writes nothing
+- a fire row with no span and no Window left in the day's shape is not a page
 
 ---
 
