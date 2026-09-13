@@ -3,9 +3,10 @@ import { fetchTasks } from './client'
 
 // The generated `TaskResponse.duration` is `number | string | null` — .NET 10's OpenAPI
 // generator describes an int32 as permitting a string on the wire. `client.ts` is the boundary
-// that normalises it away. Asserting on the *value* here rather than on rendered text is
-// deliberate: a component test cannot tell `30` from `'30'`, because `${x}m` renders both as
-// "30m". Only this assertion actually holds the coercion in place.
+// that normalises every Duration bucket to its string form. Asserting on the *value* here rather
+// than on rendered text is deliberate: a component test cannot tell `30` from `'30'`, because
+// `${x}m` renders both as "30m" — and only a value assertion distinguishes a non-numeric bucket
+// like `'longer'` surviving from it becoming `NaN`.
 beforeEach(() => {
   vi.restoreAllMocks()
 })
@@ -18,18 +19,31 @@ function jsonResponse(body: unknown) {
 }
 
 describe('fetchTasks', () => {
-  it('coerces a string duration to a number', async () => {
+  it('carries a numeric duration bucket through as its string form', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        jsonResponse([{ id: '1', title: 'Water the plants', duration: '30', createdAt: '2026-08-27T10:00:00Z' }]),
+        jsonResponse([{ id: '1', title: 'Water the plants', duration: 30, createdAt: '2026-08-27T10:00:00Z' }]),
       ),
     )
 
     const [task] = await fetchTasks()
 
-    expect(task.duration).toBe(30)
-    expect(typeof task.duration).toBe('number')
+    expect(task.duration).toBe('30')
+    expect(typeof task.duration).toBe('string')
+  })
+
+  it('carries a non-numeric duration bucket through verbatim', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([{ id: '1', title: 'Water the plants', duration: 'longer', createdAt: '2026-08-27T10:00:00Z' }]),
+      ),
+    )
+
+    const [task] = await fetchTasks()
+
+    expect(task.duration).toBe('longer')
   })
 
   it('leaves a null duration null rather than coercing it to 0', async () => {
