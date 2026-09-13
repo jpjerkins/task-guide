@@ -150,6 +150,25 @@ public sealed class ReminderPageReadTests
     }
 
     [Fact]
+    public async Task A_Snooze_re_fires_page_still_offers_Snooze_since_the_Windows_own_fired_row_survives_the_re_fire()
+    {
+        var window = Window("w_morning", 9, 10);
+        var now = Resolution.Resolve(Today, new TimeOnly(9, 0));
+        // SnoozeWindow appends a Snooze row and leaves the original Window row (with its FiredAt)
+        // in the file — that's the whole repeat mechanism. Both rows must be seeded together.
+        var original = new FireRow(window.Id, FireKind.Window, window.Name, window.Start, window.End, null, now, 1, null);
+        var reFire = new FireRow(window.Id, FireKind.Snooze, window.Name, window.Start, window.End, null, now.AddMinutes(15), 0, null);
+        var store = new FakeStore(new FakeStoreViewBuilder().WithFires(Today, new DayFires(Today, [original, reFire])).Build());
+
+        var page = await Page(store, Shapes(window), now.AddMinutes(15), "w_morning");
+
+        Assert.Equal(FireKind.Snooze, page.FiredAs);
+        var snooze = Assert.IsType<WindowContext>(page.Context.Value).Snooze;
+        Assert.NotNull(snooze);
+        Assert.Equal(15, snooze!.IntervalMinutes);
+    }
+
+    [Fact]
     public async Task The_footer_carries_the_disjoint_partition_plus_the_orphan_count()
     {
         var window = Window("w_morning", 9, 10);

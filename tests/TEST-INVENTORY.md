@@ -614,6 +614,7 @@ directly.
 - weather is not fetched for a fallback page, and a page for another date reads that date's
   forecast rather than current conditions
 - an ordinal axis is declared only when the Window carries exactly one value on it
+- a Snooze re-fire's page still offers Snooze, since the Window's own fired row survives the re-fire
 
 ---
 
