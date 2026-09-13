@@ -308,6 +308,9 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 ### Snooze arithmetic
 
 - interval is `clamp(25% of length, 5 min, 30 min)`
+- a Snooze writes its pending Fire-record row immediately
+- Snooze refuses a re-fire crossing the Reminder's day boundary with the unavailable-control line
+- a stale Reminder's Snooze refusal says "This reminder was for yesterday"
 - a 10-minute Window floors at 5 minutes; a 4-hour Window caps at 30
 - `offered ⟺ now + interval < the Reminder's Day boundary`
 - a Window firing at 11:50p offers no Snooze

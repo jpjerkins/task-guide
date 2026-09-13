@@ -1,3 +1,8 @@
+using TaskGuide.Application.Ports;
+using TaskGuide.Application.Reminders;
+using TaskGuide.Domain.Common;
+using TaskGuide.Domain.Time;
+
 namespace TaskGuide.Api.Endpoints;
 
 /// <summary>
@@ -18,7 +23,16 @@ public static class ReminderEndpoints
 
         // The predicate is server-side and the UI reads it. A crossing request is REJECTED, and
         // the rejection renders as the same line the disabled state would have shown.
-        reminders.MapPost("/{date}/{windowId}/snooze", (string date, string windowId) => Results.NoContent());
+        reminders.MapPost("/{date}/{windowId}/snooze", async Task<IResult> (string date, string windowId, IStore store, TimeProvider timeProvider, DayBoundary boundary, CancellationToken ct) =>
+        {
+            if (!DateOnly.TryParse(date, out var reminderDate))
+                return TypedResults.BadRequest(new { error = "date must be an ISO date" });
+            var outcome = await new SnoozeWindow(store, timeProvider, boundary).ExecuteAsync(reminderDate, new WindowId(windowId), ct);
+            return outcome.Match<IResult>(
+                _ => TypedResults.NoContent(),
+                unavailable => TypedResults.Conflict(new { error = unavailable.Line }),
+                _ => TypedResults.NotFound());
+        });
 
         // The audit trail for "why did I not get a reminder?" — 30-day retention.
         reminders.MapGet("/fires/{date}", (string date) => Results.NoContent());
