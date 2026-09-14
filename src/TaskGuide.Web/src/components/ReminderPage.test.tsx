@@ -204,3 +204,14 @@ it('the_footer_renders_the_counts_as_a_partition_plus_a_disjoint_orphan_count', 
   await screen.findByText('Evening wind-down')
   expect(container2.querySelector('.footer-count')).not.toBeInTheDocument()
 })
+
+it('a_failed_fetched_Dimension_check_renders_its_footer_note_beside_the_counts_named_generically_off_the_response', async () => {
+  currentPage = page({ failedFetches: ['weather'] })
+  const { unmount } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Weather unavailable')
+  unmount()
+
+  currentPage = page({ failedFetches: ['tide'] })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Tide unavailable')
+})
