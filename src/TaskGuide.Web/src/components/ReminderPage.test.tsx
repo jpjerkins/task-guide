@@ -263,3 +263,26 @@ it('toggling_a_Matching_on_chip_re_reads_the_match_list_from_the_server_the_rend
   expect(screen.getByText('Water plants')).toBeInTheDocument()
   expect(putBody).toBe(JSON.stringify({ date: DATE, windowId: WINDOW_ID, dimensions: { weather: ['sunny', 'rainy'] } }))
 })
+
+it('the_Matching_on_chipset_survives_its_own_press_same_DOM_nodes_before_and_after', async () => {
+  currentPage = page({
+    matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} },
+  })
+  dimensions = [
+    { id: 'weather', label: 'Weather', algebra: 'categorical', values: ['sunny', 'rainy'], taskDefault: null, windowDefault: null, source: 'authored' },
+  ]
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/right-now/matching-on') {
+      currentPage = page({ matchingOn: { declared: { weather: ['sunny', 'rainy'] }, defaulted: {} } })
+      return new Response(null, { status: 204 })
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  const chip = await screen.findByRole('button', { name: 'rainy' })
+  await user.click(chip)
+  await waitFor(() => expect(chip).toHaveAttribute('aria-pressed', 'true'))
+  expect(screen.getByRole('button', { name: 'rainy' })).toBe(chip)
+  expect(chip.isConnected).toBe(true)
+})
