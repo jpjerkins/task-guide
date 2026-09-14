@@ -873,6 +873,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/reminders/{date}/{windowId}` carries a `longer` Task's Duration as its bucket value
   rather than failing on it
 - `GET /api/reminders/{date}/{windowId}` offers no Snooze on a Window that never fired
+- `PUT /api/right-now/matching-on`, `PATCH /api/tasks/{id}`, `POST /api/tasks/{id}/completions`, and
+  `PUT /api/tasks/{id}/postpone` each declare 204, 400, and 409 in OpenAPI, and no bare 200
 
 ## `TaskGuide.Web` (vitest)
 

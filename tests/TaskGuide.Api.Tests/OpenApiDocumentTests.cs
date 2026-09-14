@@ -134,4 +134,27 @@ public sealed class OpenApiDocumentTests : IDisposable
         Assert.Equal("#/components/schemas/DayTemplateResponse", promotion);
         Assert.Equal("#/components/schemas/DateOverrideResponse", stamp);
     }
+
+    // #134 typed these four handlers' return types as Results<NoContent, BadRequest<object>,
+    // Conflict<object>> (or the matching-on equivalent) instead of the bare `IResult` that used to
+    // document a bodiless 200. A revert back to `async Task<IResult>` keeps the rest of the suite
+    // green while silently degrading the document back to that bodiless 200 — so this asserts both
+    // that 204/400/409 are declared AND that 200 is gone, since a test that only checked the new
+    // statuses would also pass against the old document.
+    [Theory]
+    [InlineData("/api/right-now/matching-on", "put")]
+    [InlineData("/api/tasks/{id}", "patch")]
+    [InlineData("/api/tasks/{id}/completions", "post")]
+    [InlineData("/api/tasks/{id}/postpone", "put")]
+    public async Task Refusal_shaped_handler_declares_204_400_and_409_and_not_a_bare_200(string path, string method)
+    {
+        var doc = await GetDocumentAsync();
+
+        var responses = doc.GetProperty("paths").GetProperty(path).GetProperty(method).GetProperty("responses");
+
+        Assert.True(responses.TryGetProperty("204", out _));
+        Assert.True(responses.TryGetProperty("400", out _));
+        Assert.True(responses.TryGetProperty("409", out _));
+        Assert.False(responses.TryGetProperty("200", out _));
+    }
 }
