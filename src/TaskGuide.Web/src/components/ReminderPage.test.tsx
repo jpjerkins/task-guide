@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { components } from '../api/schema'
 import { ReminderPage } from './ReminderPage'
@@ -161,4 +161,34 @@ it('Matching_on_is_gated_by_the_same_page_level_predicate_and_carries_its_own_su
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('This reminder was for yesterday')
   expect(screen.queryByText('Matching on')).not.toBeInTheDocument()
+})
+
+it('mark_off_and_Postpone_stay_live_on_a_page_past_its_Day_boundary', async () => {
+  currentPage = page({
+    isLive: false,
+    staleLine: 'This reminder was for yesterday',
+    matches: [{ id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' }],
+  })
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && url === '/api/tasks/t1/completions') return new Response(null, { status: 204 })
+    if (init?.method === 'PUT' && url === '/api/tasks/t1/postpone') return new Response(null, { status: 204 })
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Water plants')
+
+  await user.click(screen.getByRole('button', { name: 'Mark Water plants done' }))
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/tasks/t1/completions', expect.objectContaining({ method: 'POST' })))
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith(`/api/reminders/${DATE}/${WINDOW_ID}`))
+
+  await user.click(screen.getByRole('button', { name: 'Not now' }))
+  const input = screen.getByLabelText('Not now')
+  fireEvent.change(input, { target: { value: '2026-09-20' } })
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/tasks/t1/postpone',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ date: '2026-09-20' }) }),
+    ),
+  )
 })
