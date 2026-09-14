@@ -540,6 +540,24 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
+                    content: {
+                        "application/json": components["schemas"]["ReminderPageResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
                     content?: never;
                 };
             };
@@ -573,12 +591,37 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -644,7 +687,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DayTemplateResponse"][];
+                    };
                 };
             };
         };
@@ -696,7 +741,27 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DayTemplateResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -789,6 +854,52 @@ export interface paths {
                     };
                     content: {
                         "application/json": string[];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/day-templates/{id}/affected-dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AffectedDateResponse"][];
                     };
                 };
                 /** @description Bad Request */
@@ -1084,6 +1195,55 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["WindowValueDependentsResponse"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/day-templates/{id}/windows/{windowId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    date?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    windowId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WindowMatchPreviewResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -1483,12 +1643,30 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -2140,6 +2318,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AffectedDateResponse: {
+            /** Format: date */
+            date: string;
+            overridden: boolean;
+        };
         AvailabilityWindow: {
             id: components["schemas"]["WindowId"];
             name: string;
@@ -2204,6 +2387,7 @@ export interface components {
             name: string;
             windows: components["schemas"]["AvailabilityWindow"][];
             eventPrototypes: components["schemas"]["EventPrototype"][];
+            unused: boolean;
         };
         DayTemplateUseResponse: {
             templateId: string;
@@ -2223,6 +2407,7 @@ export interface components {
             values: string[];
             taskDefault: null | string;
             windowDefault: null | string;
+            source: string;
         };
         EditEventExceptionRequest: {
             deleted: boolean;
@@ -2265,6 +2450,14 @@ export interface components {
         EventPrototypeId: {
             value?: string;
         };
+        FooterCountsResponse: {
+            /** Format: int32 */
+            toProcess: number | string;
+            /** Format: int32 */
+            stale: number | string;
+            /** Format: int32 */
+            orphans: number | string;
+        };
         LastWeekdayBefore: {
             weekday: components["schemas"]["DayOfWeek"];
         };
@@ -2281,6 +2474,14 @@ export interface components {
             date: string;
             windowId: string;
             dimensions: {
+                [key: string]: string[];
+            };
+        };
+        MatchingOnResponse: {
+            declared: {
+                [key: string]: string[];
+            };
+            defaulted: {
                 [key: string]: string[];
             };
         };
@@ -2323,6 +2524,36 @@ export interface components {
         PromoteDayRequest: {
             name: string;
         };
+        ReminderPageResponse: {
+            /** Format: date */
+            date: string;
+            windowName: null | string;
+            /** Format: time */
+            windowStart: null | string;
+            /** Format: time */
+            windowEnd: null | string;
+            snooze: null | components["schemas"]["SnoozeOffer"];
+            fallbackEventName: null | string;
+            firedAs: null | string;
+            matches: components["schemas"]["ReminderTaskResponse"][];
+            isLive: boolean;
+            staleLine: null | string;
+            matchingOn: components["schemas"]["MatchingOnResponse"];
+            footer: components["schemas"]["FooterCountsResponse"];
+            failedFetches: string[];
+        };
+        ReminderTaskResponse: {
+            id: string;
+            title: string;
+            duration: null | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SnoozeOffer: {
+            /** Format: int32 */
+            intervalMinutes: number | string;
+            suppression: null | string;
+        };
         StampDayRequest: {
             templateId: string;
         };
@@ -2352,6 +2583,11 @@ export interface components {
         };
         WindowId: {
             value?: string;
+        };
+        WindowMatchPreviewResponse: {
+            /** Format: int32 */
+            count: number | string;
+            titles: string[];
         };
         WindowRequest: {
             name: string;
