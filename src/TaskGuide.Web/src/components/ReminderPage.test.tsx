@@ -115,3 +115,9 @@ it('an_Unprocessed_Task_in_the_footer_count_is_repairable_inline', async () => {
   expect(screen.getByRole('button', { name: '60m' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Longer' })).toBeDisabled()
 })
+
+it('the_Snooze_control_names_the_interval_the_server_gave_it', async () => {
+  currentPage = page({ snooze: { intervalMinutes: 17, suppression: null } })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  expect(await screen.findByRole('button', { name: 'Snooze 17 min' })).toBeInTheDocument()
+})
