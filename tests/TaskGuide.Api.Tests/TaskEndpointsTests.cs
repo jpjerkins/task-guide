@@ -175,6 +175,25 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task PUT_api_tasks_id_postpone_postpones_a_plain_Task()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW");
+        await SeedTasksAsync(task);
+
+        var response = await _client.PutAsJsonAsync($"/api/tasks/{task.Id.Value}/postpone", new { date = new DateOnly(2026, 9, 8) });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PUT_api_tasks_id_postpone_rejects_a_malformed_Task_id()
+    {
+        var response = await _client.PutAsJsonAsync("/api/tasks/t_derived_absence_/postpone", new { date = new DateOnly(2026, 9, 8) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PATCH_api_tasks_id_is_refused_on_a_derived_Task()
     {
         var derived = Task("t_derived_absence_event_1") with
@@ -189,6 +208,31 @@ public sealed class TaskEndpointsTests : IDisposable
         });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PATCH_api_tasks_id_defers_a_plain_Task()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW");
+        await SeedTasksAsync(task);
+
+        var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Patch, $"/api/tasks/{task.Id.Value}")
+        {
+            Content = JsonContent.Create(new { date = new DateOnly(2026, 9, 8) }),
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PATCH_api_tasks_id_rejects_a_malformed_Task_id()
+    {
+        var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Patch, "/api/tasks/t_derived_absence_")
+        {
+            Content = JsonContent.Create(new { date = new DateOnly(2026, 9, 8) }),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

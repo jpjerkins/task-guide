@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using TaskGuide.Application.RightNow;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -24,7 +25,7 @@ public static class RightNowEndpoints
         // living. It edits that date's copy of the Window, which is what an Override already is,
         // and the chips are their own undo. No stacking — the first adjustment materialises the
         // date and detaches it from its Day template.
-        now.MapPut("/matching-on", async Task<IResult> (
+        now.MapPut("/matching-on", async Task<Results<NoContent, Conflict<object>>> (
             MatchingOnHttpRequest request,
             IStore store,
             TimeProvider timeProvider,
@@ -39,9 +40,9 @@ public static class RightNowEndpoints
                 new MatchingOnRequest(request.Date, new WindowId(request.WindowId), dimensions),
                 ct);
 
-            return result.Match<IResult>(
+            return result.Match<Results<NoContent, Conflict<object>>>(
                 _ => TypedResults.NoContent(),
-                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
 
         // Between Windows this mints an ad-hoc Window on that date, running from now to the next

@@ -790,7 +790,11 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - completing a derived Task writes its `(ruleId, triggerId, due)` derived-completion fact
 - `POST /api/tasks/{id}/completions` rejects a malformed Task id
 - `PATCH /api/tasks/{id}` is refused on a derived Task
+- `PATCH /api/tasks/{id}` defers a plain Task
+- `PATCH /api/tasks/{id}` rejects a malformed Task id
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
+- `PUT /api/tasks/{id}/postpone` postpones a plain Task
+- `PUT /api/tasks/{id}/postpone` rejects a malformed Task id
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
