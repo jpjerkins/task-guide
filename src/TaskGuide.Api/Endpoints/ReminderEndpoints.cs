@@ -48,14 +48,17 @@ public static class ReminderEndpoints
 
         // The predicate is server-side and the UI reads it. A crossing request is REJECTED, and
         // the rejection renders as the same line the disabled state would have shown.
-        reminders.MapPost("/{date}/{windowId}/snooze", async Task<IResult> (string date, string windowId, IStore store, TimeProvider timeProvider, DayBoundary boundary, CancellationToken ct) =>
+        // Typed, not `IResult`: an untyped lambda emits no response metadata, so `schema.d.ts`
+        // documented this as a bodiless 200 and the SPA could not see the 409 line at all (#133).
+        reminders.MapPost("/{date}/{windowId}/snooze", async Task<Results<NoContent, BadRequest<object>, Conflict<object>, NotFound>> (
+            string date, string windowId, IStore store, TimeProvider timeProvider, DayBoundary boundary, CancellationToken ct) =>
         {
             if (!DateOnly.TryParse(date, out var reminderDate))
-                return TypedResults.BadRequest(new { error = "date must be an ISO date" });
+                return TypedResults.BadRequest<object>(new { error = "date must be an ISO date" });
             var outcome = await new SnoozeWindow(store, timeProvider, boundary).ExecuteAsync(reminderDate, new WindowId(windowId), ct);
-            return outcome.Match<IResult>(
+            return outcome.Match<Results<NoContent, BadRequest<object>, Conflict<object>, NotFound>>(
                 _ => TypedResults.NoContent(),
-                unavailable => TypedResults.Conflict(new { error = unavailable.Line }),
+                unavailable => TypedResults.Conflict<object>(new { error = unavailable.Line }),
                 _ => TypedResults.NotFound());
         });
 
