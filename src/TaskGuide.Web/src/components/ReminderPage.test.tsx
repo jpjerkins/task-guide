@@ -103,3 +103,15 @@ it('a_Window_that_matched_nothing_renders_Nothing_fits_split_on_whether_a_Remind
   expect(container2.querySelector('.empty')).toHaveTextContent('Nothing fits.')
   expect(container2.querySelector('.empty')).not.toHaveTextContent('No notification would have fired.')
 })
+
+it('an_Unprocessed_Task_in_the_footer_count_is_repairable_inline', async () => {
+  currentPage = page({ footer: { toProcess: 1, stale: 0, orphans: 0 } })
+  unprocessed = [{ id: 'tu1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('File the receipt')
+  expect(screen.getByRole('button', { name: '2m' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '10m' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '30m' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '60m' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Longer' })).toBeDisabled()
+})
