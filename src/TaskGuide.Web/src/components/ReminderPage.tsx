@@ -77,6 +77,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   const [justAdjusted, setJustAdjusted] = useState(false)
   const [postponeOpenId, setPostponeOpenId] = useState<string | null>(null)
   const [postponeDate, setPostponeDate] = useState<string | null>(null)
+  const [matchingOnBusy, setMatchingOnBusy] = useState(false)
 
   const path = `/api/reminders/${date}/${windowId}`
 
@@ -185,6 +186,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
 
   async function handleToggleChip(dim: DimensionResponse, value: string) {
     setMatchingOnNote(null)
+    setMatchingOnBusy(true)
     const dimensions = toggledDeclared(dim, value, page.matchingOn.declared)
     try {
       await sendJson('PUT', '/api/right-now/matching-on', { date, windowId, dimensions })
@@ -195,6 +197,8 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       if (fresh?.isLive) {
         setMatchingOnNote("Couldn't change what this matches on — try again.")
       }
+    } finally {
+      setMatchingOnBusy(false)
     }
   }
 
@@ -236,6 +240,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
                           key={`${dim.id}-${v}`}
                           type="button"
                           aria-pressed={effective.includes(v)}
+                          disabled={matchingOnBusy}
                           onClick={() => handleToggleChip(dim, v)}
                         >
                           {v}

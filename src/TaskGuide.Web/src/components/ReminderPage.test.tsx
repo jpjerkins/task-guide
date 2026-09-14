@@ -319,6 +319,35 @@ it('the_Matching_on_chipset_survives_its_own_press_same_DOM_nodes_before_and_aft
   expect(chip.isConnected).toBe(true)
 })
 
+it('the_Matching_on_chips_are_disabled_while_an_adjustment_is_in_flight', async () => {
+  currentPage = page({
+    matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} },
+  })
+  dimensions = [
+    { id: 'weather', label: 'Weather', algebra: 'categorical', values: ['sunny', 'rainy'], taskDefault: null, windowDefault: null, source: 'authored' },
+  ]
+  let resolvePut: (r: Response) => void
+  const putPromise = new Promise<Response>((resolve) => {
+    resolvePut = resolve
+  })
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/right-now/matching-on') {
+      return putPromise
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  const chip = await screen.findByRole('button', { name: 'rainy' })
+  await user.click(chip)
+  await waitFor(() => expect(chip).toBeDisabled())
+  expect(screen.getByRole('button', { name: 'sunny' })).toBeDisabled()
+
+  currentPage = page({ matchingOn: { declared: { weather: ['sunny', 'rainy'] }, defaulted: {} } })
+  resolvePut!(new Response(null, { status: 204 }))
+  await waitFor(() => expect(chip).not.toBeDisabled())
+})
+
 it('a_fallback_pushs_landing_page_has_no_Snooze_control_at_all_rather_than_a_disabled_one', async () => {
   currentPage = page({ windowName: null, fallbackEventName: 'Grocery run', firedAs: 'fallback', snooze: null })
   const { container } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)

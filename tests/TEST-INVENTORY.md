@@ -1245,6 +1245,7 @@ specified under **Shared controls** above and are not restated here.
 - an adjustment reports back that the date is now an Override, since the write is what protects a Day
   template for 13 months
 - Postpone sends nothing until its date is confirmed — a half-typed date in the picker never writes
+- the "Matching on" chips are disabled while an adjustment is in flight, since each write replaces the Window's whole tag set and a second tap would overwrite the first
 
 #### Task list and status filters
 
