@@ -225,6 +225,37 @@ it('Postpone_sends_nothing_until_its_date_is_confirmed', async () => {
   )
 })
 
+it('a_refused_mark_off_states_that_it_failed_rather_than_silently_re_reading', async () => {
+  currentPage = page({
+    matches: [{ id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' }],
+  })
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && url === '/api/tasks/t1/completions') return new Response(null, { status: 409 })
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await user.click(await screen.findByRole('button', { name: 'Mark Water plants done' }))
+  await screen.findByText("Couldn't mark this off.")
+})
+
+it('a_refused_Postpone_states_that_it_failed_rather_than_silently_re_reading', async () => {
+  currentPage = page({
+    matches: [{ id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' }],
+  })
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/tasks/t1/postpone') return new Response(null, { status: 409 })
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Water plants')
+  await user.click(screen.getByRole('button', { name: 'Not now' }))
+  fireEvent.change(screen.getByLabelText('Not now'), { target: { value: '2026-09-20' } })
+  await user.click(screen.getByRole('button', { name: 'Postpone' }))
+  await screen.findByText("Couldn't postpone this task.")
+})
+
 it('the_footer_renders_the_counts_as_a_partition_plus_a_disjoint_orphan_count', async () => {
   currentPage = page({ footer: { toProcess: 6, stale: 3, orphans: 2 } })
   const { container, unmount } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)

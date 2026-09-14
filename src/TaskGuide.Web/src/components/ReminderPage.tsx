@@ -79,6 +79,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   const [postponeDate, setPostponeDate] = useState<string | null>(null)
   const [matchingOnBusy, setMatchingOnBusy] = useState(false)
   const [completingId, setCompletingId] = useState<string | null>(null)
+  const [taskActionNote, setTaskActionNote] = useState<string | null>(null)
 
   const path = `/api/reminders/${date}/${windowId}`
 
@@ -149,23 +150,30 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       : page.date
 
   async function handleComplete(taskId: string) {
+    setTaskActionNote(null)
     setCompletingId(taskId)
     try {
       await sendJson('POST', `/api/tasks/${taskId}/completions`, undefined)
     } catch {
-      // A refused completion re-reads the page like every other write; the page renders
-      // whatever the server now says (e.g. the task no longer being a match).
-    } finally {
+      await reload()
+      setTaskActionNote("Couldn't mark this off.")
       setCompletingId(null)
+      return
     }
+    setCompletingId(null)
     await reload()
   }
 
   async function handlePostpone(taskId: string, next: string) {
+    setTaskActionNote(null)
     try {
       await sendJson('PUT', `/api/tasks/${taskId}/postpone`, { date: next })
     } catch {
-      // same re-read-and-render-what-it-says rule as completion.
+      setPostponeOpenId(null)
+      setPostponeDate(null)
+      await reload()
+      setTaskActionNote("Couldn't postpone this task.")
+      return
     }
     setPostponeOpenId(null)
     setPostponeDate(null)
@@ -264,6 +272,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
         ) : (
           page.staleLine && <div className="note">{page.staleLine}</div>
         )}
+        {taskActionNote && <div className="note">{taskActionNote}</div>}
         <div className="list">
           {page.matches.length === 0 ? (
             <div className="empty">
