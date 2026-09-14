@@ -38,12 +38,14 @@ export async function sendJson<T>(method: string, path: string, body: unknown): 
 type TaskResponse = components['schemas']['TaskResponse']
 type CreateTaskRequest = components['schemas']['CreateTaskRequest']
 
-// App-facing Task: `duration` normalised to `string | null`. The wire carries a Duration
-// *bucket* (KnownDimensions.DurationBuckets: "2" | "10" | "30" | "60" | "longer"), not a minute
-// count. The generated `TaskResponse.duration` is typed `number | string | null` — an artifact
-// of how .NET 10's OpenAPI generator describes an int32 (it permits a string on the wire, though
-// the server sends a JSON number for numeric buckets). This boundary normalises every bucket to
-// its string form so a non-numeric bucket like `"longer"` survives instead of becoming `NaN`.
+// App-facing Task: `duration` normalised to `string | null`. A Duration is a *bucket*
+// (KnownDimensions.DurationBuckets: "2" | "10" | "30" | "60" | "longer"), not a minute count.
+// The generated `TaskResponse.duration` is typed `number | string | null` — an artifact of how
+// .NET 10's OpenAPI generator describes an int32, which is what the wire still carries: the
+// server sends a JSON number and cannot yet send `longer` (TaskResponse.Duration is `int?`
+// until #130 widens it). So this boundary is deliberately ahead of the server — normalising
+// every bucket to its string form is a no-op on today's payloads, and stops `longer` becoming
+// `NaN` the moment it starts arriving.
 export interface Task {
   id: string
   title: string
