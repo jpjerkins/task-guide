@@ -152,6 +152,23 @@ it('a_rejected_Snooze_POST_renders_the_same_line_the_disabled_state_would_have_s
   expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
 })
 
+it('a_Snooze_whose_POST_and_re_read_both_fail_still_says_it_did_not_snooze', async () => {
+  currentPage = page({ snooze: { intervalMinutes: 17, suppression: null } })
+  let offline = false
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && url.endsWith('/snooze')) {
+      offline = true
+      return new Response(null, { status: 500 })
+    }
+    if (offline && url === `/api/reminders/${DATE}/${WINDOW_ID}`) return new Response(null, { status: 500 })
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await user.click(await screen.findByRole('button', { name: 'Snooze 17 min' }))
+  await screen.findByText("Couldn't snooze — try again.")
+})
+
 it('Matching_on_is_gated_by_the_same_page_level_predicate_and_carries_its_own_suppression_line', async () => {
   currentPage = page({
     isLive: false,

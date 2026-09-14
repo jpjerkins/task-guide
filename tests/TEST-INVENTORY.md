@@ -1248,6 +1248,7 @@ specified under **Shared controls** above and are not restated here.
 - the "Matching on" chips are disabled while an adjustment is in flight, since each write replaces the Window's whole tag set and a second tap would overwrite the first
 - a Task's mark-off control is disabled while its completion is in flight, so a double tap cannot complete two instances of a recurring Task
 - a refused mark off or Postpone states that it failed rather than silently re-reading
+- a Snooze whose POST and re-read both fail still says it did not snooze
 
 #### Task list and status filters
 

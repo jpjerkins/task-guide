@@ -189,8 +189,9 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     } catch {
       const fresh = await reload()
       // A refusal shows up as the server's own suppression line (rendered below, from `fresh`).
-      // Anything else is a plain failed write with nothing to explain it.
-      if (fresh?.snooze && !fresh.snooze.suppression) {
+      // Anything else — including the re-read itself failing offline — is a plain failed write
+      // with nothing else to explain it.
+      if (!fresh || (fresh.snooze && !fresh.snooze.suppression)) {
         setSnoozeNote("Couldn't snooze — try again.")
       }
     }
@@ -206,7 +207,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       await reload()
     } catch {
       const fresh = await reload()
-      if (fresh?.isLive) {
+      if (!fresh || fresh.isLive) {
         setMatchingOnNote("Couldn't change what this matches on — try again.")
       }
     } finally {
