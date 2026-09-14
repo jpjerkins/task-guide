@@ -160,8 +160,8 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       setCompletingId(null)
       return
     }
-    setCompletingId(null)
     await reload()
+    setCompletingId(null)
   }
 
   async function handlePostpone(taskId: string, next: string) {
