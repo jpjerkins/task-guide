@@ -1244,6 +1244,7 @@ specified under **Shared controls** above and are not restated here.
   is no Window behind it to derive an interval from
 - an adjustment reports back that the date is now an Override, since the write is what protects a Day
   template for 13 months
+- Postpone sends nothing until its date is confirmed — a half-typed date in the picker never writes
 
 #### Task list and status filters
 

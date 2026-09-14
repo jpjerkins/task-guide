@@ -76,6 +76,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   const [matchingOnNote, setMatchingOnNote] = useState<string | null>(null)
   const [justAdjusted, setJustAdjusted] = useState(false)
   const [postponeOpenId, setPostponeOpenId] = useState<string | null>(null)
+  const [postponeDate, setPostponeDate] = useState<string | null>(null)
 
   const path = `/api/reminders/${date}/${windowId}`
 
@@ -162,6 +163,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       // same re-read-and-render-what-it-says rule as completion.
     }
     setPostponeOpenId(null)
+    setPostponeDate(null)
     await reload()
   }
 
@@ -273,16 +275,22 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
                 <div className="body">
                   <div className="title">{t.title}</div>
                   <div className="meta">{t.duration !== null && <span className="pill dur">{durLabel(t.duration)}</span>}</div>
-                  <button type="button" onClick={() => setPostponeOpenId(postponeOpenId === t.id ? null : t.id)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPostponeDate(null)
+                      setPostponeOpenId(postponeOpenId === t.id ? null : t.id)
+                    }}
+                  >
                     Not now
                   </button>
                   {postponeOpenId === t.id && (
-                    <DateEntry
-                      key={`postpone-${t.id}`}
-                      label="Not now"
-                      value={null}
-                      onChange={(next) => next && handlePostpone(t.id, next)}
-                    />
+                    <>
+                      <DateEntry key={`postpone-${t.id}`} label="Not now" value={postponeDate} onChange={setPostponeDate} />
+                      <button type="button" disabled={!postponeDate} onClick={() => postponeDate && handlePostpone(t.id, postponeDate)}>
+                        Postpone
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

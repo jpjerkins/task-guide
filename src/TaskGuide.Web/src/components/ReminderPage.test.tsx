@@ -185,6 +185,38 @@ it('mark_off_and_Postpone_stay_live_on_a_page_past_its_Day_boundary', async () =
   await user.click(screen.getByRole('button', { name: 'Not now' }))
   const input = screen.getByLabelText('Not now')
   fireEvent.change(input, { target: { value: '2026-09-20' } })
+  await user.click(screen.getByRole('button', { name: 'Postpone' }))
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/tasks/t1/postpone',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ date: '2026-09-20' }) }),
+    ),
+  )
+})
+
+it('Postpone_sends_nothing_until_its_date_is_confirmed', async () => {
+  currentPage = page({
+    matches: [{ id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' }],
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Water plants')
+
+  await user.click(screen.getByRole('button', { name: 'Not now' }))
+  const input = screen.getByLabelText('Not now')
+  expect(screen.getByRole('button', { name: 'Postpone' })).toBeDisabled()
+
+  // A half-typed year (e.g. "0002" mid-keystroke) is a valid-looking date value the input
+  // fires onChange for; it must not write until the Postpone button is pressed.
+  fireEvent.change(input, { target: { value: '0002-09-20' } })
+  expect(fetch).not.toHaveBeenCalledWith('/api/tasks/t1/postpone', expect.anything())
+  expect(screen.getByLabelText('Not now')).toBe(input)
+
+  fireEvent.change(input, { target: { value: '2026-09-20' } })
+  expect(fetch).not.toHaveBeenCalledWith('/api/tasks/t1/postpone', expect.anything())
+  expect(screen.getByRole('button', { name: 'Postpone' })).not.toBeDisabled()
+
+  await user.click(screen.getByRole('button', { name: 'Postpone' }))
   await waitFor(() =>
     expect(fetch).toHaveBeenCalledWith(
       '/api/tasks/t1/postpone',
