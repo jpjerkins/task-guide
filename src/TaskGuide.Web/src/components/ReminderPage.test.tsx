@@ -73,3 +73,19 @@ it('the_page_renders_the_Windows_own_name_span_and_date', async () => {
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('Grocery run')
 })
+
+it('all_matches_render_not_the_pushs_shortlist_of_three', async () => {
+  currentPage = page({
+    matches: [
+      { id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' },
+      { id: 't2', title: 'Fold laundry', duration: '30', createdAt: '2026-09-01T00:00:00Z' },
+      { id: 't3', title: 'Read a chapter', duration: '30', createdAt: '2026-09-01T00:00:00Z' },
+      { id: 't4', title: 'Stretch', duration: '10', createdAt: '2026-09-01T00:00:00Z' },
+    ],
+  })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Water plants')
+  expect(screen.getByText('Fold laundry')).toBeInTheDocument()
+  expect(screen.getByText('Read a chapter')).toBeInTheDocument()
+  expect(screen.getByText('Stretch')).toBeInTheDocument()
+})
