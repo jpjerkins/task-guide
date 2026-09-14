@@ -873,11 +873,15 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 The SPA's `Task` type is generated from the OpenAPI document (`npm run gen:api`); nothing about
 a Task's shape is written by hand. `src/api/client.ts` is the normalisation boundary.
 
-- a string `duration` off the wire is coerced to a **number** — the generator describes an int32
-  as `integer | string`, and only a value assertion catches this: `${x}m` renders `30` and `'30'`
-  identically, so no component test can tell them apart
+- a numeric `duration` bucket off the wire is carried through as its **string** form — the
+  generator describes an int32 as `integer | string`, and only a value assertion catches this:
+  `${x}m` renders `30` and `'30'` identically, so no component test can tell them apart
+- a non-numeric `duration` bucket (`"longer"`) survives the boundary verbatim rather than
+  becoming `NaN`
 - a null `duration` stays null rather than becoming `0`
 - a Task with a null `duration` renders its title and **no duration pill**
+- a Task whose `duration` is the unsized bucket renders a **Longer** pill rather than a
+  minutes label, derived from the value not parsing as minutes rather than matching `"longer"`
 - a non-OK GET and a rejected fetch both land on the error state
 - the quick-add duration chip IS the submit, and is inert while the title is empty
 

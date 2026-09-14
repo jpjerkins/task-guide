@@ -7,8 +7,12 @@ type LoadState =
   | { status: 'error' }
   | { status: 'ready'; tasks: Task[] }
 
-function durLabel(minutes: number) {
-  return `${minutes}m`
+// Mirrors DurationCeiling.UnsizedBucketOf: the unsized bucket names no length, so it's
+// identified by what it is *not* (parseable as minutes) rather than a literal 'longer'
+// match, keeping this in step with the Domain's bucket registry. 'Longer' is the label
+// the UI prototypes use (docs/prototypes/ui-screens.prototype.html:437).
+function durLabel(bucket: string) {
+  return Number.isNaN(Number(bucket)) ? 'Longer' : `${bucket}m`
 }
 
 export function TasksScreen() {

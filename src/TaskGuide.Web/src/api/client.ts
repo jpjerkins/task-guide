@@ -38,15 +38,18 @@ export async function sendJson<T>(method: string, path: string, body: unknown): 
 type TaskResponse = components['schemas']['TaskResponse']
 type CreateTaskRequest = components['schemas']['CreateTaskRequest']
 
-// App-facing Task: `duration` normalised to `number | null`. The generated
-// `TaskResponse.duration` is typed `number | string | null` — an artifact of how .NET 10's
-// OpenAPI generator describes an int32 (it permits a string on the wire, though the server
-// always sends a JSON number). Coercing here at the network boundary keeps that artifact out
-// of component code entirely.
+// App-facing Task: `duration` normalised to `string | null`. A Duration is a *bucket*
+// (KnownDimensions.DurationBuckets: "2" | "10" | "30" | "60" | "longer"), not a minute count.
+// The generated `TaskResponse.duration` is typed `number | string | null` — an artifact of how
+// .NET 10's OpenAPI generator describes an int32, which is what the wire still carries: the
+// server sends a JSON number and cannot yet send `longer` (TaskResponse.Duration is `int?`
+// until #130 widens it). So this boundary is deliberately ahead of the server — normalising
+// every bucket to its string form is a no-op on today's payloads, and stops `longer` becoming
+// `NaN` the moment it starts arriving.
 export interface Task {
   id: string
   title: string
-  duration: number | null
+  duration: string | null
   createdAt: string
 }
 
@@ -56,7 +59,7 @@ function toTask(raw: TaskResponse): Task {
   return {
     id: raw.id,
     title: raw.title,
-    duration: raw.duration === null || raw.duration === undefined ? null : Number(raw.duration),
+    duration: raw.duration === null || raw.duration === undefined ? null : String(raw.duration),
     createdAt: raw.createdAt,
   }
 }
