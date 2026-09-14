@@ -286,3 +286,11 @@ it('the_Matching_on_chipset_survives_its_own_press_same_DOM_nodes_before_and_aft
   expect(screen.getByRole('button', { name: 'rainy' })).toBe(chip)
   expect(chip.isConnected).toBe(true)
 })
+
+it('a_fallback_pushs_landing_page_has_no_Snooze_control_at_all_rather_than_a_disabled_one', async () => {
+  currentPage = page({ windowName: null, fallbackEventName: 'Grocery run', firedAs: 'fallback', snooze: null })
+  const { container } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Grocery run')
+  expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
+  expect(container.querySelector('.btn-row')).not.toBeInTheDocument()
+})
