@@ -1,0 +1,75 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import type { components } from '../api/schema'
+import { ReminderPage } from './ReminderPage'
+
+type ReminderPageResponse = components['schemas']['ReminderPageResponse']
+type DimensionResponse = components['schemas']['DimensionResponse']
+
+const DATE = '2026-09-13'
+const WINDOW_ID = 'w_evening'
+
+function page(overrides: Partial<ReminderPageResponse> = {}): ReminderPageResponse {
+  return {
+    date: DATE,
+    windowName: 'Evening wind-down',
+    windowStart: '19:00:00',
+    windowEnd: '21:30:00',
+    snooze: null,
+    fallbackEventName: null,
+    firedAs: 'window',
+    matches: [],
+    isLive: true,
+    staleLine: null,
+    matchingOn: { declared: {}, defaulted: {} },
+    footer: { toProcess: 0, stale: 0, orphans: 0 },
+    failedFetches: [],
+    ...overrides,
+  }
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(status === 204 ? null : JSON.stringify(body), { status })
+}
+
+let currentPage: ReminderPageResponse
+let dimensions: DimensionResponse[]
+let unprocessed: unknown[]
+let fetch: ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>
+
+async function read(url: string): Promise<Response> {
+  if (url === `/api/reminders/${DATE}/${WINDOW_ID}`) return json(currentPage)
+  if (url === '/api/dimensions') return json(dimensions)
+  if (url === '/api/tasks?status=unprocessed') return json(unprocessed)
+  return new Response(null, { status: 404 })
+}
+
+beforeEach(() => {
+  currentPage = page()
+  dimensions = []
+  unprocessed = []
+  fetch = vi.fn(read)
+  vi.stubGlobal('fetch', fetch)
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+it('the_page_renders_the_Windows_own_name_span_and_date', async () => {
+  const { unmount } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Evening wind-down')
+  expect(screen.getByText('7p–9:30p · 2026-09-13')).toBeInTheDocument()
+  unmount()
+
+  currentPage = page({
+    windowName: null,
+    windowStart: null,
+    windowEnd: null,
+    fallbackEventName: 'Grocery run',
+    firedAs: 'fallback',
+  })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Grocery run')
+})
