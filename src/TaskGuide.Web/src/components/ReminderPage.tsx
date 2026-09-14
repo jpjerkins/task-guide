@@ -84,7 +84,8 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   const reload = useCallback(async (): Promise<ReminderPageResponse | null> => {
     try {
       const fresh = await getJson<ReminderPageResponse>(path)
-      setState({ status: 'ready', page: fresh! })
+      if (fresh === null) throw new Error(`GET ${path} returned no page`)
+      setState({ status: 'ready', page: fresh })
       return fresh
     } catch {
       setState((prev) => (prev.status === 'ready' ? prev : { status: 'error' }))
@@ -164,10 +165,9 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     await reload()
   }
 
-  async function handleSnooze() {
+  async function handleSnooze(interval: number) {
     setSnoozeNote(null)
     try {
-      const interval = Number(page.snooze!.intervalMinutes)
       await sendJson('POST', `/api/reminders/${date}/${windowId}/snooze`, undefined)
       setSnoozeNote(`Snoozed — back in ${interval} min.`)
       await reload()
@@ -200,6 +200,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     new Set([...Object.keys(page.matchingOn.declared), ...Object.keys(page.matchingOn.defaulted)]),
   )
   const footerText = footerLine(page.footer)
+  const snooze = page.snooze
 
   return (
     <div>
@@ -288,13 +289,13 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
             ))
           )}
         </div>
-        {page.snooze &&
-          (page.snooze.suppression ? (
-            <div className="note">{page.snooze.suppression}</div>
+        {snooze &&
+          (snooze.suppression ? (
+            <div className="note">{snooze.suppression}</div>
           ) : (
             <div className="btn-row">
-              <button className="btn" onClick={handleSnooze}>
-                Snooze {Number(page.snooze.intervalMinutes)} min
+              <button className="btn" onClick={() => handleSnooze(Number(snooze.intervalMinutes))}>
+                Snooze {Number(snooze.intervalMinutes)} min
               </button>
             </div>
           ))}
