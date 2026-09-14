@@ -151,3 +151,14 @@ it('a_rejected_Snooze_POST_renders_the_same_line_the_disabled_state_would_have_s
   await screen.findByText('Snooze ends at midnight')
   expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
 })
+
+it('Matching_on_is_gated_by_the_same_page_level_predicate_and_carries_its_own_suppression_line', async () => {
+  currentPage = page({
+    isLive: false,
+    staleLine: 'This reminder was for yesterday',
+    matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} },
+  })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('This reminder was for yesterday')
+  expect(screen.queryByText('Matching on')).not.toBeInTheDocument()
+})
