@@ -294,3 +294,21 @@ it('a_fallback_pushs_landing_page_has_no_Snooze_control_at_all_rather_than_a_dis
   expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
   expect(container.querySelector('.btn-row')).not.toBeInTheDocument()
 })
+
+it('an_adjustment_reports_back_that_the_date_is_now_an_Override', async () => {
+  currentPage = page({ matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} } })
+  dimensions = [
+    { id: 'weather', label: 'Weather', algebra: 'categorical', values: ['sunny', 'rainy'], taskDefault: null, windowDefault: null, source: 'authored' },
+  ]
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/right-now/matching-on') {
+      currentPage = page({ matchingOn: { declared: { weather: ['sunny', 'rainy'] }, defaulted: {} } })
+      return new Response(null, { status: 204 })
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await user.click(await screen.findByRole('button', { name: 'rainy' }))
+  await screen.findByText(`${DATE} is now an override`)
+})
