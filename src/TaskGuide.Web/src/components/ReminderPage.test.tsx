@@ -121,3 +121,16 @@ it('the_Snooze_control_names_the_interval_the_server_gave_it', async () => {
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   expect(await screen.findByRole('button', { name: 'Snooze 17 min' })).toBeInTheDocument()
 })
+
+it('when_the_server_reports_Snooze_unavailable_the_control_is_suppressed_not_hidden', async () => {
+  currentPage = page({ snooze: { intervalMinutes: 17, suppression: 'Snooze ends at midnight' } })
+  const { unmount } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Snooze ends at midnight')
+  expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
+  unmount()
+
+  currentPage = page({ snooze: { intervalMinutes: 17, suppression: 'This reminder was for yesterday' } })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('This reminder was for yesterday')
+  expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
+})
