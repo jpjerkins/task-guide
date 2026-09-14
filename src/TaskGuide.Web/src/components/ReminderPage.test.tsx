@@ -89,3 +89,17 @@ it('all_matches_render_not_the_pushs_shortlist_of_three', async () => {
   expect(screen.getByText('Read a chapter')).toBeInTheDocument()
   expect(screen.getByText('Stretch')).toBeInTheDocument()
 })
+
+it('a_Window_that_matched_nothing_renders_Nothing_fits_split_on_whether_a_Reminder_fired', async () => {
+  currentPage = page({ matches: [], firedAs: null })
+  const { container, unmount } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText(/Nothing fits/)
+  expect(container.querySelector('.empty')).toHaveTextContent('Nothing fits.No notification would have fired.')
+  unmount()
+
+  currentPage = page({ matches: [], firedAs: 'unconditional' })
+  const { container: container2 } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText(/Nothing fits/)
+  expect(container2.querySelector('.empty')).toHaveTextContent('Nothing fits.')
+  expect(container2.querySelector('.empty')).not.toHaveTextContent('No notification would have fired.')
+})
