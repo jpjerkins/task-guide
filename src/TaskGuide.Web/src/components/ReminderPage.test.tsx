@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { components } from '../api/schema'
 import { ReminderPage } from './ReminderPage'
 
@@ -132,5 +133,21 @@ it('when_the_server_reports_Snooze_unavailable_the_control_is_suppressed_not_hid
   currentPage = page({ snooze: { intervalMinutes: 17, suppression: 'This reminder was for yesterday' } })
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('This reminder was for yesterday')
+  expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
+})
+
+it('a_rejected_Snooze_POST_renders_the_same_line_the_disabled_state_would_have_shown', async () => {
+  currentPage = page({ snooze: { intervalMinutes: 17, suppression: null } })
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && url.endsWith('/snooze')) {
+      currentPage = page({ snooze: { intervalMinutes: 17, suppression: 'Snooze ends at midnight' } })
+      return new Response(JSON.stringify({ error: 'Snooze ends at midnight' }), { status: 409 })
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await user.click(await screen.findByRole('button', { name: 'Snooze 17 min' }))
+  await screen.findByText('Snooze ends at midnight')
   expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
 })
