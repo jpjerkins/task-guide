@@ -97,29 +97,29 @@ public static class TaskEndpoints
         tasks.MapGet("/{id}", (string id) => Results.NoContent());
         // An absolute date is for a one-off Task; recurring Tasks carry a moving, per-instance
         // offset from their generated deadline instead.
-        tasks.MapPatch("/{id}", async Task<IResult> (string id, DeferTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
+        tasks.MapPatch("/{id}", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (string id, DeferTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
         {
             if (!IsTaskId(id))
             {
-                return TypedResults.BadRequest(new { error = "id must be a Task id" });
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
             }
 
             var defer = ToDefer(request);
             if (defer is null)
             {
-                return TypedResults.BadRequest(new { error = "supply either date or offset and unit" });
+                return TypedResults.BadRequest<object>(new { error = "supply either date or offset and unit" });
             }
 
             var result = await new DeferTask(store, derivedTasks).ExecuteAsync(new TaskId(id), defer, ct);
-            return result.Match<IResult>(
+            return result.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
                 _ => TypedResults.NoContent(),
-                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
         tasks.MapDelete("/{id}", (string id) => Results.NoContent());
 
         // The only authored completion fact. Refused on an `Unprocessed` Task — there is nothing
         // yet to be done within — and on a derived Task it is the only interaction there is.
-        tasks.MapPost("/{id}/completions", async Task<IResult> (
+        tasks.MapPost("/{id}/completions", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (
             string id,
             IStore store,
             DimensionRegistry registry,
@@ -131,30 +131,30 @@ public static class TaskEndpoints
         {
             if (!IsTaskId(id))
             {
-                return TypedResults.BadRequest(new { error = "id must be a Task id" });
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
             }
 
             var result = await new CompleteTask(store, registry, staleThresholds, timeProvider, boundary, derivedTasks)
                 .ExecuteAsync(new TaskId(id), ct);
-            return result.Match<IResult>(
+            return result.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
                 _ => TypedResults.NoContent(),
-                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
         tasks.MapDelete("/{id}/completions/{due}", (string id, string due) => Results.NoContent());
 
         // "Not now." Stored as an absolute date; "two weeks" is a UI shorthand resolved at write
         // time. Offered on Active rows only — never on recurring or derived Tasks.
-        tasks.MapPut("/{id}/postpone", async Task<IResult> (string id, PostponeTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
+        tasks.MapPut("/{id}/postpone", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (string id, PostponeTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
         {
             if (!IsTaskId(id))
             {
-                return TypedResults.BadRequest(new { error = "id must be a Task id" });
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
             }
 
             var result = await new PostponeTask(store, derivedTasks).ExecuteAsync(new TaskId(id), request.Date, ct);
-            return result.Match<IResult>(
+            return result.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
                 _ => TypedResults.NoContent(),
-                refusal => TypedResults.Conflict(new { error = refusal.Reason }));
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
         tasks.MapDelete("/{id}/postpone", (string id) => Results.NoContent());
 

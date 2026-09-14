@@ -781,6 +781,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `PUT /api/right-now/matching-on` writes through to that date's Override and does not stack
 - `PUT /api/right-now/matching-on` is refused on a landing page past its Reminder's day boundary
 - `PUT /api/right-now/matching-on` refuses multiple values for an ordinal ceiling
+- `PUT /api/right-now/matching-on` is refused with 400 when `dimensions` is omitted
+- `PUT /api/right-now/matching-on` treats an empty `dimensions` object as clearing every axis
 - marking off is accepted on that same stale page
 - `GET /api/tasks?status=unprocessed` returns only `Unprocessed` Tasks
 - `GET /api/dimensions` returns the declared Dimension registry
@@ -790,7 +792,11 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - completing a derived Task writes its `(ruleId, triggerId, due)` derived-completion fact
 - `POST /api/tasks/{id}/completions` rejects a malformed Task id
 - `PATCH /api/tasks/{id}` is refused on a derived Task
+- `PATCH /api/tasks/{id}` defers a plain Task
+- `PATCH /api/tasks/{id}` rejects a malformed Task id
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
+- `PUT /api/tasks/{id}/postpone` postpones a plain Task
+- `PUT /api/tasks/{id}/postpone` rejects a malformed Task id
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
@@ -867,6 +873,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/reminders/{date}/{windowId}` carries a `longer` Task's Duration as its bucket value
   rather than failing on it
 - `GET /api/reminders/{date}/{windowId}` offers no Snooze on a Window that never fired
+- `PUT /api/right-now/matching-on`, `PATCH /api/tasks/{id}`, `POST /api/tasks/{id}/completions`, and
+  `PUT /api/tasks/{id}/postpone` each declare 204, 400, and 409 in OpenAPI, and no bare 200
 
 ## `TaskGuide.Web` (vitest)
 
