@@ -78,6 +78,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   const [postponeOpenId, setPostponeOpenId] = useState<string | null>(null)
   const [postponeDate, setPostponeDate] = useState<string | null>(null)
   const [matchingOnBusy, setMatchingOnBusy] = useState(false)
+  const [completingId, setCompletingId] = useState<string | null>(null)
 
   const path = `/api/reminders/${date}/${windowId}`
 
@@ -148,11 +149,14 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       : page.date
 
   async function handleComplete(taskId: string) {
+    setCompletingId(taskId)
     try {
       await sendJson('POST', `/api/tasks/${taskId}/completions`, undefined)
     } catch {
       // A refused completion re-reads the page like every other write; the page renders
       // whatever the server now says (e.g. the task no longer being a match).
+    } finally {
+      setCompletingId(null)
     }
     await reload()
   }
@@ -274,7 +278,12 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
           ) : (
             page.matches.map((t: ReminderTaskResponse) => (
               <div className="row" key={t.id}>
-                <button className="tick" aria-label={`Mark ${t.title} done`} onClick={() => handleComplete(t.id)}>
+                <button
+                  className="tick"
+                  aria-label={`Mark ${t.title} done`}
+                  disabled={completingId === t.id}
+                  onClick={() => handleComplete(t.id)}
+                >
                   ✓
                 </button>
                 <div className="body">

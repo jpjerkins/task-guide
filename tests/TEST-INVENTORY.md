@@ -1246,6 +1246,7 @@ specified under **Shared controls** above and are not restated here.
   template for 13 months
 - Postpone sends nothing until its date is confirmed — a half-typed date in the picker never writes
 - the "Matching on" chips are disabled while an adjustment is in flight, since each write replaces the Window's whole tag set and a second tap would overwrite the first
+- a Task's mark-off control is disabled while its completion is in flight, so a double tap cannot complete two instances of a recurring Task
 
 #### Task list and status filters
 

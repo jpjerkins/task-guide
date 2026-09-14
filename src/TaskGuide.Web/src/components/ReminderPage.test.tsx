@@ -319,6 +319,28 @@ it('the_Matching_on_chipset_survives_its_own_press_same_DOM_nodes_before_and_aft
   expect(chip.isConnected).toBe(true)
 })
 
+it('a_Tasks_mark_off_control_is_disabled_while_its_completion_is_in_flight', async () => {
+  currentPage = page({
+    matches: [{ id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' }],
+  })
+  let resolvePost: (r: Response) => void
+  const postPromise = new Promise<Response>((resolve) => {
+    resolvePost = resolve
+  })
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && url === '/api/tasks/t1/completions') return postPromise
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  const tick = await screen.findByRole('button', { name: 'Mark Water plants done' })
+  await user.click(tick)
+  await waitFor(() => expect(tick).toBeDisabled())
+
+  resolvePost!(new Response(null, { status: 204 }))
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Mark Water plants done' })).not.toBeDisabled())
+})
+
 it('the_Matching_on_chips_are_disabled_while_an_adjustment_is_in_flight', async () => {
   currentPage = page({
     matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} },
