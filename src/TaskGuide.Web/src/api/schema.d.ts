@@ -528,6 +528,15 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
                 /** @description Conflict */
                 409: {
                     headers: {
@@ -2536,7 +2545,7 @@ export interface components {
             /** Format: date */
             date: string;
             windowId: string;
-            dimensions: {
+            dimensions: null | {
                 [key: string]: string[];
             };
         };

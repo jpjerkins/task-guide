@@ -105,6 +105,41 @@ public sealed class RightNowEndpointsTests : IDisposable
         Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
     }
 
+    [Fact]
+    public async Task PUT_api_right_now_matching_on_is_refused_with_400_when_dimensions_is_omitted()
+    {
+        await SeedScheduleAsync(new AvailabilityWindow(
+            new WindowId("w_evening"), "Evening", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty));
+
+        var response = await _client.PutAsJsonAsync("/api/right-now/matching-on", new
+        {
+            date = new DateOnly(2030, 1, 7),
+            windowId = "w_evening",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
+    }
+
+    [Fact]
+    public async Task PUT_api_right_now_matching_on_treats_an_empty_dimensions_object_as_clearing_every_axis()
+    {
+        var date = new DateOnly(2030, 1, 7);
+        await SeedScheduleAsync(new AvailabilityWindow(
+            new WindowId("w_evening"), "Evening", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty));
+
+        var response = await _client.PutAsJsonAsync("/api/right-now/matching-on", new
+        {
+            date,
+            windowId = "w_evening",
+            dimensions = new Dictionary<string, string[]>(),
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var written = Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
+        Assert.Equal(date, written.Date);
+    }
+
     private async Task SeedScheduleAsync(AvailabilityWindow window)
     {
         var template = new DayTemplate(new DayTemplateId("dt_everyday"), "Everyday", [window], []);
