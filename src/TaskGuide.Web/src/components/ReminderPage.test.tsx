@@ -192,3 +192,15 @@ it('mark_off_and_Postpone_stay_live_on_a_page_past_its_Day_boundary', async () =
     ),
   )
 })
+
+it('the_footer_renders_the_counts_as_a_partition_plus_a_disjoint_orphan_count', async () => {
+  currentPage = page({ footer: { toProcess: 6, stale: 3, orphans: 2 } })
+  const { container, unmount } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await waitFor(() => expect(container.querySelector('.footer-count')).toHaveTextContent('6 to process · 3 stale · 2 orphans'))
+  unmount()
+
+  currentPage = page({ footer: { toProcess: 0, stale: 0, orphans: 0 } })
+  const { container: container2 } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Evening wind-down')
+  expect(container2.querySelector('.footer-count')).not.toBeInTheDocument()
+})
