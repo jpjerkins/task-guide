@@ -231,3 +231,35 @@ it('Matching_on_renders_the_declared_axes_distinctly_from_the_defaulted_ones', a
   expect(declaredPill).toHaveClass('pill', 'now')
   expect(defaultedPill).toHaveClass('pill', 'dim')
 })
+
+it('toggling_a_Matching_on_chip_re_reads_the_match_list_from_the_server_the_rendered_list_is_never_filtered_client_side', async () => {
+  currentPage = page({
+    matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} },
+    matches: [{ id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' }],
+  })
+  dimensions = [
+    { id: 'weather', label: 'Weather', algebra: 'categorical', values: ['sunny', 'rainy'], taskDefault: null, windowDefault: null, source: 'authored' },
+  ]
+  let putBody: unknown = null
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/right-now/matching-on') {
+      putBody = init.body
+      currentPage = page({
+        matchingOn: { declared: { weather: ['sunny', 'rainy'] }, defaulted: {} },
+        matches: [
+          { id: 't1', title: 'Water plants', duration: '10', createdAt: '2026-09-01T00:00:00Z' },
+          { id: 't2', title: 'Walk in the rain', duration: '30', createdAt: '2026-09-01T00:00:00Z' },
+        ],
+      })
+      return new Response(null, { status: 204 })
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Water plants')
+  await user.click(screen.getByRole('button', { name: 'rainy' }))
+  await screen.findByText('Walk in the rain')
+  expect(screen.getByText('Water plants')).toBeInTheDocument()
+  expect(putBody).toBe(JSON.stringify({ date: DATE, windowId: WINDOW_ID, dimensions: { weather: ['sunny', 'rainy'] } }))
+})
