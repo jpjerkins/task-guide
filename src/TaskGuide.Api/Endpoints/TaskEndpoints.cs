@@ -173,8 +173,8 @@ public static class TaskEndpoints
         task.CreatedAt);
 
     /// <summary>The one Dimension the walking skeleton (#51) reads back out — the ordinal single value, if any.</summary>
-    private static int? DurationOf(TaskItem task) =>
-        task.Tags.SingleOn(KnownDimensions.Duration) is { } duration ? int.Parse(duration.Value) : null;
+    private static string? DurationOf(TaskItem task) =>
+        task.Tags.SingleOn(KnownDimensions.Duration)?.Value;
 
     private static bool IsTaskId(string id) =>
         IsMintedTaskId(id) || IsDerivedTaskId(id);
@@ -206,7 +206,7 @@ public static class TaskEndpoints
 /// <summary>Walking skeleton request shape (#51): a Task is a title and a Duration, nothing else.</summary>
 public sealed record CreateTaskRequest(string Title, int Duration);
 
-public sealed record TaskResponse(string Id, string Title, int? Duration, DateTimeOffset CreatedAt);
+public sealed record TaskResponse(string Id, string Title, string? Duration, DateTimeOffset CreatedAt);
 
 public sealed record PostponeTaskRequest(DateOnly Date);
 
