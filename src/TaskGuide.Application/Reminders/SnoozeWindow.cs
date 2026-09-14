@@ -22,8 +22,8 @@ public sealed class SnoozeWindow(IStore store, TimeProvider timeProvider, DayBou
                 return OneOf<StoreMutation, SnoozeOutcome>.FromT1((SnoozeOutcome)new ReminderNotFound());
             var interval = SnoozePolicy.IntervalFor(end.ToTimeSpan() - start.ToTimeSpan());
             var dayBoundary = boundary.EndOf(date);
-            if (!SnoozePolicy.IsSnoozeOffered(now, interval, dayBoundary))
-                return OneOf<StoreMutation, SnoozeOutcome>.FromT1((SnoozeOutcome)new SnoozeUnavailable(now >= dayBoundary ? "This reminder was for yesterday" : "Snooze ends at midnight"));
+            if (ReminderSuppression.SnoozeLine(now, interval, dayBoundary) is { } suppression)
+                return OneOf<StoreMutation, SnoozeOutcome>.FromT1((SnoozeOutcome)new SnoozeUnavailable(suppression));
             var row = reminder with
             {
                 Kind = FireKind.Snooze,
