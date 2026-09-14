@@ -2418,8 +2418,7 @@ export interface components {
         CaptureTaskResponse: {
             id: string;
             title: string;
-            /** Format: int32 */
-            duration: null | number | string;
+            duration: null | string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -2648,8 +2647,7 @@ export interface components {
         TaskResponse: {
             id: string;
             title: string;
-            /** Format: int32 */
-            duration: null | number | string;
+            duration: null | string;
             /** Format: date-time */
             createdAt: string;
         };

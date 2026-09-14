@@ -69,21 +69,27 @@ public sealed class OpenApiDocumentTests : IDisposable
     }
 
     [Fact]
-    public async Task Duration_is_documented_as_a_nullable_integer()
+    public async Task TaskResponse_and_CaptureTaskResponse_duration_are_documented_as_nullable_strings()
     {
         var doc = await GetDocumentAsync();
 
-        var duration = doc.GetProperty("components").GetProperty("schemas")
-            .GetProperty("TaskResponse").GetProperty("properties").GetProperty("duration");
+        var schemas = doc.GetProperty("components").GetProperty("schemas");
+        AssertNullableString(schemas.GetProperty("TaskResponse"));
+        AssertNullableString(schemas.GetProperty("CaptureTaskResponse"));
+    }
 
-        // Nullable value types surface either as {"type": ["integer","null"]} or a bare
-        // {"type": "integer"} with a sibling "nullable": true, depending on generator version —
-        // accept either shape, but the schema must be integer-typed.
+    private static void AssertNullableString(JsonElement schema)
+    {
+        var duration = schema.GetProperty("properties").GetProperty("duration");
+        // Nullable reference types surface either as {"type": ["string","null"]} or a bare
+        // {"type": "string"} with a sibling "nullable": true, depending on generator version.
         var typeElement = duration.GetProperty("type");
         var typeValues = typeElement.ValueKind == JsonValueKind.Array
             ? typeElement.EnumerateArray().Select(e => e.GetString()).ToArray()
             : [typeElement.GetString()];
-        Assert.Contains("integer", typeValues);
+        Assert.Contains("string", typeValues);
+        Assert.True(typeValues.Contains("null") ||
+                    (duration.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean()));
     }
 
     [Fact]

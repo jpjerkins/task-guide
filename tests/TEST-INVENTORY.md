@@ -469,6 +469,9 @@ UI-visible footer note) is A2 → `TaskGuide.Infrastructure.Tests`.
 - capture with a Duration produces an `Active` Task
 - capture without one produces an `Unprocessed` Task
 - raw minutes snap up
+- capturing a Duration over 60 minutes returns the `longer` bucket verbatim
+- capturing without a Duration returns null and task read remains null
+- a Task read returns the `longer` Duration bucket verbatim
 - **no capture path writes Tags**
 - capture from any of the three Shortcuts sends a Receipt
 - **in-app capture sends none**
@@ -775,7 +778,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   `Task` type is generated from it, so a bare `200: OK` is a broken contract, not a cosmetic gap
 - `GET /api/tasks` documents its 200 as an **array of** `TaskResponse`
 - `POST /api/tasks` documents 201 (with a `TaskResponse` body), 400 and 503
-- `TaskResponse.duration` is documented as a **nullable** integer
+- `TaskResponse_and_CaptureTaskResponse_duration_are_documented_as_nullable_strings`; both
+  response schemas carry a **nullable** string containing the verbatim Duration bucket (`"2"`,
+  `"10"`, `"30"`, `"60"`, `"longer"`) or null
 - `POST /api/reminders/{date}/{windowId}/snooze` **rejects** a re-fire crossing the day boundary,
   with the same line the disabled control shows
 - `PUT /api/right-now/matching-on` writes through to that date's Override and does not stack

@@ -70,7 +70,7 @@ public sealed class TaskEndpointsTests : IDisposable
         var id = body.GetProperty("id").GetString()!;
         Assert.Matches("^t_[0-9A-HJKMNP-TV-Z]{26}$", id);
         Assert.Equal("Fix the shelf bracket", body.GetProperty("title").GetString());
-        Assert.Equal(30, body.GetProperty("duration").GetInt32());
+        Assert.Equal("30", body.GetProperty("duration").GetString());
         Assert.Contains(id, response.Headers.Location!.ToString());
     }
 
@@ -83,6 +83,16 @@ public sealed class TaskEndpointsTests : IDisposable
 
         Assert.Single(list.EnumerateArray());
         Assert.Equal("Take the bins out", list[0].GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task A_Task_read_returns_the_longer_Duration_bucket_verbatim()
+    {
+        await SeedTasksAsync(Task("t_longer", "longer"));
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+
+        Assert.Equal("longer", Assert.Single(list.EnumerateArray()).GetProperty("duration").GetString());
     }
 
     [Fact]
@@ -276,6 +286,20 @@ public sealed class TaskEndpointsTests : IDisposable
         new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
         {
             [KnownDimensions.Duration] = [new TagValue("30")],
+        }, LooseTags: []),
+        Deadline: null,
+        Defer: null,
+        Postpone: null,
+        Recurrence: null,
+        DateTimeOffset.UtcNow);
+
+    private static TaskItem Task(string id, string duration) => new(
+        new TaskId(id),
+        "Seeded task",
+        Notes: null,
+        new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+        {
+            [KnownDimensions.Duration] = [new TagValue(duration)],
         }, LooseTags: []),
         Deadline: null,
         Defer: null,
