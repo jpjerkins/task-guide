@@ -215,3 +215,19 @@ it('a_failed_fetched_Dimension_check_renders_its_footer_note_beside_the_counts_n
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('Tide unavailable')
 })
+
+it('Matching_on_renders_the_declared_axes_distinctly_from_the_defaulted_ones', async () => {
+  currentPage = page({
+    matchingOn: { declared: { weather: ['sunny'] }, defaulted: { energy: ['high'] } },
+  })
+  const { container } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Evening wind-down')
+  const declaredPill = Array.from(container.querySelectorAll('.adjust-sum .pill')).find((el) =>
+    el.textContent?.includes('weather'),
+  )
+  const defaultedPill = Array.from(container.querySelectorAll('.adjust-sum .pill')).find((el) =>
+    el.textContent?.includes('energy'),
+  )
+  expect(declaredPill).toHaveClass('pill', 'now')
+  expect(defaultedPill).toHaveClass('pill', 'dim')
+})
