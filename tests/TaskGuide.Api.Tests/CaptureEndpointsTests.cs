@@ -44,6 +44,35 @@ public sealed class CaptureEndpointsTests : IDisposable
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var task = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Repair the gate", task.GetProperty("title").GetString());
-        Assert.Equal(60, task.GetProperty("duration").GetInt32());
+        Assert.Equal("60", task.GetProperty("duration").GetString());
+    }
+
+    [Fact]
+    public async Task Capturing_a_Duration_over_60_minutes_returns_the_longer_bucket_verbatim()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/capture/",
+            new { title = "Reorganize the workshop", duration = 61, source = "quick-task-shortcut" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var task = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("longer", task.GetProperty("duration").GetString());
+    }
+
+    [Fact]
+    public async Task Capturing_without_a_Duration_returns_null_and_task_read_remains_null()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/capture/",
+            new { title = "Unprocessed capture", duration = (int?)null, source = "in-app" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var captured = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, captured.GetProperty("duration").ValueKind);
+
+        var id = captured.GetProperty("id").GetString();
+        var tasks = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+        var read = Assert.Single(tasks.EnumerateArray(), task => task.GetProperty("id").GetString() == id);
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("duration").ValueKind);
     }
 }

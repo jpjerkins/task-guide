@@ -69,21 +69,27 @@ public sealed class OpenApiDocumentTests : IDisposable
     }
 
     [Fact]
-    public async Task Duration_is_documented_as_a_nullable_integer()
+    public async Task TaskResponse_and_CaptureTaskResponse_duration_are_documented_as_nullable_strings()
     {
         var doc = await GetDocumentAsync();
 
-        var duration = doc.GetProperty("components").GetProperty("schemas")
-            .GetProperty("TaskResponse").GetProperty("properties").GetProperty("duration");
+        var schemas = doc.GetProperty("components").GetProperty("schemas");
+        AssertNullableString(schemas.GetProperty("TaskResponse"));
+        AssertNullableString(schemas.GetProperty("CaptureTaskResponse"));
+    }
 
-        // Nullable value types surface either as {"type": ["integer","null"]} or a bare
-        // {"type": "integer"} with a sibling "nullable": true, depending on generator version —
-        // accept either shape, but the schema must be integer-typed.
+    private static void AssertNullableString(JsonElement schema)
+    {
+        var duration = schema.GetProperty("properties").GetProperty("duration");
+        // Nullable reference types surface either as {"type": ["string","null"]} or a bare
+        // {"type": "string"} with a sibling "nullable": true, depending on generator version.
         var typeElement = duration.GetProperty("type");
         var typeValues = typeElement.ValueKind == JsonValueKind.Array
             ? typeElement.EnumerateArray().Select(e => e.GetString()).ToArray()
             : [typeElement.GetString()];
-        Assert.Contains("integer", typeValues);
+        Assert.Contains("string", typeValues);
+        Assert.True(typeValues.Contains("null") ||
+                    (duration.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean()));
     }
 
     [Fact]
@@ -116,6 +122,23 @@ public sealed class OpenApiDocumentTests : IDisposable
         var createdRef = response201.GetProperty("content").GetProperty("application/json")
             .GetProperty("schema").GetProperty("$ref").GetString();
         Assert.Equal("#/components/schemas/TaskResponse", createdRef);
+    }
+
+    [Fact]
+    public async Task PUT_api_tasks_id_duration_declares_request_and_204_400_409_outcomes()
+    {
+        var doc = await GetDocumentAsync();
+        var operation = doc.GetProperty("paths").GetProperty("/api/tasks/{id}/duration").GetProperty("put");
+        var responses = operation.GetProperty("responses");
+
+        Assert.True(responses.TryGetProperty("204", out _));
+        Assert.True(responses.TryGetProperty("400", out _));
+        Assert.True(responses.TryGetProperty("409", out _));
+        Assert.False(responses.TryGetProperty("200", out _));
+
+        var requestSchema = operation.GetProperty("requestBody").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
+        Assert.Equal("#/components/schemas/SetTaskDurationRequest", requestSchema);
     }
 
     [Fact]

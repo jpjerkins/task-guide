@@ -21,8 +21,8 @@ namespace TaskGuide.Api.Endpoints;
 /// </remarks>
 public static class CaptureEndpoints
 {
-    private static int? DurationOf(TaskItem task) =>
-        task.Tags.SingleOn(KnownDimensions.Duration) is { } duration ? int.Parse(duration.Value) : null;
+    private static string? DurationOf(TaskItem task) =>
+        task.Tags.SingleOn(KnownDimensions.Duration)?.Value;
 
     public static RouteGroupBuilder MapCaptureEndpoints(this RouteGroupBuilder api)
     {
@@ -78,5 +78,5 @@ public static class CaptureEndpoints
 }
 
 public sealed record CaptureRequest(string Title, int? Duration, string Source);
-public sealed record CaptureTaskResponse(string Id, string Title, int? Duration, DateTimeOffset CreatedAt);
+public sealed record CaptureTaskResponse(string Id, string Title, string? Duration, DateTimeOffset CreatedAt);
 public sealed class CaptureEndpointsLogCategory;
