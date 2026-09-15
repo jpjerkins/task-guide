@@ -1148,17 +1148,19 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 
 **What this list needs from the API that does not exist yet (#104)**
 
-Five bullets above name server-supplied data the wire does not currently carry. They are stated as
+Four bullets above name server-supplied data the wire does not currently carry. They are stated as
 requirements rather than softened away, because softening them would specify a surface that quietly
 computes what the server owns. **No lane edits an endpoint to close these** — the Schedule and
 Capture lanes are merged and no open ticket owns these files, so this is a report, per plan
 constraint 6.
 
+The `DimensionResponse.source` marker is now present on the wire; it is therefore no longer an API
+dependency for the fetched-Dimension rows in #105 and #112.
+
 | Needed | Today | Blocks |
 |---|---|---|
 | `GET /api/day-templates` and `GET /{id}` | `Results.NoContent()` stubs (`DayTemplateEndpoints.cs:13-14`) | #105's editor and #106's shape picker have **no source of shapes at all** |
 | `unused` on `DayTemplateResponse` | absent; `DELETE /{id}` is gated on it server-side | the delete affordance in #105 |
-| A source marker (`WindowValueSource` — authored / derived / fetched) on `DimensionResponse` | absent; the prototype reads its own fixture field `src` | the window editor's weather chipset, #112's fetched row |
 | A window match preview (count + first titles) | no endpoint; `windows/{id}/dependents` is the Drift warning | the window editor's preview |
 | A template's affected dates for the next fortnight | `/api/days/{date}` answers one date | the scope banner's count, the affected-dates list |
 

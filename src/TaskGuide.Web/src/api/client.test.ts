@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchTasks } from './client'
+import { fetchDimensions, fetchTasks } from './client'
 
 // The generated `TaskResponse.duration` is `number | string | null` — .NET 10's OpenAPI
 // generator describes an int32 as permitting a string on the wire. `client.ts` is the boundary
@@ -57,5 +57,48 @@ describe('fetchTasks', () => {
     const [task] = await fetchTasks()
 
     expect(task.duration).toBeNull()
+  })
+})
+
+describe('fetchDimensions', () => {
+  it('passes a normal array payload through unchanged', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            id: 'location',
+            label: 'Location',
+            algebra: 'categorical',
+            values: ['home', 'garage'],
+            taskDefault: null,
+            windowDefault: null,
+            source: 'authored',
+          },
+        ]),
+      ),
+    )
+
+    const dimensions = await fetchDimensions()
+
+    expect(dimensions).toEqual([
+      {
+        id: 'location',
+        label: 'Location',
+        algebra: 'categorical',
+        values: ['home', 'garage'],
+        taskDefault: null,
+        windowDefault: null,
+        source: 'authored',
+      },
+    ])
+  })
+
+  it('normalises a 204/null response to an empty array', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    const dimensions = await fetchDimensions()
+
+    expect(dimensions).toEqual([])
   })
 })
