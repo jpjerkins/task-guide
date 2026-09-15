@@ -455,54 +455,76 @@ ordinary issues as they surface, not a batch at the end.
 
 ## Ticket index
 
-All issues carry `build` plus a `lane:*` label. Blocking uses GitHub's native issue dependencies, so
+All issues carry `build`, a `lane:*` label and an `agent:claude` / `agent:codex` label. **The
+`agent:` label decides who implements a ticket, and the other agent reviews it** — if this table's
+Agent column disagrees with the label, the label wins (Phil, 2026-09-15; see `docs/coordination.md`). Blocking uses GitHub's native issue dependencies, so
 the frontier renders in the tracker's own UI; `./scripts/frontier.sh` does not apply here — these are
 not map children.
 
-| # | Ticket | Lane | Blocked by |
-|---|---|---|---|
-| [#74](https://github.com/jpjerkins/task-guide/issues/74) | W0 · Playwright on ARM64/Debian 12 | Web-Now | — *(starts immediately)* |
-| [#75](https://github.com/jpjerkins/task-guide/issues/75) | 0a · ADR amendments and glossary | Integration | — |
-| [#76](https://github.com/jpjerkins/task-guide/issues/76) | 0b-1 · Port and signature changes | Integration | #75 |
-| [#77](https://github.com/jpjerkins/task-guide/issues/77) | 0b-2 · Test-support and test projects | Integration | #76 |
-| [#72](https://github.com/jpjerkins/task-guide/issues/72) | 0b-3 · `OneOf` retrofit | Integration | #76 |
-| [#78](https://github.com/jpjerkins/task-guide/issues/78) | 0c · Composition root | Integration | #77, #72 |
-| [#79](https://github.com/jpjerkins/task-guide/issues/79) | F1 · The two Domain notification rules | Firing | #76 |
-| [#80](https://github.com/jpjerkins/task-guide/issues/80) | F2 · `TickPlan`, `FireIntent`, `TickPlanner` | Firing | #78, #79 |
-| [#81](https://github.com/jpjerkins/task-guide/issues/81) | F3 · `TickExecutor` | Firing | #80 |
-| [#82](https://github.com/jpjerkins/task-guide/issues/82) | F4 · `ITickLoop` and scaffolding removal | Firing | #81 |
-| [#83](https://github.com/jpjerkins/task-guide/issues/83) | F5 · Carriers and the fallback push | Firing | #81 |
-| [#84](https://github.com/jpjerkins/task-guide/issues/84) | F6 · Glance scheduling, weather laziness | Firing | #81, #79 |
-| [#85](https://github.com/jpjerkins/task-guide/issues/85) | A1 · Three Pushover senders, Receipt retry | Adapters | #77 |
-| [#86](https://github.com/jpjerkins/task-guide/issues/86) | A2 · Weather adapter | Adapters | #77 |
-| [#87](https://github.com/jpjerkins/task-guide/issues/87) | A3 · Liveness | Adapters | #77 |
-| [#88](https://github.com/jpjerkins/task-guide/issues/88) | A4 · Glance renderer | Adapters | #76, #79 |
-| [#89](https://github.com/jpjerkins/task-guide/issues/89) | S1 · Day-template lifecycle | Schedule | #78 |
-| [#90](https://github.com/jpjerkins/task-guide/issues/90) | S2 · Patterns | Schedule | #89 |
-| [#91](https://github.com/jpjerkins/task-guide/issues/91) | S3 · Overrides | Schedule | #89 |
-| [#92](https://github.com/jpjerkins/task-guide/issues/92) | S4 · Windows and Drift | Schedule | #89 |
-| [#93](https://github.com/jpjerkins/task-guide/issues/93) | S5 · Events and derived obligations | Schedule | #89 |
-| [#94](https://github.com/jpjerkins/task-guide/issues/94) | C1 · Capture and the Receipt | Capture & Tasks | #78 |
-| [#95](https://github.com/jpjerkins/task-guide/issues/95) | C2 · Task mutations | Capture & Tasks | #94 |
-| [#96](https://github.com/jpjerkins/task-guide/issues/96) | C3 · Snooze | Capture & Tasks | #94 |
-| [#97](https://github.com/jpjerkins/task-guide/issues/97) | C4 · Right-now, triage, dimensions | Capture & Tasks | #94 |
-| [#98](https://github.com/jpjerkins/task-guide/issues/98) | I1 · `schema.d.ts` regen | Integration | #95, #96, #97, #84 |
-| [#99](https://github.com/jpjerkins/task-guide/issues/99) | I2 · `schema.d.ts` regen | Integration | #90, #91, #92, #93 |
-| [#111](https://github.com/jpjerkins/task-guide/issues/111) | 0b-4 · Web shell, client seam, shared controls | Integration | #77 |
-| [#100](https://github.com/jpjerkins/task-guide/issues/100) | WN0 · Web-Now test list | Web-Now | #98, #111 |
-| [#101](https://github.com/jpjerkins/task-guide/issues/101) | WN1 · Reminder landing page | Web-Now | #100 |
-| [#102](https://github.com/jpjerkins/task-guide/issues/102) | WN2 · Task list, detail, triage | Web-Now | #100 |
-| [#103](https://github.com/jpjerkins/task-guide/issues/103) | WN3 · Quick capture, Right now, day view | Web-Now | #100 |
-| [#104](https://github.com/jpjerkins/task-guide/issues/104) | WA0 · Web-Authoring test list | Web-Authoring | #99, #111 |
-| [#105](https://github.com/jpjerkins/task-guide/issues/105) | WA1 · Window and day-template editors | Web-Authoring | #104 |
-| [#106](https://github.com/jpjerkins/task-guide/issues/106) | WA2 · Pattern editor and switcher | Web-Authoring | #104 |
-| [#107](https://github.com/jpjerkins/task-guide/issues/107) | WA3 · Override a date | Web-Authoring | #104 |
-| [#108](https://github.com/jpjerkins/task-guide/issues/108) | WA4 · Event create and overlap | Web-Authoring | #104 |
-| [#112](https://github.com/jpjerkins/task-guide/issues/112) | WA5 · Read-only dimensions viewer | Web-Authoring | #104 |
-| [#109](https://github.com/jpjerkins/task-guide/issues/109) | V1 · The E2E suite | Validation | #74, #84, #88, #101, #102, #103, #106, #107, #108, #112 |
-| [#49](https://github.com/jpjerkins/task-guide/issues/49) | V2 · Restore drill | Validation | #109 |
-| [#110](https://github.com/jpjerkins/task-guide/issues/110) | V3 · Guided walkthrough → tutorial | Validation | #109, #49 |
+| # | Ticket | Lane | Agent | Blocked by |
+|---|---|---|---|---|
+| [#74](https://github.com/jpjerkins/task-guide/issues/74) | W0 · Playwright on ARM64/Debian 12 | Web-Now | Claude | — *(starts immediately)* |
+| [#75](https://github.com/jpjerkins/task-guide/issues/75) | 0a · ADR amendments and glossary | Integration | Claude | — |
+| [#76](https://github.com/jpjerkins/task-guide/issues/76) | 0b-1 · Port and signature changes | Integration | Claude | #75 |
+| [#77](https://github.com/jpjerkins/task-guide/issues/77) | 0b-2 · Test-support and test projects | Integration | Claude | #76 |
+| [#72](https://github.com/jpjerkins/task-guide/issues/72) | 0b-3 · `OneOf` retrofit | Integration | Claude | #76 |
+| [#78](https://github.com/jpjerkins/task-guide/issues/78) | 0c · Composition root | Integration | Claude | #77, #72 |
+| [#79](https://github.com/jpjerkins/task-guide/issues/79) | F1 · The two Domain notification rules | Firing | Codex | #76 |
+| [#80](https://github.com/jpjerkins/task-guide/issues/80) | F2 · `TickPlan`, `FireIntent`, `TickPlanner` | Firing | Codex | #78, #79 |
+| [#81](https://github.com/jpjerkins/task-guide/issues/81) | F3 · `TickExecutor` | Firing | Codex | #80 |
+| [#82](https://github.com/jpjerkins/task-guide/issues/82) | F4 · `ITickLoop` and scaffolding removal | Firing | Codex | #81 |
+| [#83](https://github.com/jpjerkins/task-guide/issues/83) | F5 · Carriers and the fallback push | Firing | Codex | #81 |
+| [#84](https://github.com/jpjerkins/task-guide/issues/84) | F6 · Glance scheduling, weather laziness | Firing | Codex | #81, #79 |
+| [#85](https://github.com/jpjerkins/task-guide/issues/85) | A1 · Three Pushover senders, Receipt retry | Adapters | Claude | #77 |
+| [#86](https://github.com/jpjerkins/task-guide/issues/86) | A2 · Weather adapter | Adapters | Claude | #77 |
+| [#87](https://github.com/jpjerkins/task-guide/issues/87) | A3 · Liveness | Adapters | Claude | #77 |
+| [#88](https://github.com/jpjerkins/task-guide/issues/88) | A4 · Glance renderer | Adapters | Claude | #76, #79 |
+| [#89](https://github.com/jpjerkins/task-guide/issues/89) | S1 · Day-template lifecycle | Schedule | Codex | #78 |
+| [#90](https://github.com/jpjerkins/task-guide/issues/90) | S2 · Patterns | Schedule | Codex | #89 |
+| [#91](https://github.com/jpjerkins/task-guide/issues/91) | S3 · Overrides | Schedule | Codex | #89 |
+| [#92](https://github.com/jpjerkins/task-guide/issues/92) | S4 · Windows and Drift | Schedule | Codex | #89 |
+| [#93](https://github.com/jpjerkins/task-guide/issues/93) | S5 · Events and derived obligations | Schedule | Codex | #89 |
+| [#94](https://github.com/jpjerkins/task-guide/issues/94) | C1 · Capture and the Receipt | Capture & Tasks | Codex | #78 |
+| [#95](https://github.com/jpjerkins/task-guide/issues/95) | C2 · Task mutations | Capture & Tasks | Codex | #94 |
+| [#96](https://github.com/jpjerkins/task-guide/issues/96) | C3 · Snooze | Capture & Tasks | Codex | #94 |
+| [#97](https://github.com/jpjerkins/task-guide/issues/97) | C4 · Right-now, triage, dimensions | Capture & Tasks | Codex | #94 |
+| [#98](https://github.com/jpjerkins/task-guide/issues/98) | I1 · `schema.d.ts` regen | Integration | Claude | #95, #96, #97, #84 |
+| [#99](https://github.com/jpjerkins/task-guide/issues/99) | I2 · `schema.d.ts` regen | Integration | Claude | #90, #91, #92, #93 |
+| [#111](https://github.com/jpjerkins/task-guide/issues/111) | 0b-4 · Web shell, client seam, shared controls | Integration | Claude | #77 |
+| [#100](https://github.com/jpjerkins/task-guide/issues/100) | WN0 · Web-Now test list | Web-Now | Claude | #98, #111 |
+| [#101](https://github.com/jpjerkins/task-guide/issues/101) | WN1 · Reminder landing page | Web-Now | Claude | #100 |
+| [#102](https://github.com/jpjerkins/task-guide/issues/102) | WN2 · Task list, detail, triage | Web-Now | Claude | #100 |
+| [#103](https://github.com/jpjerkins/task-guide/issues/103) | WN3 · Quick capture, Right now, day view | Web-Now | Claude | #100 |
+| [#104](https://github.com/jpjerkins/task-guide/issues/104) | WA0 · Web-Authoring test list | Web-Authoring | Claude | #99, #111 |
+| [#105](https://github.com/jpjerkins/task-guide/issues/105) | WA1 · Window and day-template editors | Web-Authoring | Claude | #104 |
+| [#106](https://github.com/jpjerkins/task-guide/issues/106) | WA2 · Pattern editor and switcher | Web-Authoring | Claude | #104 |
+| [#107](https://github.com/jpjerkins/task-guide/issues/107) | WA3 · Override a date | Web-Authoring | Claude | #104 |
+| [#108](https://github.com/jpjerkins/task-guide/issues/108) | WA4 · Event create and overlap | Web-Authoring | Claude | #104 |
+| [#112](https://github.com/jpjerkins/task-guide/issues/112) | WA5 · Read-only dimensions viewer | Web-Authoring | Claude | #104 |
+| [#109](https://github.com/jpjerkins/task-guide/issues/109) | V1 · The E2E suite | Validation | Claude | #74, #84, #88, #101, #102, #103, #106, #107, #108, #112 |
+| [#49](https://github.com/jpjerkins/task-guide/issues/49) | V2 · Restore drill | Validation | Claude | #109 |
+| [#110](https://github.com/jpjerkins/task-guide/issues/110) | V3 · Guided walkthrough → tutorial | Validation | Claude | #109, #49 |
+
+### Added after the plan
+
+Filed during the build, not by #71. Same labels, same rule.
+
+| # | Ticket | Lane | Agent | Blocked by |
+|---|---|---|---|---|
+| [#117](https://github.com/jpjerkins/task-guide/issues/117) | Four latent TestSupport findings | Integration | Claude | — |
+| [#135](https://github.com/jpjerkins/task-guide/issues/135) | I · `schema.d.ts` drift guard | Integration | Claude | — |
+| [#140](https://github.com/jpjerkins/task-guide/issues/140) | Re-port #107, #108, #112 to the prototypes | Web-Authoring | Claude | #112 |
+| [#141](https://github.com/jpjerkins/task-guide/issues/141) | Audit Codex's Web work against the prototypes | Web (both) | Claude | — |
+| [#65](https://github.com/jpjerkins/task-guide/issues/65) | Storage test fidelity and coverage debt | Storage | Claude | — |
+| [#124](https://github.com/jpjerkins/task-guide/issues/124) | The wire carries no Status | Capture & Tasks | Codex | — |
+| [#132](https://github.com/jpjerkins/task-guide/issues/132) | `POST /api/tasks` stores an unsnapped Duration | Capture & Tasks | Codex | #130 |
+| [#136](https://github.com/jpjerkins/task-guide/issues/136) | Omitted `days` 500s the Pattern endpoints | Schedule | Codex | — |
+| [#126](https://github.com/jpjerkins/task-guide/issues/126) | Match preview evaluates derived obligations at now | Rules | Codex | — |
+| [#63](https://github.com/jpjerkins/task-guide/issues/63) | One catchable codec read failure; `/health` readable | Storage | Codex | #66 |
+| [#64](https://github.com/jpjerkins/task-guide/issues/64) | One atomic write path; snapshot prune | Storage | Codex | — |
+
+#140 also blocks #109: the E2E suite exercises the Override rail and range authoring it re-ports.
 
 Carried, outside the wave order: [#73](https://github.com/jpjerkins/task-guide/issues/73) lands inside
 F2; [#50](https://github.com/jpjerkins/task-guide/issues/50) is pulled forward and blocked only by A4;
-[#51](https://github.com/jpjerkins/task-guide/issues/51) closes after V3.
+[#51](https://github.com/jpjerkins/task-guide/issues/51) closed 2026-09-15 — its last box became #74, and its open `/health` finding moved to #63.
