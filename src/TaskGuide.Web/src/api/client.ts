@@ -72,3 +72,11 @@ export async function fetchTasks(): Promise<Task[]> {
 export async function createTask(task: NewTask): Promise<void> {
   await sendJson<TaskResponse>('POST', '/api/tasks', task)
 }
+
+type DimensionResponse = components['schemas']['DimensionResponse']
+export type { DimensionResponse }
+
+export async function fetchDimensions(): Promise<DimensionResponse[]> {
+  const raw = await getJson<DimensionResponse[]>('/api/dimensions')
+  return raw === null ? [] : raw
+}
