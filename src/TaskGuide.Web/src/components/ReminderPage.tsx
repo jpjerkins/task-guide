@@ -79,6 +79,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   const [postponeDate, setPostponeDate] = useState<string | null>(null)
   const [matchingOnBusy, setMatchingOnBusy] = useState(false)
   const [completingId, setCompletingId] = useState<string | null>(null)
+  const [durationBusyId, setDurationBusyId] = useState<string | null>(null)
   const [taskActionNote, setTaskActionNote] = useState<string | null>(null)
 
   const path = `/api/reminders/${date}/${windowId}`
@@ -97,6 +98,15 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     }
   }, [path])
 
+  const loadUnprocessedTask = useCallback(async () => {
+    try {
+      const tasks = await getJson<TaskResponse[]>('/api/tasks?status=unprocessed')
+      setUnprocessedTask(tasks?.[0] ?? null)
+    } catch {
+      setUnprocessedTask(null)
+    }
+  }, [])
+
   useEffect(() => {
     setState({ status: 'loading' })
     reload()
@@ -113,13 +123,10 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       setUnprocessedTask(null)
       return
     }
-    getJson<TaskResponse[]>('/api/tasks?status=unprocessed')
-      .then((tasks) => setUnprocessedTask(tasks?.[0] ?? null))
-      .catch(() => setUnprocessedTask(null))
+    loadUnprocessedTask()
     // Only the ready-ness and the count gate this fetch; re-running it on every unrelated
     // re-read (e.g. after a Snooze) would be wasted traffic for a list that didn't change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status === 'ready' ? state.page.footer.toProcess : 0])
+  }, [state.status === 'ready' ? state.page.footer.toProcess : 0, loadUnprocessedTask])
 
   if (state.status === 'loading') {
     return (
@@ -178,6 +185,24 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     setPostponeOpenId(null)
     setPostponeDate(null)
     await reload()
+  }
+
+  async function handleDuration(taskId: string, duration: string) {
+    setTaskActionNote(null)
+    setDurationBusyId(taskId)
+    const finishDuration = async () => {
+      await reload()
+      await loadUnprocessedTask()
+      setDurationBusyId(null)
+    }
+    try {
+      await sendJson('PUT', `/api/tasks/${taskId}/duration`, { duration })
+    } catch {
+      await finishDuration()
+      setTaskActionNote("Couldn't set this task's duration.")
+      return
+    }
+    await finishDuration()
   }
 
   async function handleSnooze(interval: number) {
@@ -348,7 +373,12 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
               <div className="title">{unprocessedTask.title}</div>
               <div className="meta">
                 {UNPROCESSED_BUCKETS.map((b) => (
-                  <button key={b} className="pill dur" disabled>
+                  <button
+                    key={b}
+                    className="pill dur"
+                    disabled={durationBusyId === unprocessedTask.id}
+                    onClick={() => handleDuration(unprocessedTask.id, b)}
+                  >
                     {durLabel(b)}
                   </button>
                 ))}
