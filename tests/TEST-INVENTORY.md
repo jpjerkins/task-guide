@@ -395,6 +395,12 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - **it offers no Snooze at all** — not a disabled one
 - a non-runway windowless day fires nothing
 
+### Reminder landing URL and route contract
+
+- a Window fire landing URL contains its date and Window identity
+- a fallback fire landing URL uses the literal `fallback` identity
+- an unknown Window identity is preserved in the landing URL
+
 ### Schedule authoring
 
 - an Event write precedes its generated Override write
@@ -1215,6 +1221,9 @@ specified under **Shared controls** above and are not restated here.
 #### Reminder landing page
 
 - the page renders the Window's own name, span and date — it is not a re-render of the push's text
+- cold-loading a per-fire URL renders `ReminderPage` with its date and literal Window-or-fallback identity
+- a malformed route is not treated as a Reminder route
+- an unknown Window route is not silently treated as the fallback route
 - **all** matches render, not the push's shortlist of three; the push is deliberately not at parity
   with the page
 - a Window that matched nothing renders "Nothing fits" rather than an empty list, and the empty

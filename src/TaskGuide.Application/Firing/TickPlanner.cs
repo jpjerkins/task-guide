@@ -79,29 +79,31 @@ public sealed class TickPlanner(
             var ranked = Rank(matches, counter, now, fetched, failedFetches);
             FireIntentKind kind = unconditional ? new UnconditionalFire() : new WindowFire(resolved);
             var dayBoundary = _boundary.EndOf(date);
+            var fireRow = new FireRow(
+                window.Id,
+                unconditional ? FireKind.Unconditional : FireKind.Window,
+                window.Name,
+                window.Start,
+                window.End,
+                DueAt: null,
+                FiredAt: null,
+                Matched: ranked.Count,
+                Carried: unconditional ? carrier?.Id : null);
+            var landingPage = LandingPageUrl.For(_landingPage, date, fireRow);
             intents.Add(new FireIntent(
                 kind,
                 ranked,
                 ranked.Count > 0
-                    ? ReminderComposer.Compose(kind, ranked, events, footer, failedFetches, _landingPage,
+                    ? ReminderComposer.Compose(kind, ranked, events, footer, failedFetches, landingPage,
                         TimeToLivePolicy.For(kind, dayBoundary))
                     : Fallback.Intent(
                         carrier ?? throw new InvalidOperationException("An unconditional fire requires a carrier Event."),
                         events,
                         footer,
                         failedFetches,
-                        _landingPage,
+                        landingPage,
                         dayBoundary).Reminder,
-                new FireRow(
-                    window.Id,
-                    unconditional ? FireKind.Unconditional : FireKind.Window,
-                    window.Name,
-                    window.Start,
-                    window.End,
-                    DueAt: null,
-                    FiredAt: null,
-                    Matched: ranked.Count,
-                    Carried: unconditional ? carrier?.Id : null)));
+                fireRow));
 
             carried |= unconditional;
         }
@@ -109,7 +111,14 @@ public sealed class TickPlanner(
         if (carrier is { } fallbackCarrier
             && Fallback.IsDue(fallbackCarrier, shape.Windows, dayFires, now, _resolution, _boundary))
         {
-            intents.Add(Fallback.Intent(fallbackCarrier, events, footer, failedFetches, _landingPage, _boundary.EndOf(date)));
+            var fallbackRow = new FireRow(null, FireKind.Fallback, null, null, null, null, null, null, fallbackCarrier.Id);
+            intents.Add(Fallback.Intent(
+                fallbackCarrier,
+                events,
+                footer,
+                failedFetches,
+                LandingPageUrl.For(_landingPage, date, fallbackRow),
+                _boundary.EndOf(date)));
         }
 
         return new TickPlan(intents.ToArray(), Glance(view, tasks, date, shape, now, fetched, failedFetches));

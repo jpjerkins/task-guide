@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { registerQuickAction, registerScreen, resetRegistry } from './components/shared/screenRegistry'
 import { ScreenNav } from './components/shared/ScreenNav'
@@ -11,6 +11,11 @@ import { ScreenNav } from './components/shared/ScreenNav'
 // directly and asserts on its registration before resetting anything.
 beforeEach(() => {
   resetRegistry()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  window.history.replaceState({}, '', '/')
 })
 
 function goTo(tabLabel: string) {
@@ -35,6 +40,19 @@ function registerTwoScheduleScreens() {
 }
 
 describe('App', () => {
+  it.each([
+    ['/2026-09-13/w_evening', '/api/reminders/2026-09-13/w_evening'],
+    ['/2026-09-13/fallback', '/api/reminders/2026-09-13/fallback'],
+  ])('cold-loads %s into ReminderPage with its route identity', async (route, apiPath) => {
+    window.history.replaceState({}, '', route)
+    const fetchMock = vi.fn(async () => new Response(null, { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(apiPath))
+  })
+
   it('renders the placeholder for a tab with no registered screen', () => {
     render(<App />)
 

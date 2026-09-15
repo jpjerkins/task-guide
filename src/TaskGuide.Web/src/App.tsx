@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { PlaceholderScreen } from './components/PlaceholderScreen'
+import { ReminderPage } from './components/ReminderPage'
 import { TabBar, type Tab } from './components/TabBar'
 import { installHmrGuard, screensFor } from './components/shared/screenRegistry'
 import { BackProvider, ScreenNav } from './components/shared/ScreenNav'
+import { parseReminderRoute } from './reminderRoute'
 
 // Each file under ./screens registers itself as a module side effect (registerScreen). This is
 // the ONLY place that needs to know the directory exists — a new Web ticket adds its own
@@ -24,6 +26,15 @@ const TAB_TITLES: Record<Tab, string> = {
 export default function App() {
   const [tab, setTab] = useState<Tab>('tasks')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const reminderRoute = parseReminderRoute(window.location.pathname)
+
+  if (reminderRoute) {
+    return (
+      <div className="device">
+        <ReminderPage date={reminderRoute.date} windowId={reminderRoute.windowId} />
+      </div>
+    )
+  }
 
   const screens = screensFor(tab)
 

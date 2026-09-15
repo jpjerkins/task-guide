@@ -39,6 +39,7 @@ public sealed class TickPlannerTests
         Assert.Equal([task], intent.Shortlist);
         var reminder = Assert.IsType<Reminder>(typeof(FireIntent).GetProperty("Reminder")?.GetValue(intent));
         Assert.Equal(resolved.End, reminder.TimeToLive);
+        Assert.Equal(new Uri("https://not-the-real-host.invalid/2026-09-05/w_morning"), reminder.LandingPage);
         var glance = Assert.IsType<GlanceState>(plan.Glance);
         var inside = Assert.IsType<InsideWindow>(glance.Shape.Value);
         Assert.Equal(window.Id, inside.Window.Window.Id);
