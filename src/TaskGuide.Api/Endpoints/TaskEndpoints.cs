@@ -13,7 +13,7 @@ using TaskGuide.Domain.Tasks;
 namespace TaskGuide.Api.Endpoints;
 
 /// <summary>
-/// Task list (+ status filters), task detail, and the two reactive gestures.
+/// Task list (+ status filters), task detail, and reactive gestures.
 /// Standing requirement: <b>everything doable via the API must also be doable through the UI.</b>
 /// </summary>
 public static class TaskEndpoints
@@ -115,6 +115,19 @@ public static class TaskEndpoints
                 _ => TypedResults.NoContent(),
                 refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
+        tasks.MapPut("/{id}/duration", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (string id, SetTaskDurationRequest request, IStore store, CancellationToken ct) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
+            }
+
+            var result = await new SetTaskDuration(store).ExecuteAsync(new TaskId(id), request.Duration, ct);
+            return result.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
+                _ => TypedResults.NoContent(),
+                invalid => TypedResults.BadRequest<object>(new { error = invalid.Reason }),
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
+        });
         tasks.MapDelete("/{id}", (string id) => Results.NoContent());
 
         // The only authored completion fact. Refused on an `Unprocessed` Task — there is nothing
@@ -211,6 +224,9 @@ public sealed record TaskResponse(string Id, string Title, string? Duration, Dat
 public sealed record PostponeTaskRequest(DateOnly Date);
 
 public sealed record DeferTaskRequest(DateOnly? Date, int? Offset, OffsetUnit? Unit);
+
+/// <summary>The canonical Duration bucket to author on an existing Task.</summary>
+public sealed record SetTaskDurationRequest(string? Duration);
 
 /// <summary>A logging-category marker — <see cref="TaskEndpoints"/> is static and can't be used as one directly.</summary>
 public sealed class TaskEndpointsLogCategory;

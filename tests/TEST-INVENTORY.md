@@ -1379,3 +1379,15 @@ specified under **Shared controls** above and are not restated here.
 - an ordinal slider commits its least value from the keyboard alone, and a press of "leave at the
   default" released over the slider does not commit one
 - authoring an Override over a range from the rail's escape writes the whole span
+
+## Duration repair command — #138
+
+- Supplying a bucket repairs missing Duration
+- Invalid Duration is refused without changing the store
+- Missing or derived Tasks are refused without changing the store
+- Setting Duration replaces only that dimension and preserves all other task/store data
+- Setting the same Duration bucket twice succeeds idempotently
+- Setting Duration transitions derived Status from Unprocessed to Active without persisting Status
+- `PUT /api/tasks/{id}/duration` accepts the five canonical buckets and returns 204
+- `PUT /api/tasks/{id}/duration` rejects malformed/invalid input with 400 and refuses absent/derived Tasks with 409
+- OpenAPI declares the Duration request DTO and 204/400/409 route outcomes

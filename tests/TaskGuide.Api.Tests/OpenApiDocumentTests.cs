@@ -125,6 +125,23 @@ public sealed class OpenApiDocumentTests : IDisposable
     }
 
     [Fact]
+    public async Task PUT_api_tasks_id_duration_declares_request_and_204_400_409_outcomes()
+    {
+        var doc = await GetDocumentAsync();
+        var operation = doc.GetProperty("paths").GetProperty("/api/tasks/{id}/duration").GetProperty("put");
+        var responses = operation.GetProperty("responses");
+
+        Assert.True(responses.TryGetProperty("204", out _));
+        Assert.True(responses.TryGetProperty("400", out _));
+        Assert.True(responses.TryGetProperty("409", out _));
+        Assert.False(responses.TryGetProperty("200", out _));
+
+        var requestSchema = operation.GetProperty("requestBody").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
+        Assert.Equal("#/components/schemas/SetTaskDurationRequest", requestSchema);
+    }
+
+    [Fact]
     public async Task Day_template_lifecycle_responses_are_typed_for_SPA_generation()
     {
         var doc = await GetDocumentAsync();

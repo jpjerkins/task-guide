@@ -15,9 +15,9 @@ using Xunit;
 namespace TaskGuide.Api.Tests;
 
 /// <summary>
-/// The walking skeleton's slice (#51): a Task is a title and a Duration. Only
-/// <c>POST /api/tasks</c> and <c>GET /api/tasks</c> are real — every other Task endpoint still
-/// returns 204 and is out of scope here.
+/// The walking skeleton's slice (#51): a Task is a title and a Duration. The walking skeleton's
+/// <c>POST /api/tasks</c> and <c>GET /api/tasks</c>, plus the #138 Duration repair route, are real;
+/// the remaining Task endpoints are outside this fixture's scope.
 /// </summary>
 /// <remarks>
 /// <c>Program.cs</c> reads <c>Storage:DataDir</c> from configuration on the line before
