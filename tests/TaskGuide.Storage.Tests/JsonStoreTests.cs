@@ -354,7 +354,7 @@ public sealed class JsonStoreTests : IDisposable
         // The whole store loads at startup per IStore's memory-authoritative contract — a bad
         // tasks.json must refuse to start (plan → apply → open), not surface as a failure on the
         // first request that happens to touch the store.
-        Assert.ThrowsAny<JsonException>(() => new JsonStore(_dataDir));
+        Assert.Throws<BadStoreFileException>(() => new JsonStore(_dataDir));
     }
 
     [Fact]
@@ -382,7 +382,7 @@ public sealed class JsonStoreTests : IDisposable
 
         // Extends the tasks.json-only rule above to every collection: a bad day-templates.json
         // must refuse to start too, not surface on the first request that happens to touch it.
-        Assert.ThrowsAny<JsonException>(() => new JsonStore(_dataDir));
+        Assert.Throws<BadStoreFileException>(() => new JsonStore(_dataDir));
     }
 
     private static TaskItem NewTask(string id, string title) =>

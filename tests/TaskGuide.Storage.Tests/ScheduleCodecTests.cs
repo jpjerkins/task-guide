@@ -83,7 +83,7 @@ public sealed class ScheduleCodecTests
                   "days": ["dt_01ARZ3NDEKTSV4RRFFQ69G5G00", "dt_01ARZ3NDEKTSV4RRFFQ69G5G00"] }] }
             """;
 
-        var ex = Assert.Throws<JsonException>(() => PatternCodec.Read(json));
+        var ex = Assert.Throws<BadStoreFileException>(() => PatternCodec.Read(json));
         Assert.Contains("Broken", ex.Message);
     }
 

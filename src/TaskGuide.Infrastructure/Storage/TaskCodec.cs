@@ -15,6 +15,16 @@ public static class TaskCodec
 
     public static IReadOnlyList<TaskItem> Read(string json)
     {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "tasks.json",
+            "each Task record must satisfy the tasks.json schema",
+            () => ReadCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
+
+    private static IReadOnlyList<TaskItem> ReadCore(string json, Action<string> identify)
+    {
         using var document = JsonDocument.Parse(json);
 
         var tasks = new List<TaskItem>();
@@ -22,6 +32,7 @@ public static class TaskCodec
         foreach (var element in document.RootElement.EnumerateArray())
         {
             var id = new TaskId(element.GetProperty("id").GetString()!);
+            identify(id.Value);
 
             var task = new TaskItem(
                 id,

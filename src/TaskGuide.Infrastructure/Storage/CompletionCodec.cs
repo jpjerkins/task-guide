@@ -15,7 +15,14 @@ public static class CompletionCodec
     /// <summary>
     /// `completions/&lt;taskId&gt;.json` - the id comes from the filename, not the file.
     /// </summary>
-    public static CompletionLog Read(TaskId taskId, string json)
+    public static CompletionLog Read(TaskId taskId, string json) =>
+        StoreCodecBoundary.Read(
+            $"completions/{FileNameFor(taskId)}",
+            "each Task completion must satisfy the completion log schema",
+            () => ReadCore(taskId, json),
+            () => taskId.Value);
+
+    private static CompletionLog ReadCore(TaskId taskId, string json)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -44,7 +51,10 @@ public static class CompletionCodec
     }
 
     /// <summary>`completions/derived.json`.</summary>
-    public static IReadOnlyList<DerivedCompletionEntry> ReadDerived(string json)
+    public static IReadOnlyList<DerivedCompletionEntry> ReadDerived(string json) =>
+        StoreCodecBoundary.Read("completions/derived.json", "each derived completion must satisfy the derived completion schema", () => ReadDerivedCore(json));
+
+    private static IReadOnlyList<DerivedCompletionEntry> ReadDerivedCore(string json)
     {
         using var document = JsonDocument.Parse(json);
 

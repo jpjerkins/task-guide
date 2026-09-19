@@ -89,6 +89,50 @@ public sealed class HealthReporterTests : IDisposable
     }
 
     [Fact]
+    public void Read_health_parses_the_file_a_structurally_invalid_tasks_json_reports_unreadable()
+    {
+        var store = new JsonStore(_dataDir);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
+        File.WriteAllText(Path.Combine(_dataDir, "tasks.json"), """[ { "id": "t_1" } ]""");
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
+
+        HealthReport? report = null;
+        var exception = Record.Exception(() => report = reporter.Current());
+
+        Assert.Null(exception);
+        Assert.NotNull(report);
+        Assert.False(report.Storage.Readable);
+        Assert.False(report.Ok);
+    }
+
+    [Fact]
+    public void Read_health_an_io_failure_reports_unreadable()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        var store = new JsonStore(_dataDir);
+        var heartbeat = new TickHeartbeat();
+        var reporter = new HealthReporter(store, heartbeat, _dataDir);
+        var tasksPath = Path.Combine(_dataDir, "tasks.json");
+        File.WriteAllText(tasksPath, "[]");
+        Chmod(tasksPath, 0);
+        heartbeat.RecordTick(DateTimeOffset.UtcNow);
+
+        try
+        {
+            var report = reporter.Current();
+
+            Assert.False(report.Storage.Readable);
+            Assert.False(report.Ok);
+        }
+        finally
+        {
+            Chmod(tasksPath, 0b110_100_100); // 644
+        }
+    }
+
+    [Fact]
     public void Writable_is_null_and_does_not_force_ok_false_before_any_write_has_happened()
     {
         var store = new JsonStore(_dataDir);

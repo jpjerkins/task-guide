@@ -12,7 +12,10 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </summary>
 public static class DayTemplateCodec
 {
-    public static IReadOnlyList<DayTemplate> Read(string json)
+    public static IReadOnlyList<DayTemplate> Read(string json) =>
+        StoreCodecBoundary.Read("day-templates.json", "each Day template must satisfy the day-templates.json schema", () => ReadCore(json));
+
+    private static IReadOnlyList<DayTemplate> ReadCore(string json)
     {
         using var document = JsonDocument.Parse(json);
 

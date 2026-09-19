@@ -531,6 +531,10 @@ section.
 - a stalled loop reports `ok: false` while HTTP still answers
 - **read health parses the file** — a truncated or empty file reports unreadable where `stat` would
   have passed
+- **read health parses the file** — a structurally invalid `tasks.json` reports unreadable rather
+  than escaping from `/health` (#63)
+- **read health** — an I/O failure reading `tasks.json` reports unreadable rather than escaping
+  from `/health` (#63)
 - write health is read off the retention sweep's outcome, not a probe
 - a registry collision signals outbound before exiting
 - load, memory and Pushover reachability appear nowhere in the predicate
@@ -638,6 +642,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 
 - the whole store loads into typed objects at startup
 - every read is served from memory
+- every codec read failure arrives as one catchable type, naming the file and violated invariant;
+  a known record identity is structured separately from the message (ADR-0010c, #63)
 - **a mutation writes the affected file(s) before the request returns**
 - a write is atomic: a killed process leaves the old file or the new one, never a partial
 - one global write lock serialises mutations

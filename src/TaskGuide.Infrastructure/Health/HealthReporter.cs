@@ -1,4 +1,3 @@
-using System.Text.Json;
 using TaskGuide.Application.Ports;
 using TaskGuide.Infrastructure.Storage;
 
@@ -57,7 +56,7 @@ public sealed class HealthReporter(IStore store, TickHeartbeat heartbeat, string
             TaskCodec.Read(File.ReadAllText(_tasksPath));
             return true;
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is BadStoreFileException or IOException or UnauthorizedAccessException)
         {
             return false;
         }

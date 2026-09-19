@@ -17,7 +17,10 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </remarks>
 public static class EventCodec
 {
-    public static IReadOnlyList<Event> Read(string json)
+    public static IReadOnlyList<Event> Read(string json) =>
+        StoreCodecBoundary.Read("events.json", "each Event must satisfy the events.json schema", () => ReadCore(json));
+
+    private static IReadOnlyList<Event> ReadCore(string json)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -62,7 +65,10 @@ public static class EventCodec
         writer.WriteEndArray();
     }
 
-    public static IReadOnlyList<EventException> ReadExceptions(string json)
+    public static IReadOnlyList<EventException> ReadExceptions(string json) =>
+        StoreCodecBoundary.Read("event-exceptions.json", "each Event exception must satisfy the event-exceptions.json schema", () => ReadExceptionsCore(json));
+
+    private static IReadOnlyList<EventException> ReadExceptionsCore(string json)
     {
         using var document = JsonDocument.Parse(json);
 

@@ -13,12 +13,15 @@ public static class ManifestCodec
     public const int CurrentVersion = 1;
 
     /// <summary>
-    /// Throws <see cref="JsonException"/> if <paramref name="json"/> is not a JSON object, or has
+    /// Throws <see cref="BadStoreFileException"/> if <paramref name="json"/> is not a JSON object, or has
     /// no `version` property, or `version` is not an integer. A manifest this can't make sense of
     /// is exactly the case a Snapshot exists to have already copied faithfully, so this refuses
     /// rather than guessing.
     /// </summary>
-    public static int Read(string json)
+    public static int Read(string json) =>
+        StoreCodecBoundary.Read("manifest.json", "manifest.json must contain an integer version", () => ReadCore(json));
+
+    private static int ReadCore(string json)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;

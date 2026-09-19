@@ -15,7 +15,14 @@ public static class FireCodec
     private const string FileDateFormat = "yyyy-MM-dd";
 
     /// <summary>`fires/&lt;date&gt;.json` - the date comes from the filename.</summary>
-    public static DayFires Read(DateOnly date, string json)
+    public static DayFires Read(DateOnly date, string json) =>
+        StoreCodecBoundary.Read(
+            $"fires/{FileNameFor(date)}",
+            "each Fire row must satisfy the Fire log schema",
+            () => ReadCore(date, json),
+            () => date.ToString(FileDateFormat));
+
+    private static DayFires ReadCore(DateOnly date, string json)
     {
         using var document = JsonDocument.Parse(json);
 

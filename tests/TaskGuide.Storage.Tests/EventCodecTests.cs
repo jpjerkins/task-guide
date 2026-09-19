@@ -96,7 +96,7 @@ public sealed class EventCodecTests
             ]
             """;
 
-        var ex = Assert.Throws<JsonException>(() => EventCodec.ReadExceptions(json));
+        var ex = Assert.Throws<BadStoreFileException>(() => EventCodec.ReadExceptions(json));
         Assert.Contains("2026-08-18", ex.Message);
     }
 
@@ -112,7 +112,7 @@ public sealed class EventCodecTests
             ]
             """;
 
-        var ex = Assert.Throws<JsonException>(() => EventCodec.ReadExceptions(json));
+        var ex = Assert.Throws<BadStoreFileException>(() => EventCodec.ReadExceptions(json));
         Assert.Contains("2026-08-18", ex.Message);
         Assert.Contains("ep_01ARZ3NDEKTSV4RRFFQ69G5J00", ex.Message);
     }

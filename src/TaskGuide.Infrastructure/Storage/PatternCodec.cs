@@ -18,7 +18,10 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </remarks>
 public static class PatternCodec
 {
-    public static PatternBook Read(string json)
+    public static PatternBook Read(string json) =>
+        StoreCodecBoundary.Read("patterns.json", "the Pattern book must satisfy the patterns.json schema", () => ReadCore(json));
+
+    private static PatternBook ReadCore(string json)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;

@@ -127,7 +127,7 @@ public sealed class CompletionCodecTests
             ]
             """;
 
-        var ex = Assert.Throws<JsonException>(() => CompletionCodec.ReadDerived(json));
+        var ex = Assert.Throws<BadStoreFileException>(() => CompletionCodec.ReadDerived(json));
         Assert.Contains("absence", ex.Message);
         Assert.Contains("evt_01ARZ3NDEKTSV4RRFFQ69G5M01", ex.Message);
         Assert.Contains("2026-09-27", ex.Message);

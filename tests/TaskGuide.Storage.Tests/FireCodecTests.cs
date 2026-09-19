@@ -69,7 +69,7 @@ public sealed class FireCodecTests
             ]
             """;
 
-        var ex = Assert.Throws<JsonException>(() => FireCodec.Read(new DateOnly(2026, 8, 15), json));
+        var ex = Assert.Throws<BadStoreFileException>(() => FireCodec.Read(new DateOnly(2026, 8, 15), json));
         Assert.Contains("2026-08-15", ex.Message);
         Assert.Contains("fallback", ex.Message);
         Assert.Contains("null", ex.Message);
@@ -110,7 +110,7 @@ public sealed class FireCodecTests
             ]
             """;
 
-        var ex = Assert.Throws<JsonException>(() => FireCodec.Read(new DateOnly(2026, 8, 15), json));
+        var ex = Assert.Throws<BadStoreFileException>(() => FireCodec.Read(new DateOnly(2026, 8, 15), json));
         Assert.Contains("2026-08-15", ex.Message);
         Assert.Contains("w_01ARZ3NDEKTSV4RRFFQ69G5H02", ex.Message);
         Assert.Contains("window", ex.Message);

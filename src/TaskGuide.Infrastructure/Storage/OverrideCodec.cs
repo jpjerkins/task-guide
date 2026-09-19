@@ -13,7 +13,10 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </summary>
 public static class OverrideCodec
 {
-    public static IReadOnlyList<DateOverride> Read(string json)
+    public static IReadOnlyList<DateOverride> Read(string json) =>
+        StoreCodecBoundary.Read("overrides.json", "each date Override must satisfy the overrides.json schema", () => ReadCore(json));
+
+    private static IReadOnlyList<DateOverride> ReadCore(string json)
     {
         using var document = JsonDocument.Parse(json);
 
