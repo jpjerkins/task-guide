@@ -71,7 +71,8 @@ function ShapeRow({ template, view, busy, onPick }: { template: Template; view: 
 
 export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationError }: {
   date: string; onCancel: () => void
-  onStamp: (templateId: string, span: { from: string; to: string } | null) => Promise<void>
+  // A null templateId is the wire's blank-the-dates arm, not "leave them alone" — see the row below.
+  onStamp: (templateId: string | null, span: { from: string; to: string } | null) => Promise<void>
   busy: boolean
   mutationError?: string
 }) {
@@ -125,6 +126,19 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
     <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
     {invalidRange && <div className="note" role="alert">Choose a start and end date; the end must not precede the start.</div>}
     {error && <div className="note" role="alert">{error}</div>}
+    {inRange && <>
+      {/* The span endpoint's only null-template arm writes `new DateOverride(date, [], null)` —
+          a zero-window Override, which wins over the Pattern because DayShape is
+          `Override[date] ?? Pattern[weekday]`. So this row blanks the dates, and its copy has to
+          say exactly that: an earlier wording ("keep each date's own shape ... without changing
+          what is on it") promised the opposite of what it did. #144 tracks the real freeze mode. */}
+      <div className="sec-h">Clear the span</div>
+      <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span)}>
+        <span className="who">
+          <span className="nm">Blank every date in the span<span className="pill due">destructive</span></span>
+          <span className="sub2">every window on those dates is removed and nothing will fire on them</span>
+        </span></button></div>
+    </>}
     {groups.map(group => {
       const withTog = !toggleShown
       toggleShown = true

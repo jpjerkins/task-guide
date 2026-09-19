@@ -68,7 +68,9 @@ export function OverrideScreen() {
     } catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
   }
-  async function stamp(templateId: string, span: { from: string; to: string } | null) {
+  // null is the wire's blank-the-dates arm (the stamp sheet's "Blank every date in the span"),
+  // not "leave them alone" — CreateOverrideSpan maps it to a zero-window Override.
+  async function stamp(templateId: string | null, span: { from: string; to: string } | null) {
     setBusy(true)
     setError('')
     try {

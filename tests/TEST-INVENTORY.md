@@ -1111,10 +1111,9 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - the date-range override is a **scope on the stamp picker** (#140 §1 surface B2), not a second
   sheet or a second verb: `OverrideStampSheet` carries a `This date` / `A range…` `.modebar`, and
   `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, swaps
-  the sheet's title and opening note to name the span. It originally also added a "Leave them as
-  they are" / "Keep each date's own shape" row above the season groups (`onStamp(null, span)`);
-  removed by #140 review finding 1, recorded below — it stamped a zero-window Override instead of
-  the per-date preservation its copy promised
+  the sheet's title and opening note to name the span. Range scope also offers one non-template row,
+  **"Blank every date in the span"** under a `Clear the span` heading (`onStamp(null, span)`) —
+  see the finding-1 paragraph below for why its wording is load-bearing
 - stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
   sends one clobber-check-then-POST span write — `{ from, to, templateId }`, `from === to` for a
   single date — never the old per-date `PUT .../stamp`
@@ -1145,10 +1144,12 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 **#140 review finding 4**: the untouched-dates sentence pluralized `n` but not `untouched` —
 `untouched === 1` still rendered "The other 1 dates are following the pattern". Now singular at
 `untouched === 1`, matching the title's existing `n === 1` handling. Separately: the note's "will
-be copied off it" and the button's "stamp all {span}" were only false on the null-template path
-(finding 1's now-deleted "Keep each date's own shape" row); with that row gone, every remaining
-path stamps a real template, so both phrases are true in every case this component can now reach —
-checked, no further wording change needed.
+be copied off it" and the button's "stamp all {span}" are false on the null-template path — the
+blank-the-span row — where nothing is stamped and the untouched dates are cleared rather than
+copied off the Pattern. `useOverrideConfirmation` is not told which arm it is confirming, so this
+remains a known inaccuracy on that one path, narrowed to a row that now announces itself as
+destructive. Closing it properly means passing the arm into `confirm`, and is better done together
+with #144, which changes what the arms are.
 
 **Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
 `clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
@@ -1277,14 +1278,24 @@ sheet, one list, one button, matching the prototype's rejection of B1 in favor o
 `.sec-h.with-tog` line, and its stale open-only handler (`() => setEscapeOpen(true)`, which could
 never close) is fixed as part of the port, not a separate bug ticket.
 
-**#140 review finding 1**: the range scope's "Keep each date's own shape" row (`onStamp(null,
-span)`) is removed, not relabelled. Server-side that reached `CreateOverrideSpan`'s null-template
-arm — `new DateOverride(date, [], null)` — a zero-window Override, so the row actually blanked
-every date in the span rather than detaching it "without changing what is on it". The span
-endpoint takes one template, not per-date windows, so there is no Web-side way to keep each date's
-own shape without breaking #140's one-check-one-POST invariant; #144 tracks the missing
-freeze-this-span server mode. The range scope now offers only real shapes, and `onStamp`'s
-`templateId` is non-nullable.
+**#140 review finding 1 — the row's wording is the whole safeguard.** It first read "Keep each
+date's own shape / detaches every date from the pattern without changing what is on it", which was
+the **opposite** of what it did. `DayShape` is `Override[date] ?? Pattern[weekday]` — the coalesce
+is on whether an Override *exists*, not on whether it has content — and `onStamp(null, span)`
+reaches `CreateOverrideSpan`'s null arm, `new DateOverride(date, [], null)`. A zero-window Override
+wins over the Pattern, so the row blanked every date in the span and nothing fired on them
+afterwards; recovery is per date.
+
+The row is **kept, with wording that matches the write**: "Blank every date in the span /
+every window on those dates is removed and nothing will fire on them", a `.pill.due` destructive
+marker, and a `Clear the span` heading separating it from the shapes. Blanking a span is a real
+thing to want (a week away), so the feature stays; only the lie goes. A test asserts the row's text
+contains the removal wording **and matches none of** `keep|preserv|without changing|own shape`, so
+the promise cannot creep back.
+
+There is still no way to *preserve* each date's shape across a span: the endpoint takes one
+template, not per-date windows, and fanning out per date would break this ticket's
+one-check-one-POST invariant. **#144** tracks that missing freeze-this-span server mode.
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 

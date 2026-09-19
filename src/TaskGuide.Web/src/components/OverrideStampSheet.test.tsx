@@ -210,7 +210,7 @@ it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switchin
 // date in the span, not the "detaches without changing what is on it" the copy promised. There is
 // no per-date-preserving mode on the span endpoint (#144 tracks adding one), so the row is gone
 // rather than relabelled, and no row in range scope may ever pass a null template.
-it('range_scope_offers_no_row_that_can_send_a_null_template', async () => {
+it('the_range_scope_offers_a_blank_every_date_row_whose_wording_matches_what_the_write_actually_does', async () => {
   stub(patterns([christmas.id]))
   const onStamp = vi.fn(async () => {})
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
@@ -218,10 +218,24 @@ it('range_scope_offers_no_row_that_can_send_a_null_template', async () => {
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
   await screen.findByRole('button', { name: /Christmas/ })
-  expect(screen.queryByText('Leave them as they are')).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /Keep each date's own shape/ })).not.toBeInTheDocument()
-  for (const button of screen.getAllByRole('button')) fireEvent.click(button)
-  expect(onStamp).not.toHaveBeenCalledWith(null, expect.anything())
+
+  // The wire has one null-template arm and it BLANKS the dates (CreateOverrideSpan ->
+  // new DateOverride(date, [], null)). The row is allowed to exist only while it says so: no
+  // wording here may promise that anything is preserved. #144 tracks the real "freeze" mode.
+  const row = screen.getByRole('button', { name: /Blank every date in the span/ })
+  expect(row).toHaveTextContent('every window on those dates is removed and nothing will fire on them')
+  expect(row.textContent).not.toMatch(/keep|preserv|without changing|own shape/i)
+  expect(screen.getByText('Clear the span')).toBeInTheDocument()
+
+  fireEvent.click(row)
+  expect(onStamp).toHaveBeenCalledWith(null, { from: '2026-12-24', to: '2026-12-28' })
+})
+
+it('the_blank_every_date_row_is_offered_only_in_range_scope', async () => {
+  stub(patterns([christmas.id]))
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  await screen.findByRole('button', { name: /Christmas/ })
+  expect(screen.queryByRole('button', { name: /Blank every date/ })).not.toBeInTheDocument()
 })
 
 it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
