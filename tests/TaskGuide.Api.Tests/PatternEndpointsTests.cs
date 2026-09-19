@@ -124,6 +124,44 @@ public sealed class PatternEndpointsTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task POST_api_patterns_projects_active_false_for_a_new_Pattern()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/patterns",
+            new
+            {
+                name = "New pattern",
+                days = Enumerable.Repeat("dt_01ARZ3NDEKTSV4RRFFQ69G5FAV", 7),
+            });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("active").GetBoolean());
+    }
+
+    [Fact]
+    public async Task PATCH_api_patterns_id_projects_active_true_for_the_active_Pattern()
+    {
+        var template = new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Template", [], []);
+        var active = Pattern("p_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Active", template.Id);
+        await WriteAsync(
+            new DayTemplatesWrite([template]),
+            new PatternsWrite(new PatternBook(active.Id, [active])));
+
+        var response = await _client.PatchAsJsonAsync(
+            $"/api/patterns/{active.Id.Value}",
+            new
+            {
+                name = "Renamed active",
+                days = Enumerable.Repeat(template.Id.Value, 7),
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("active").GetBoolean());
+    }
+
     private async Task WriteAsync(params object[] writes)
     {
         var store = _factory.Services.GetRequiredService<IStore>();

@@ -826,6 +826,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/patterns marks exactly one Pattern as active`
 - `POST /api/patterns` with a nonblank `name` and omitted `days` returns 400
 - `PATCH /api/patterns/{id}` with a nonblank `name` and omitted `days` returns 400
+- `POST /api/patterns projects active false for a new Pattern`
+- `PATCH /api/patterns/{id} projects active true for the active Pattern`
 - `PUT /api/overrides/{date}/stamp` copies the template's shape and **preserves each Window's id**
 - `PUT /api/overrides/{date}/stamp` is refused for an unknown template id
 - `POST /api/overrides/{date}/promote` writes a new Day template and **does not re-link** the source
