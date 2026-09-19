@@ -1195,7 +1195,11 @@ checked, no further wording change needed.
   a departure. No option repeats `— {window.name}` in its label — see the `.sec-h` line above for
   how two windows' groups are told apart instead
 - the closing note carries the *move the end time to `{hm}` or later and the split disappears*
-  clause, computed from the first overlapping window, in addition to the one-off-day sentence
+  clause, computed from the first overlapping window, in addition to the one-off-day sentence —
+  **only when `split` is actually one of that window's offered options** (#140 review finding 6):
+  an event starting at or before the first overlapping window's start (`optionsFor` never offers
+  `split` there) omits the clause entirely rather than naming a split nobody was offered; the
+  one-off-day sentence itself stays unconditional
 - the sheet's date text (`When — …`, both notes) renders through `fmtShort`, not a local formatter
 - the time row and each option's description render **unstyled** — `index.css` has no class for
   either, and this sheet does not add one or inline a style. Blocked on **#142** (`.timerow`,

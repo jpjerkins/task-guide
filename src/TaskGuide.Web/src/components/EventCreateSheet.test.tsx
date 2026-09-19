@@ -62,7 +62,11 @@ describe('EventCreateSheet', () => {
     expect(secHeaders[0]).toHaveTextContent('Morning')
     expect(secHeaders[1]).toHaveTextContent('Afternoon')
 
-    expect(screen.getByText(/move the end time to 12p or later/i)).toBeInTheDocument()
+    // #140 review finding 6: the split clause used to render unconditionally. Here the first
+    // overlap is Morning, whose options are Replace only (the event starts before the window, so
+    // optionsFor never offers split or truncateEnd) — the note must not mention a split nobody
+    // was offered.
+    expect(screen.queryByText(/move the end time to .* or later/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /replace the window.*morning disappears/i }))
     await user.click(screen.getByRole('button', { name: /push it to after the event.*covers its whole start/i }))
@@ -77,6 +81,33 @@ describe('EventCreateSheet', () => {
       ],
     })
     expect(onCreated).toHaveBeenCalledOnce()
+  })
+
+  it('an_event_starting_after_the_window_offers_no_split_and_the_overlap_note_omits_the_split_clause', async () => {
+    const user = userEvent.setup()
+    const window = [{ id: { value: 'w1' }, name: 'Window', start: '06:00', end: '10:00', tags: { dimensions: {}, looseTags: [] } }]
+    render(<EventCreateSheet date="2026-09-07" windows={window} onCancel={() => {}} onCreated={() => {}} />)
+    await user.clear(screen.getByLabelText('Start'))
+    await user.type(screen.getByLabelText('Start'), '05:00')
+    await user.clear(screen.getByLabelText('End'))
+    await user.type(screen.getByLabelText('End'), '08:00')
+
+    expect(screen.getByRole('button', { name: /replace the window/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /push it to after the event/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /split it around the event/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/move the end time to .* or later/i)).not.toBeInTheDocument()
+  })
+
+  it('the_overlap_note_keeps_the_split_clause_when_split_is_actually_one_of_the_offered_options', async () => {
+    const user = userEvent.setup()
+    render(<EventCreateSheet date="2026-09-07" windows={[windows[0]]} onCancel={() => {}} onCreated={() => {}} />)
+    await user.clear(screen.getByLabelText('Start'))
+    await user.type(screen.getByLabelText('Start'), '10:00')
+    await user.clear(screen.getByLabelText('End'))
+    await user.type(screen.getByLabelText('End'), '11:00')
+
+    expect(screen.getByRole('button', { name: /split it around the event/i })).toBeInTheDocument()
+    expect(screen.getByText(/move the end time to 12p or later/i)).toBeInTheDocument()
   })
 
   it('the resolution set is closed at the four wire values, and no option whose guard is false is ever rendered', async () => {

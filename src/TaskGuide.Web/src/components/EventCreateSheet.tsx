@@ -200,7 +200,13 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
                 </div>
               )
             })}
-            <div className="note">Only the options that actually produce something are offered — move the end time to {hm(firstOverlap.windowEnd)} or later and the split disappears, because there would be no tail to keep. Whichever you pick, {fmtShort(date)} becomes a <b>one-off day</b>.</div>
+            <div className="note">Only the options that actually produce something are offered
+              {/* split is offered only when the event starts after the window (optionsFor) — an
+                  event starting at or before the window's start has no split option to lose, so
+                  this clause is conditional on it actually being one of the offered options
+                  (#140 review finding 6). */}
+              {optionsFor(firstOverlap).includes('split') && <> — move the end time to {hm(firstOverlap.windowEnd)} or later and the split disappears, because there would be no tail to keep</>}
+              . Whichever you pick, {fmtShort(date)} becomes a <b>one-off day</b>.</div>
           </>
         )}
         <div className="btn-row">
