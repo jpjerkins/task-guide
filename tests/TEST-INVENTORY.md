@@ -1113,12 +1113,23 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - the date-range override is a **scope on the stamp picker** (#140 §1 surface B2), not a second
   sheet or a second verb: `OverrideStampSheet` carries a `This date` / `A range…` `.modebar`, and
   `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, swaps
-  the sheet's title and opening note to name the span. Range scope also offers one non-template row,
-  **"Blank every date in the span"** under a `Clear the span` heading (`onStamp(null, span)`) —
-  see the finding-1 paragraph below for why its wording is load-bearing
+  the sheet's title and opening note to name the span. Range scope also offers two non-template
+  rows: **"Keep each date's own shape"** under a `Detach the span` heading (`onStamp(null, span,
+  'freeze')`, no destructive marker), and **"Blank every date in the span"** under a `Clear the
+  span` heading (`onStamp(null, span, 'blank')`, `.pill.due` destructive) — see the finding-1
+  paragraph below for why the wording on both is load-bearing
+- every write states its arm explicitly on the wire — `mode: 'stamp' | 'freeze' | 'blank'` on
+  `OverrideSpanApiRequest`, never a null-`templateId` default standing in for "blank" (#145). The
+  `templateId` alone cannot tell `freeze` and `blank` apart — both send `null` — so `mode` is what
+  the server and every caller key off
 - stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
-  sends one clobber-check-then-POST span write — `{ from, to, templateId }`, `from === to` for a
-  single date — never the old per-date `PUT .../stamp`
+  sends one clobber-check-then-POST span write — `{ from, to, templateId, mode: 'stamp' }`,
+  `from === to` for a single date — never the old per-date `PUT .../stamp`
+- freezing a range skips the clobber-check GET entirely and POSTs straight through with no
+  confirmation, even when dates in the span already carry Overrides — `CreateOverrideSpan`'s
+  Freeze arm copies each date's own current computed shape into its own Override, reading any
+  existing Override's Windows (and its `used` record) first, so nothing on the span is ever
+  replaced and there is nothing to confirm
 - stamping onto a date that already carries an Override confirms the clobber before writing
 - reverting a date removes its Override and the date reads as following the pattern again
 - promotion names the new shape, lists the windows it will carry, and states that the source date
@@ -1139,9 +1150,15 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   sentence rather than saying "The other 0 dates" when the span is fully clobbered. It does not
   name each date's current shape — `clobber-check` returns bare dates and `DayShape` carries no
   template name, so the pill is the only claim that is actually true. `confirm()` takes
-  `(affected, span)`; both call sites (`OverrideScreen.tsx`'s unified `stamp`, via
-  `OverrideRange.ts`'s `authorOverrideSpan`) now wire the `span` argument, computed by
-  `authorOverrideSpan`'s own one-line inclusive day count
+  `(affected, span, mode)`; both call sites (`OverrideScreen.tsx`'s unified `stamp`, via
+  `OverrideRange.ts`'s `authorOverrideSpan`) now wire the `span` and `mode` arguments, `span`
+  computed by `authorOverrideSpan`'s own one-line inclusive day count, `mode` narrowed to
+  `'stamp' | 'blank'` there because `authorOverrideSpan` never calls `confirm` for `'freeze'`
+- the same confirmation, told `mode: 'blank'`, swaps its wording rather than reusing the stamp
+  copy verbatim: title `Blank {n} Override{s}?`, `.damage-h` "Blanking clears what is on
+  it/them" (not "Stamping replaces"), the untouched sentence says those dates "will be cleared
+  too" (not "copied off it"), and the button reads `Blank it` / `Blank all {span}` — never
+  "stamp". The stamp-mode wording is asserted verbatim elsewhere as a regression guard
 
 **#140 review finding 4**: the untouched-dates sentence pluralized `n` but not `untouched` —
 `untouched === 1` still rendered "The other 1 dates are following the pattern". Now singular at
@@ -1152,6 +1169,15 @@ copied off the Pattern. `useOverrideConfirmation` is not told which arm it is co
 remains a known inaccuracy on that one path, narrowed to a row that now announces itself as
 destructive. Closing it properly means passing the arm into `confirm`, and is better done together
 with #144, which changes what the arms are.
+
+**Closed by #145**: `authorOverrideSpan`'s `confirm` now takes `(affected, span, mode)`, and
+`useOverrideConfirmation` renders mode-specific wording rather than the one stamp-flavored copy
+used everywhere. `stamp` keeps its wording verbatim ("Stamping replaces…" / "…copied off it" /
+`Replace…`); `blank` now says "Blanking clears…" / "…cleared too" / `Blank…`, never "stamp" or
+"copied off". `freeze` never reaches this confirmation at all (see the new freeze-arm bullets
+above) — `authorOverrideSpan` skips the clobber-check GET and posts straight through when
+`mode === 'freeze'`, because `CreateOverrideSpan`'s Freeze arm never replaces anything, so there is
+nothing to confirm.
 
 **Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
 `clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
@@ -1298,6 +1324,13 @@ the promise cannot creep back.
 There is still no way to *preserve* each date's shape across a span: the endpoint takes one
 template, not per-date windows, and fanning out per date would break this ticket's
 one-check-one-POST invariant. **#144** tracks that missing freeze-this-span server mode.
+
+**Closed by #144/#145**: the server gained a real `mode: 'freeze'` arm (`CreateOverrideSpan`'s
+Freeze case) that copies each date's own current computed shape into its own Override rather than
+stamping a template or blanking it, and the Web picker's range scope offers it back as **"Keep
+each date's own shape"** under a `Detach the span` heading — the row this finding removed, now
+built on a write that actually does what that wording says, with no destructive marker and no
+confirmation (nothing on it is ever replaced).
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 
