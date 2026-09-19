@@ -49,6 +49,36 @@ public sealed class OverrideEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task POST_api_overrides_freeze_copies_each_dates_current_shape_and_preserves_Window_ids()
+    {
+        var first = new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Thursday", [Window("w_thursday")], []);
+        var second = new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5FAW"), "Friday", [Window("w_friday")], []);
+        var third = new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5FAX"), "Saturday", [Window("w_saturday")], []);
+        var patternId = new PatternId("p_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        var days = Enumerable.Repeat(first.Id, 7).ToArray();
+        days[(int)DayOfWeek.Friday] = second.Id;
+        days[(int)DayOfWeek.Saturday] = third.Id;
+        await WriteAsync(
+            new DayTemplatesWrite([first, second, third]),
+            new PatternsWrite(new PatternBook(patternId, [new Pattern(patternId, "Week", days)])));
+
+        var response = await _client.PostAsJsonAsync("/api/overrides", new
+        {
+            from = "2026-12-24",
+            to = "2026-12-26",
+            mode = "freeze",
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var overrides = _factory.Services.GetRequiredService<IStore>().Read().Overrides;
+        Assert.Equal(["w_thursday", "w_friday", "w_saturday"], overrides
+            .OrderBy(overrideDay => overrideDay.Date)
+            .SelectMany(overrideDay => overrideDay.Windows)
+            .Select(window => window.Id.Value)
+            .ToArray());
+    }
+
+    [Fact]
     public async Task GET_api_overrides_clobber_check_names_every_date_in_the_range_that_already_has_one()
     {
         await WriteAsync(new OverridesWrite([

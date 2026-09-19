@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Application.Schedule;
 using TaskGuide.Domain.Common;
@@ -47,14 +48,18 @@ public static class OverrideEndpoints
     private static async Task<Results<Created<DateOverrideResponse[]>, BadRequest<object>, Conflict<object>>> CreateAsync(
         OverrideSpanApiRequest request, IStore store, CancellationToken ct)
     {
-        if (!DateOnly.TryParse(request.From, out var from) || !DateOnly.TryParse(request.To, out var to) || to < from ||
-            (request.TemplateId is not null && !DayTemplateLifecycleHandlers.IsDayTemplateId(request.TemplateId)))
+        if (!DateOnly.TryParse(request.From, out var from) || !DateOnly.TryParse(request.To, out var to) || to < from)
         {
             return TypedResults.BadRequest<object>(new { error = "valid start and end dates are required" });
         }
 
-        DayTemplateId? templateId = request.TemplateId is null ? null : new DayTemplateId(request.TemplateId);
-        var outcome = await new CreateOverrideSpan(store).ExecuteAsync(new OverrideSpanRequest(from, to, templateId), ct);
+        var modeResult = ToMode(request);
+        if (modeResult.TryPickT1(out var modeError, out var mode))
+        {
+            return TypedResults.BadRequest<object>(new { error = modeError });
+        }
+
+        var outcome = await new CreateOverrideSpan(store).ExecuteAsync(new OverrideSpanCommandRequest(from, to, mode), ct);
         return outcome.Match<Results<Created<DateOverrideResponse[]>, BadRequest<object>, Conflict<object>>>(
             _ => TypedResults.Created("/api/overrides", store.Read().Overrides
                 .Where(overrideDay => overrideDay.Date >= from && overrideDay.Date <= to)
@@ -63,6 +68,45 @@ public static class OverrideEndpoints
                 .ToArray()),
             refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
     }
+
+    private static OneOf<OverrideSpanMode, string> ToMode(OverrideSpanApiRequest request)
+    {
+        if (request.Mode is null)
+        {
+            return request.TemplateId is null
+                ? OneOf<OverrideSpanMode, string>.FromT0((OverrideSpanMode)new BlankOverrideSpan())
+                : ValidatedStamp(request.TemplateId);
+        }
+
+        if (string.Equals(request.Mode, "stamp", StringComparison.OrdinalIgnoreCase))
+        {
+            return request.TemplateId is null
+                ? OneOf<OverrideSpanMode, string>.FromT1("templateId is required for stamp mode")
+                : ValidatedStamp(request.TemplateId);
+        }
+
+        if (request.TemplateId is not null)
+        {
+            return OneOf<OverrideSpanMode, string>.FromT1("templateId is only valid for stamp mode");
+        }
+
+        if (string.Equals(request.Mode, "freeze", StringComparison.OrdinalIgnoreCase))
+        {
+            return OneOf<OverrideSpanMode, string>.FromT0((OverrideSpanMode)new FreezeOverrideSpan());
+        }
+
+        if (string.Equals(request.Mode, "blank", StringComparison.OrdinalIgnoreCase))
+        {
+            return OneOf<OverrideSpanMode, string>.FromT0((OverrideSpanMode)new BlankOverrideSpan());
+        }
+
+        return OneOf<OverrideSpanMode, string>.FromT1("mode is not supported");
+    }
+
+    private static OneOf<OverrideSpanMode, string> ValidatedStamp(string templateId) =>
+        DayTemplateLifecycleHandlers.IsDayTemplateId(templateId)
+            ? OneOf<OverrideSpanMode, string>.FromT0((OverrideSpanMode)new StampOverrideSpan(new DayTemplateId(templateId)))
+            : OneOf<OverrideSpanMode, string>.FromT1("templateId is not a valid Day template id");
 
     private static Results<Ok<IReadOnlyList<DateOnly>>, BadRequest<object>> ClobberCheck(string? from, string? to, IStore store)
     {
@@ -188,7 +232,12 @@ internal static class DayTemplateLifecycleHandlers
 
 public sealed record PromoteDayRequest(string Name);
 public sealed record StampDayRequest(string TemplateId);
-public sealed record OverrideSpanApiRequest(string From, string To, string? TemplateId);
+public sealed record OverrideSpanApiRequest(
+    string From,
+    string To,
+    string? TemplateId,
+    string? Mode = null);
+
 public sealed record EditOverrideRequest(IReadOnlyList<AvailabilityWindow>? Windows);
 public sealed record DayTemplateResponse(
     string Id,

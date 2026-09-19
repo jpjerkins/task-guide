@@ -25,6 +25,43 @@ public sealed class OverrideCommandTests
     }
 
     [Fact]
+    public async Task Freezing_an_Override_span_copies_each_dates_current_windows_preserves_their_ids_and_retains_an_existing_stamped_Overrides_use_record()
+    {
+        var thursday = new DayTemplate(new DayTemplateId("dt_thursday"), "Thursday", [Window("w_thursday")], []);
+        var friday = new DayTemplate(new DayTemplateId("dt_friday"), "Friday", [Window("w_friday")], []);
+        var saturday = new DayTemplate(new DayTemplateId("dt_saturday"), "Saturday", [Window("w_saturday")], []);
+        var patternId = new PatternId("p_week");
+        var days = Enumerable.Repeat(thursday.Id, 7).ToArray();
+        days[(int)DayOfWeek.Friday] = friday.Id;
+        days[(int)DayOfWeek.Saturday] = saturday.Id;
+        var overriddenFriday = new DateOnly(2026, 12, 25);
+        var stampedFriday = DayTemplateLifecycle.Stamp(overriddenFriday, friday);
+        var existingFriday = stampedFriday with { Windows = [Window("w_override")] };
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithDayTemplates([thursday, friday, saturday])
+            .WithPatterns(new PatternBook(patternId, [new Pattern(patternId, "Week", days)]))
+            .WithOverrides([existingFriday])
+            .Build());
+
+        var result = await new CreateOverrideSpan(store).ExecuteAsync(
+            new OverrideSpanCommandRequest(
+                new DateOnly(2026, 12, 24),
+                new DateOnly(2026, 12, 26),
+                (OverrideSpanMode)new FreezeOverrideSpan()),
+            CancellationToken.None);
+
+        Assert.True(result.IsT0);
+        Assert.Equal(
+            ["w_thursday", "w_override", "w_saturday"],
+            store.Read().Overrides
+                .OrderBy(overrideDay => overrideDay.Date)
+                .SelectMany(overrideDay => overrideDay.Windows)
+                .Select(window => window.Id.Value)
+                .ToArray());
+        Assert.Equal(existingFriday.Used, Assert.Single(store.Read().Overrides, overrideDay => overrideDay.Date == overriddenFriday).Used);
+    }
+
+    [Fact]
     public async Task An_Override_span_ending_at_DateOnly_MaxValue_is_written()
     {
         var date = DateOnly.MaxValue;

@@ -720,6 +720,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - the use record survives the date becoming a one-off day
 - re-stamping replaces the use record rather than appending
 - promoting a one-off day writes the source date's use record and **does not re-link**
+- freezing an Override span copies each dates current windows, preserves their ids, and retains an
+  existing stamped Override's use record
 - `Unused` is false for a template referenced only by a **dormant** Pattern
 - `Unused` is false for a template stamped within ±13 months, in **either** direction
 - deleting an `Unused` template corrupts no record
@@ -815,6 +817,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `PUT /api/tasks/{id}/postpone` rejects a malformed Task id
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
+- `POST /api/overrides` freeze copies each date's current shape and preserves Window ids
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
 - `PATCH /api/overrides/{date}` on a stamped date makes it a one-off day and its use record survives
 - `DELETE /api/overrides/{date}` removes that date's Override

@@ -1,5 +1,6 @@
 using OneOf;
 using TaskGuide.Application.Ports;
+using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Schedule;
 
 namespace TaskGuide.Application.Schedule;
@@ -8,6 +9,16 @@ public sealed class CreateOverrideSpan(IStore store)
 {
     public async Task<OverrideSpanOutcome> ExecuteAsync(OverrideSpanRequest request, CancellationToken cancellationToken)
     {
+        var mode = request.Stamp is { } templateId
+            ? (OverrideSpanMode)new StampOverrideSpan(templateId)
+            : (OverrideSpanMode)new BlankOverrideSpan();
+        return await ExecuteAsync(new OverrideSpanCommandRequest(request.From, request.To, mode), cancellationToken);
+    }
+
+    public async Task<OverrideSpanOutcome> ExecuteAsync(
+        OverrideSpanCommandRequest request,
+        CancellationToken cancellationToken)
+    {
         if (request.To < request.From)
         {
             return new OverrideSpanRefused("The end date must not precede the start date");
@@ -15,25 +26,67 @@ public sealed class CreateOverrideSpan(IStore store)
 
         var outcome = await store.MutateAsync<OverrideSpanRefused>(view =>
         {
-            DayTemplate? template = null;
-            if (request.Stamp is { } templateId)
+            var replacements = request.Mode.Match<OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>>(
+                stamp =>
+                {
+                    var template = view.DayTemplates.SingleOrDefault(candidate => candidate.Id.Equals(stamp.TemplateId));
+                    return template is null
+                        ? OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>.FromT1(new OverrideSpanRefused("Day template was not found"))
+                        : OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>.FromT0(
+                            request.Dates().Select(date => DayTemplateLifecycle.Stamp(date, template)).ToArray());
+                },
+                freeze => OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>.FromT0(
+                    request.Dates().Select(date => Freeze(date, view)).ToArray()),
+                blank => OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>.FromT0(
+                    request.Dates().Select(date => new DateOverride(date, [], null)).ToArray()));
+
+            if (replacements.TryPickT1(out var refusal, out var datedOverrides))
             {
-                template = view.DayTemplates.SingleOrDefault(candidate => candidate.Id.Equals(templateId));
-                if (template is null) return new OverrideSpanRefused("Day template was not found");
+                return refusal;
             }
 
-            var replacements = request.Dates()
-                .Select(date => template is null
-                    ? new DateOverride(date, [], null)
-                    : DayTemplateLifecycle.Stamp(date, template))
-                .ToArray();
-            var dates = replacements.Select(overrideDay => overrideDay.Date).ToHashSet();
+            var dates = datedOverrides.Select(overrideDay => overrideDay.Date).ToHashSet();
             return OneOf<StoreMutation, OverrideSpanRefused>.FromT0(new StoreMutation([
-                new OverridesWrite([.. view.Overrides.Where(overrideDay => !dates.Contains(overrideDay.Date)), .. replacements]),
+                new OverridesWrite([.. view.Overrides.Where(overrideDay => !dates.Contains(overrideDay.Date)), .. datedOverrides]),
             ]));
         }, cancellationToken);
 
         return outcome.Match<OverrideSpanOutcome>(_ => new OverrideSpanApplied(), refusal => refusal);
+    }
+
+    private static DateOverride Freeze(DateOnly date, IStoreView view)
+    {
+        var existing = view.Overrides.SingleOrDefault(overrideDay => overrideDay.Date == date);
+        var windows = existing?.Windows;
+        if (windows is null)
+        {
+            var templateId = view.Patterns.Active[date.DayOfWeek];
+            var template = view.DayTemplates.SingleOrDefault(candidate => candidate.Id.Equals(templateId))
+                ?? throw new InvalidOperationException(
+                    $"Day template {templateId.Value} does not match the active Pattern for {date:yyyy-MM-dd}.");
+            windows = template.Windows;
+        }
+
+        return new DateOverride(date, [.. windows], existing?.Used);
+    }
+}
+
+[GenerateOneOf]
+public partial class OverrideSpanMode : OneOfBase<StampOverrideSpan, FreezeOverrideSpan, BlankOverrideSpan>;
+
+public sealed record StampOverrideSpan(DayTemplateId TemplateId);
+public sealed record FreezeOverrideSpan;
+public sealed record BlankOverrideSpan;
+
+public sealed record OverrideSpanCommandRequest(DateOnly From, DateOnly To, OverrideSpanMode Mode)
+{
+    public IEnumerable<DateOnly> Dates()
+    {
+        for (var date = From; ; date = date.AddDays(1))
+        {
+            yield return date;
+            if (date == To) yield break;
+        }
     }
 }
 
