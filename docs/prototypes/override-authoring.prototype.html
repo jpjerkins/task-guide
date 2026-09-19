@@ -137,43 +137,50 @@
   }
 
   /* ================= A — the escape beside the rail ================= */
-  // The rail IS the "fixed intervals" half of the shape #107 points at ("the same shape Postpone
-  // already uses: fixed intervals plus an escape"). Postpone's own control is a row of pressed
-  // mode buttons whose choice REVEALS its input directly beneath — tag-entry.prototype.html ~553:
-  // [None][Date…][In…], and "Date" reveals <input type="date"> on the next line. Nothing about it
-  // spends a full-width button on the escape, because the escape is the rare path.
+  // Two things are wrong with the shipped escape, and they are not the same thing.
   //
-  // So the escape becomes the rail's last cell, in the rail's own row, and reveals the native
-  // input beneath the strip. A date the rail cannot reach shows IN that cell, so the strip still
-  // answers "where am I" when nothing in it is current.
-  function railA(withEscape) {
+  // 1. The rail never scrolls the selected date into view. It renders today-10 first, so on load
+  //    you are looking at ten days of last week and today is off the right edge. Every screenshot
+  //    of this screen has been of the wrong ten days.
+  // 2. The escape is a full-width .btn-row button — the same visual weight as "＋ Event" — for the
+  //    rarest path on the screen, and the field it reveals pushes the scope banner and the whole
+  //    window list down.
+  //
+  // #107 points at Postpone for the shape ("fixed intervals plus an escape"). Postpone's escape is
+  // a low-weight control ON THE SAME LINE as the mode it escapes from, revealing its input beneath
+  // (tag-entry.prototype.html ~553). `.sec-h.with-tog` is already exactly that line — label left,
+  // control right, flex, space-between — and `.vtog` is already its right-hand control. So the
+  // escape sits there, and the label earns its keep by naming the rail's fixed span, which is
+  // otherwise the screen's most puzzling invariant ("the rail never grows").
+  //
+  // An earlier draft made the escape the rail's 22nd cell. That fails: .weekstrip is an
+  // overflow-x scroller, so cell 22 is ten cells past the right edge — further from the thumb
+  // than the button it replaced. Recorded because it is the obvious idea.
+  function railA(scrollToSel) {
     const cells = [];
     for (let i = -10; i <= 10; i++) {
       const d = dAdd(i), k = iso(d), cur = !state.beyond && k === state.date;
-      cells.push(`<button data-act="pick" data-v="${k}" ${cur ? 'aria-current="date"' : ""}>
+      cells.push(`<button data-act="pick" data-v="${k}" ${cur ? 'aria-current="date"' : ""}
+        ${cur && scrollToSel ? 'data-sel="1"' : ""}>
         <div class="wd">${WD[d.getDay()]}</div><div class="dn">${d.getDate()}</div>
         <div class="dot${i === 2 || i === 5 ? "" : " blank"}"></div></button>`);
     }
-    if (withEscape) {
-      const b = state.beyond;
-      cells.push(`<button data-act="escape" ${b ? 'aria-current="date"' : ""}
-        aria-label="Pick any date" aria-expanded="${state.escapeOpen}">
-        <div class="wd">${b ? MO[parseISO(b).getMonth()] : "Date"}</div>
-        <div class="dn">${b ? parseISO(b).getDate() : "⋯"}</div>
-        <div class="dot blank"></div></button>`);
-    }
     return `<div class="weekstrip">${cells.join("")}</div>`;
   }
-  const escapeField = () => state.escapeOpen ? `<label class="stack">
-      <span class="lbl">Any date</span>
-      <input class="field" type="date" data-act="beyond" value="${esc(state.beyond || state.date)}">
-    </label>` : "";
+  const escapeRow = () => `<div class="sec-h with-tog">${state.beyond
+      ? `${esc(fmtShort(parseISO(state.beyond)))} · beyond the rail`
+      : `Ten days either side of today`}
+    <span class="vtog"><button data-act="escape" aria-pressed="${state.escapeOpen}"
+      aria-expanded="${state.escapeOpen}">Any date…</button></span></div>`
+    + (state.escapeOpen ? `<label class="stack"><span class="lbl">Any date</span>
+      <input class="field" type="date" data-act="beyond" value="${esc(state.beyond || state.date)}"></label>` : "");
 
   const A_now = () => railA(false) + `
     <div class="btn-row"><button class="btn">Pick a date…</button></div>
     <div class="stack"><label class="stack"><span class="lbl">Date</span>
-      <input class="field" type="date" value="${esc(state.date)}"></label></div>`;
-  const A_new = () => railA(true) + escapeField();
+      <input class="field" type="date" value="${esc(state.date)}"></label></div>
+    <div class="sec-h">Windows on this date</div>`;
+  const A_new = () => railA(true) + escapeRow() + `<div class="sec-h">Windows on this date</div>`;
 
   /* ================= B — authoring across a range ================= */
   const dateField = (f, label) => `<label class="stack"><span class="lbl">${label}</span>
@@ -262,18 +269,25 @@
           Postpone already uses”. Postpone is a row of pressed mode buttons whose choice reveals its
           input on the next line (<code>tag-entry.prototype.html</code> ~553). Nothing in that shape
           spends a full-width button on the escape: the escape is the rare path.</p>
-        <p class="bad">As shipped ↓ — two controls competing for the same job, and the revealed field
-          pushes the scope banner and the whole window list down the screen.</p>`),
+        <p class="bad">As shipped ↓ — <b>the rail opens on the wrong ten days</b>: it renders
+          today−10 first and never scrolls the selection into view, so today is off the right edge
+          before you touch anything. And the escape is a full-width button at the same weight as
+          “＋ Event”, whose revealed field pushes the whole window list down.</p>`),
       frame(A_now()),
-      lab(`<p class="rec">Designed ↓ — the escape is the rail's last cell, in the rail's own row.
-          Less markup than today, one control instead of two, and a date the rail cannot reach shows
-          <b>in that cell</b>, so the strip still answers “where am I” when nothing in it is current.
-          Tap it to reveal the native field; tap a rail date and it collapses.</p>
-        <ul><li>Classes: <code>.weekstrip</code>, <code>.wd</code>, <code>.dn</code>,
-            <code>.dot.blank</code> — all existing, none new.</li>
-          <li>The rail still never grows: 21 date cells, fixed, plus one escape cell.</li>
-          <li>ADR-0006 holds — the revealed <code>&lt;input type="date"&gt;</code> is the shared
-            <code>DateEntry</code>, never remounted by its own change.</li></ul>`),
+      lab(`<p class="rec">Designed ↓ — <b>the rail scrolls the selected date into view</b>, and the
+          escape drops to a low-weight control on a <code>.sec-h.with-tog</code> line whose label
+          names the rail's fixed span. Tap <i>Any date…</i> to reveal the field beneath; a date the
+          rail cannot reach is named in that same label, so the screen still answers “where am I”
+          when no cell is current.</p>
+        <ul><li>Classes: <code>.sec-h.with-tog</code> and <code>.vtog</code> — both existing, both
+            already used for exactly this (they are what carries the Strips/Times toggle).</li>
+          <li>The rail still never grows: 21 cells, fixed. It only scrolls to the one you are on.</li>
+          <li>ADR-0006 holds — the revealed field is the shared <code>DateEntry</code>, never
+            remounted by its own change, and the auto-scroll is a <code>scrollIntoView</code> on a
+            ref, not a re-render.</li>
+          <li class="bad">Rejected: making the escape the rail's 22nd cell. <code>.weekstrip</code>
+            is an <code>overflow-x</code> scroller, so cell 22 sits ten cells past the right edge —
+            further from the thumb than the button it would replace.</li></ul>`),
       frame(A_new()),
 
       lab(`<h2><span class="v">B</span>Authoring an Override across a range</h2>
@@ -310,6 +324,7 @@
             <code>GET /api/overrides/clobber-check</code> returns bare dates, and
             <code>DayShape</code> carries no template name, so naming what is being destroyed per
             date needs a wire change. Said plainly with a pill rather than faked.</li></ul>`),
+      frame(C_new()),
 
       lab(`<h2>What this page does <b>not</b> decide</h2>
         <p>The rest of the Override screen — the nav, the window rows, the stamp picker's grouping and
@@ -318,6 +333,9 @@
           the <code>N fit</code> pill has no endpoint (<code>TEST-INVENTORY.md</code>'s #104 table),
           and the day's shape label needs a template link <code>DayShape</code> does not carry.</p>`),
     ].join("");
+    // The fix for defect 1, in one line. It is not a re-render, so ADR-0006 is untouched.
+    document.querySelectorAll('[data-sel="1"]').forEach(el =>
+      el.scrollIntoView({ block:"nearest", inline:"center" }));
   }
 
   document.addEventListener("click", e => {
