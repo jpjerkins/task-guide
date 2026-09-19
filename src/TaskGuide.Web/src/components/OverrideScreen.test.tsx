@@ -37,12 +37,26 @@ it('Pick_a_date_opens_the_shared_DateEntry_and_selecting_a_date_beyond_the_rail_
   fireEvent.click(screen.getByRole('button', { name: 'Pick a date…' }))
   const input = screen.getByLabelText('Pick a date…')
   fireEvent.change(input, { target: { value: '2027-12-25' } })
-  await screen.findByRole('heading', { name: '2027-12-25' })
-  await waitFor(() => expect(container.querySelector('.scope.one')).toHaveTextContent('2027-12-25 only'))
+  await screen.findByRole('heading', { name: 'Sat 25 Dec' })
+  await waitFor(() => expect(container.querySelector('.scope.one')).toHaveTextContent('Sat 25 Dec only'))
   expect(screen.getByLabelText('Pick a date…')).toBe(input)
   expect(rail?.children).toHaveLength(21)
   expect(rail?.querySelector('[aria-current]')).toBeNull()
   expect(container.querySelector('[style]')).toBeNull()
+})
+
+it('the_nav_title_is_the_short_date_and_the_sub_falls_back_to_pattern_or_override_when_no_write_supplied_a_label', async () => {
+  render(<OverrideScreen />)
+  await screen.findByText('Family time')
+  expect(screen.getByRole('heading', { name: 'Sun 1 Nov' })).toBeInTheDocument()
+  expect(document.querySelector('.sub')).toHaveTextContent('Following the pattern')
+})
+
+it('the_sub_reads_One-off_day_for_an_override_with_no_saved_label_and_the_saved_label_once_a_write_supplies_one', async () => {
+  days.set('2026-11-01', { date: '2026-11-01', windows: [window], events: [], isOverridden: true })
+  render(<OverrideScreen />)
+  await screen.findByText('Family time')
+  expect(document.querySelector('.sub')).toHaveTextContent('One-off day')
 })
 
 it('selecting_a_rail_date_changes_the_shown_date_without_adding_a_rail_entry_the_rail_never_grows', async () => {

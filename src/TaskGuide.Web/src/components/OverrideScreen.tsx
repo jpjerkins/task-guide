@@ -11,6 +11,7 @@ import { DateRail } from './DateRail'
 import { DateEntry } from './shared/DateEntry'
 import { ScreenNav } from './shared/ScreenNav'
 import { useOverrideDateSelection } from './OverrideDateSelection'
+import { fmtShort } from './OverrideFormat'
 
 type Day = components['schemas']['DayShape']
 
@@ -97,15 +98,19 @@ export function OverrideScreen() {
   }
   const modalOpen = stampOpen || rangeOpen || promoteOpen || eventOpen
   const shown = day?.date === selectedDate ? day : null
+  // The wire's DayShape carries no template-use name (tests/TEST-INVENTORY.md), so the nav's
+  // `sub` and the promote sheet's prefill both fall back to this same degraded label: the name a
+  // write in this session supplied, else a generic "override" or "pattern" reading.
+  const label = shown && (labels[selectedDate] ?? (shown.isOverridden ? 'One-off day' : 'Following the pattern'))
   return <>
-    <ScreenNav title={selectedDate} />
+    <ScreenNav title={fmtShort(selectedDate)} sub={label ?? undefined} />
     <DateRail {...railSpan} selected={selectedDate} marked={marked} disabled={busy || modalOpen} onSelect={dateEntryProps.onChange} />
     <div className="btn-row"><button className="btn" disabled={busy || modalOpen} onClick={() => setEscapeOpen(true)}>Pick a date…</button></div>
     {escapeOpen && <div className="stack"><DateEntry {...dateEntryProps} disabled={busy || modalOpen} /></div>}
     <div className="scroll" inert={modalOpen}>
       {error && <div className="note" role="alert">{error}</div>}
       {shown && <>
-        <div className="scope one"><span className="g">◈</span><span>Editing <b>{selectedDate} only</b>. {shown.isOverridden
+        <div className="scope one"><span className="g">◈</span><span>Editing <b>{fmtShort(selectedDate)} only</b>. {shown.isOverridden
           ? <>This date is already an override — <b>{labels[selectedDate] ?? 'Override'}</b>.</>
           : <>The first change copies the day off its shape and this date stops following the pattern.</>}</span></div>
         <div className="sec-h">Windows on this date</div>

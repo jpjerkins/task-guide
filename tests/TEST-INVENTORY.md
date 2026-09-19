@@ -1225,6 +1225,18 @@ without prototype fixture-based season grouping. Window editing and matching-pre
 belong to #105; this screen displays the date windows as the prototype promotion list does.
 These limitations are reported on #107, not represented as completed cross-ticket features.
 
+**#140 §1 re-port: the nav, the scope banner and the `sub` degradation** — the nav title and the
+scope banner now render `fmtShort(selectedDate)` (`OverrideFormat.ts`) instead of the raw ISO
+string, matching `nav()`/`scopeBanner()` in the prototype. `ScreenNav`'s `sub` cannot carry the
+prototype's `sh.label` (the day's shape name) because, as recorded above, `DayShape` has no
+template-use name — it degrades to the same source `sub` already had for the "already an
+override" sentence: the label a write in this session supplied (`labels[date]`), else `'One-off
+day'` when `isOverridden`, else `'Following the pattern'`. The `back` prop is omitted: the
+`schedule` tab registers exactly one screen (`overrides.screen.tsx`), so `App.tsx` takes the
+`screens.length === 1` branch and never wraps this screen in the `BackProvider` that supplies
+`ScreenNav`'s context back-action — there is currently no back navigation to wire without editing
+`App.tsx`, which is outside this ticket's lane.
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and
