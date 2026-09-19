@@ -220,7 +220,7 @@ it('cancelling_replacement_keeps_the_stamp_sheet_range_scope_open_and_writes_not
   fireEvent.click(screen.getByRole('button', { name: 'Stamp a whole shape onto this date…' }))
   const picker = await screen.findByRole('dialog')
   fireEvent.click(within(picker).getByRole('button', { name: 'A range…' }))
-  fireEvent.click(within(picker).getByRole('button', { name: /Keep each date's own shape/ }))
+  fireEvent.click(within(picker).getByRole('button', { name: /Christmas/ }))
   const confirmation = await screen.findByRole('dialog', { name: 'Replace 1 Override?' })
   fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Replace 1 Override?' })).not.toBeInTheDocument())

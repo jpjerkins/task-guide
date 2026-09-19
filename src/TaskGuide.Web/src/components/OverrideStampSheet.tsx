@@ -62,7 +62,7 @@ function ShapeRow({ template, view, busy, onPick }: { template: Template; view: 
 
 export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationError }: {
   date: string; onCancel: () => void
-  onStamp: (templateId: string | null, span: { from: string; to: string } | null) => Promise<void>
+  onStamp: (templateId: string, span: { from: string; to: string } | null) => Promise<void>
   busy: boolean
   mutationError?: string
 }) {
@@ -116,14 +116,6 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
     <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
     {invalidRange && <div className="note" role="alert">Choose a start and end date; the end must not precede the start.</div>}
     {error && <div className="note" role="alert">{error}</div>}
-    {inRange && <>
-      <div className="sec-h">Leave them as they are</div>
-      <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span)}>
-        <span className="who">
-          <span className="nm">Keep each date's own shape</span>
-          <span className="sub2">detaches every date from the pattern without changing what is on it</span>
-        </span></button></div>
-    </>}
     {groups.map(group => {
       const withTog = !toggleShown
       toggleShown = true

@@ -1111,9 +1111,10 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - the date-range override is a **scope on the stamp picker** (#140 §1 surface B2), not a second
   sheet or a second verb: `OverrideStampSheet` carries a `This date` / `A range…` `.modebar`, and
   `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, swaps
-  the sheet's title and opening note to name the span, and adds a "Leave them as they are" /
-  "Keep each date's own shape" row above the season groups that detaches every date in the span
-  without stamping a shape (`onStamp(null, span)`)
+  the sheet's title and opening note to name the span. It originally also added a "Leave them as
+  they are" / "Keep each date's own shape" row above the season groups (`onStamp(null, span)`);
+  removed by #140 review finding 1, recorded below — it stamped a zero-window Override instead of
+  the per-date preservation its copy promised
 - stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
   sends one clobber-check-then-POST span write — `{ from, to, templateId }`, `from === to` for a
   single date — never the old per-date `PUT .../stamp`
@@ -1126,8 +1127,8 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - a range landing on dates that already carry an Override names every one of them in a single
   confirmation before the write, not one prompt per date
 - a range whose end precedes its start is refused, and nothing is written — the stamp picker's
-  range scope disables every `.pickrow` (including "Keep each date's own shape") and shows
-  *Choose a start and end date; the end must not precede the start.* This is the same refusal the
+  range scope disables every `.pickrow` and shows *Choose a start and end date; the end must not
+  precede the start.* This is the same refusal the
   deleted `OverrideRangeSheet` used to carry; it moved, not disappeared
 - the clobber confirmation (#140 §1 surface C) titles and buttons itself by both counts —
   `Replace {n} Override{s}?` / `Replace {n} and stamp all {span}`, singular at n=1, and
@@ -1264,6 +1265,15 @@ sheet, one list, one button, matching the prototype's rejection of B1 in favor o
 `.sec-h.with-tog` line, and its stale open-only handler (`() => setEscapeOpen(true)`, which could
 never close) is fixed as part of the port, not a separate bug ticket.
 
+**#140 review finding 1**: the range scope's "Keep each date's own shape" row (`onStamp(null,
+span)`) is removed, not relabelled. Server-side that reached `CreateOverrideSpan`'s null-template
+arm — `new DateOverride(date, [], null)` — a zero-window Override, so the row actually blanked
+every date in the span rather than detaching it "without changing what is on it". The span
+endpoint takes one template, not per-date windows, so there is no Web-side way to keep each date's
+own shape without breaking #140's one-check-one-POST invariant; #144 tracks the missing
+freeze-this-span server mode. The range scope now offers only real shapes, and `onStamp`'s
+`templateId` is non-nullable.
+
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 
 - a single date span uses the same check and span POST and needs no confirmation when nothing is clobbered
@@ -1278,8 +1288,8 @@ Additional tests at this subsection's end (existing range and input-node tests r
 
 **Override screen integration additions (#107)**
 
-- cancelling replacement keeps the stamp sheet's range scope open (the "Keep each date's own
-  shape" row still shown, its `From` value retained) and writes nothing
+- cancelling replacement keeps the stamp sheet's range scope open (a shape row still shown, its
+  `From` value retained) and writes nothing
 - a failed stamp keeps the picker open and reports the error inside it
 - an Event marks its rail date and the selected date lists the resolved Event
 - the date view opens the existing Event editor for the selected date

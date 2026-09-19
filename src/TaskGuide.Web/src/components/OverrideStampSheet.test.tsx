@@ -126,21 +126,23 @@ it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switchin
   expect(screen.getByRole('dialog')).toHaveTextContent('Stamp a shape onto every date in the span.')
 })
 
-it('range_scope_offers_a_Keep_each_dates_own_shape_row_above_the_season_groups_that_calls_onStamp_with_null_and_the_span', async () => {
+// #140 review finding 1: the range scope used to offer a "Keep each date's own shape" row that
+// called onStamp(null, span) — server-side that stamps a zero-window Override, blanking every
+// date in the span, not the "detaches without changing what is on it" the copy promised. There is
+// no per-date-preserving mode on the span endpoint (#144 tracks adding one), so the row is gone
+// rather than relabelled, and no row in range scope may ever pass a null template.
+it('range_scope_offers_no_row_that_can_send_a_null_template', async () => {
   stub(patterns([christmas.id]))
   const onStamp = vi.fn(async () => {})
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
   fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
-  const keepHeading = await screen.findByText('Leave them as they are')
-  expect(keepHeading).toHaveClass('sec-h')
-  expect(keepHeading).not.toHaveClass('with-tog')
-  const keepRow = screen.getByRole('button', { name: /Keep each date's own shape/ })
-  expect(keepRow).toHaveClass('pickrow')
-  expect(keepRow.querySelector('.who > .sub2')).toHaveTextContent('detaches every date from the pattern without changing what is on it')
-  fireEvent.click(keepRow)
-  await waitFor(() => expect(onStamp).toHaveBeenCalledWith(null, { from: '2026-12-24', to: '2026-12-28' }))
+  await screen.findByRole('button', { name: /Christmas/ })
+  expect(screen.queryByText('Leave them as they are')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Keep each date's own shape/ })).not.toBeInTheDocument()
+  for (const button of screen.getAllByRole('button')) fireEvent.click(button)
+  expect(onStamp).not.toHaveBeenCalledWith(null, expect.anything())
 })
 
 it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
@@ -161,7 +163,6 @@ it('an_inverted_range_disables_every_pickrow_including_Keep_each_dates_own_shape
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-28' } })
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-24' } })
   expect(await screen.findByRole('alert')).toHaveTextContent('Choose a start and end date; the end must not precede the start.')
-  expect(screen.getByRole('button', { name: /Keep each date's own shape/ })).toBeDisabled()
   expect(screen.getByRole('button', { name: /Christmas/ })).toBeDisabled()
 })
 

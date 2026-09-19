@@ -68,7 +68,7 @@ export function OverrideScreen() {
     } catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
   }
-  async function stamp(templateId: string | null, span: { from: string; to: string } | null) {
+  async function stamp(templateId: string, span: { from: string; to: string } | null) {
     setBusy(true)
     setError('')
     try {
