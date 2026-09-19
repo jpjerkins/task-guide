@@ -6,11 +6,12 @@ import type { components } from '../api/schema'
 // the key lowercased instead — recorded as a gap in tests/TEST-INVENTORY.md.
 export function dimPills(tags: components['schemas']['TagSet']) {
   return <>
-    {Object.entries(tags.dimensions).map(([key, values]) => (
-      <span key={key} className="pill dim">{key.toLowerCase()}: {values.map(v => v.value).join(' / ')}</span>
-    ))}
+    {Object.entries(tags.dimensions).map(([key, values]) => {
+      const present = values.map(v => v.value).filter((v): v is string => v != null)
+      return present.length ? <span key={key} className="pill dim">{key.toLowerCase()}: {present.join(' / ')}</span> : null
+    })}
     {tags.looseTags.map((tag, i) => (
-      <span key={i} className="pill inert">{tag.value} · inert</span>
+      tag.value != null ? <span key={i} className="pill inert">{tag.value} · inert</span> : null
     ))}
   </>
 }
