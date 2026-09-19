@@ -20,6 +20,7 @@ internal static class AtomicJsonFile
     /// </remarks>
     internal static async Task WriteAsync(string path, Action<Utf8JsonWriter> writeContent, CancellationToken cancellationToken)
     {
+        // Every caller supplies a full data-directory file path; the temp must be in that directory.
         var directory = Path.GetDirectoryName(path)!;
         var tempPath = Path.Combine(directory, $".{Path.GetFileName(path)}.tmp-{Guid.NewGuid():N}");
 
