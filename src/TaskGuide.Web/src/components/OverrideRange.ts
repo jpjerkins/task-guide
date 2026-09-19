@@ -10,14 +10,14 @@ type AffectedDates = paths['/api/overrides/clobber-check']['get']['responses'][2
 // null means cancellation (or the shared client's absent POST response); failures propagate.
 export async function authorOverrideSpan(
   request: OverrideSpan,
-  confirm: (dates: Readonly<AffectedDates>) => Promise<boolean>,
+  confirm: (dates: Readonly<AffectedDates>, span: number) => Promise<boolean>,
 ): Promise<CreatedDays | null> {
   const span = { ...request }
   if (![span.from, span.to].every(isCalendarDate)) throw new Error('Valid start and end dates are required')
   if (span.to < span.from) throw new Error('End date must not precede start date')
   const dates = await getJson<AffectedDates>(`/api/overrides/clobber-check?from=${span.from}&to=${span.to}`)
   if (dates === null) throw new Error('Clobber check returned no dates response')
-  if (dates.length && !await confirm(dates)) return null
+  if (dates.length && !await confirm(dates, spanSize(span.from, span.to))) return null
   return sendJson<CreatedDays>('POST', '/api/overrides', span)
 }
 
@@ -25,4 +25,9 @@ function isCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000')) return false
   const date = new Date(`${value}T00:00:00Z`)
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+// Inclusive day count across a from..to span already validated as calendar dates at UTC midnight.
+function spanSize(from: string, to: string): number {
+  return Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1
 }

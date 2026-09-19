@@ -1092,12 +1092,31 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   forward — marks the selected date, and dots only the dates carrying an Override or an Event.
   `CONTEXT.md` 721–788 and `src/TaskGuide.Web/README.md` both say ±10 days and win over the
   prototype's `W.date()` loop (~1111), which renders eleven, yesterday through +9
+- the rail scrolls the selected date into view on mount and on every selection change (#140 §1
+  surface A: it opened showing last week with today off the right edge). `block: 'nearest'` keeps
+  the browser from also scrolling the page to the rail. jsdom has no layout, so the test stubs
+  `scrollIntoView` and asserts the call and its target node, not a resulting offset
 - selecting a rail date changes the shown date without adding a rail entry — the rail never grows
-- *Pick a date…* opens the shared `DateEntry` and selecting a date beyond the rail shows that date,
-  still without growing the rail
+- the escape (#140 §1 surface A) is a low-weight `.vtog` toggle sharing the `.sec-h.with-tog` line
+  already used for the stamp picker's Strips/Times toggle, not a full-width "Pick a date…" button.
+  Its label doubles as the rail's otherwise-unstated invariant: "Ten days either side of today"
+  when the picked date is on the rail, `{fmtShort} · beyond the rail` when it is not. The toggle
+  opens the shared `DateEntry` (labelled "Any date"), and — unlike the previous button, which only
+  ever opened it — now actually closes it on a second click (a defect, fixed in this pass: the
+  handler was `() => setEscapeOpen(true)` on every click)
+- an earlier draft made the escape the rail's 22nd cell; rejected, not built — `.weekstrip` is an
+  `overflow-x` scroller, so cell 22 sits ten cells past the right edge, further from the thumb
+  than the control it replaces
 - the rail's date control survives its own input event — same DOM node before and after
-- stamping a Day template onto a date renders the copies-the-windows-in note, and sends the stamp
-  for that date alone
+- the date-range override is a **scope on the stamp picker** (#140 §1 surface B2), not a second
+  sheet or a second verb: `OverrideStampSheet` carries a `This date` / `A range…` `.modebar`, and
+  `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, swaps
+  the sheet's title and opening note to name the span. Range scope also offers one non-template row,
+  **"Blank every date in the span"** under a `Clear the span` heading (`onStamp(null, span)`) —
+  see the finding-1 paragraph below for why its wording is load-bearing
+- stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
+  sends one clobber-check-then-POST span write — `{ from, to, templateId }`, `from === to` for a
+  single date — never the old per-date `PUT .../stamp`
 - stamping onto a date that already carries an Override confirms the clobber before writing
 - reverting a date removes its Override and the date reads as following the pattern again
 - promotion names the new shape, lists the windows it will carry, and states that the source date
@@ -1106,7 +1125,31 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   same stamp repeated, never a second mechanism and never a multi-day object
 - a range landing on dates that already carry an Override names every one of them in a single
   confirmation before the write, not one prompt per date
-- a range whose end precedes its start is refused, and nothing is written
+- a range whose end precedes its start is refused, and nothing is written — the stamp picker's
+  range scope disables every `.pickrow` and shows *Choose a start and end date; the end must not
+  precede the start.* This is the same refusal the
+  deleted `OverrideRangeSheet` used to carry; it moved, not disappeared
+- the clobber confirmation (#140 §1 surface C) titles and buttons itself by both counts —
+  `Replace {n} Override{s}?` / `Replace {n} and stamp all {span}`, singular at n=1, and
+  `Replace all {n}` when the whole span is clobbered — renders the clobbered dates as a `.damage`
+  block (`.damage-h`, `.row`, `.pill.due` "already an override") with dates through `fmtShort`
+  rather than ISO, and closes with a note giving the untouched count that drops its first
+  sentence rather than saying "The other 0 dates" when the span is fully clobbered. It does not
+  name each date's current shape — `clobber-check` returns bare dates and `DayShape` carries no
+  template name, so the pill is the only claim that is actually true. `confirm()` takes
+  `(affected, span)`; both call sites (`OverrideScreen.tsx`'s unified `stamp`, via
+  `OverrideRange.ts`'s `authorOverrideSpan`) now wire the `span` argument, computed by
+  `authorOverrideSpan`'s own one-line inclusive day count
+
+**#140 review finding 4**: the untouched-dates sentence pluralized `n` but not `untouched` —
+`untouched === 1` still rendered "The other 1 dates are following the pattern". Now singular at
+`untouched === 1`, matching the title's existing `n === 1` handling. Separately: the note's "will
+be copied off it" and the button's "stamp all {span}" are false on the null-template path — the
+blank-the-span row — where nothing is stamped and the untouched dates are cleared rather than
+copied off the Pattern. `useOverrideConfirmation` is not told which arm it is confirming, so this
+remains a known inaccuracy on that one path, narrowed to a row that now announces itself as
+destructive. Closing it properly means passing the arm into `confirm`, and is better done together
+with #144, which changes what the arms are.
 
 **Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
 `clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
@@ -1141,6 +1184,33 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   longer offered, so a stale resolution is never sent
 - the Event sheet's DOM preserves the prototype's veil/sheet, time-field, scope banner, note and
   button-row class structure
+- every rendered time — the time-field defaults, the clash banner's span, and every option's label
+  and description — renders through `hm()`, never raw 24h; the fields themselves stay lenient on
+  input (ADR-0006: a control must not be remounted or rewritten from inside its own input handler)
+- the `timeHint` note (*Type it how you say it — 3p, 7:30a, 12p*) renders under the time row
+- with more than one overlapping window, each window's option group is preceded by a `.sec-h`
+  header naming that window; with exactly one, no header renders — the clash banner above already
+  names it
+- option copy matches `overlapOptions` verbatim: `replace`/`split`/`truncateStart` labels carry no
+  times (times live in the description only); `truncateEnd`'s label does carry times, which is not
+  a departure. No option repeats `— {window.name}` in its label — see the `.sec-h` line above for
+  how two windows' groups are told apart instead
+- the closing note carries the *move the end time to `{hm}` or later and the split disappears*
+  clause, computed from the first overlapping window, in addition to the one-off-day sentence —
+  **only when `split` is actually one of that window's offered options** (#140 review finding 6):
+  an event starting at or before the first overlapping window's start (`optionsFor` never offers
+  `split` there) omits the clause entirely rather than naming a split nobody was offered; the
+  one-off-day sentence itself stays unconditional
+- the sheet's date text (`When — …`, both notes) renders through `fmtShort`, not a local formatter
+- the time row and each option's description render **unstyled** — `index.css` has no class for
+  either, and this sheet does not add one or inline a style. Blocked on **#142** (`.timerow`,
+  `.timerow span`, `.btn .d`); the sheet renders correctly today, just without the prototype's
+  layout for these two spots, until #142 lands
+- interaction stays **select-then-submit** (`aria-pressed` options + a separate "Add event"
+  button), not the prototype's tap-to-apply: `POST /api/events` requires every overlapping
+  window's resolution in one body, refused otherwise with *Every overlapping Window needs a
+  resolution* (see above) — with two overlapping windows there is no single tap that constitutes a
+  complete request, so select-then-submit is the shape the wire already requires
 
 **Read-only dimensions viewer (#112)** — `dimensionsScreen(back, backLabel)` ~948 in
 `ui-screens.prototype.html`; `identityFields()` ~502, `timingFields()` ~513, `brief(v)` ~679 in
@@ -1151,13 +1221,21 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - an ordinal Dimension renders through the shared `OrdinalSlider` in its read-only presentation —
   ticks and hint present, the leave-at-the-default toggle present only where a default is declared
   (per § *Shared controls*), every control disabled
-- a categorical Dimension renders its values as a read-only chipset — no button, no pressed state
-  to toggle
+- a categorical Dimension renders its values as read-only pills on a plain `.meta` line — no
+  `.chipset` class (that belongs to #102's authoring control, which these read-only values are
+  not), no button, no pressed state to toggle
 - a fetched Dimension renders as fetched and never authored, alongside the authored ones (needs
   the source marker — see *What this list needs* below)
 - nothing on the screen commits — no control is enabled, no draft is held, and the tag-entry
   prototype's `toggleCat` / `setOrd` / `commitDraft` affordances are absent (they are #102's)
 - an empty registry renders the empty state rather than a bare frame
+
+The `source` pill (authored/derived/fetched) is not in the `dimensionsScreen` prototype, which
+predates `DimensionResponse.source` — it is a deliberate addition, not an invention: the schema
+now carries it (`DimensionResponse.source` in `api/schema.d.ts`), and this list already requires
+it, both in the fetched-Dimension bullet above and in #105's own bullet. Per plan constraint 4
+(`docs/superpowers/plans/2026-09-03-application-layer.md`), `CONTEXT.md` and this inventory win
+over a prototype, which is a design artifact, not spec.
 
 **What this list needs from the API that does not exist yet (#104)**
 
@@ -1184,13 +1262,40 @@ Until they land, those bullets are testable against fixtures and unreachable in 
 
 The presentation-free slice uses `OverrideRange.ts` and `OverrideDateSelection.ts`. The public
 seams are the existing HTTP client and props for the real shared `DateEntry`. `authorOverrideSpan`
-passes every server-returned clobber date to one asynchronous confirmation callback; `false`
-cancels. It submits the checked span once to `POST /api/overrides` and returns the server's dated
-window copies. It never resolves the `used` record as a template link or fans out requests.
-Server-side copy isolation remains covered by the schedule tests; browser tests guard the wire
-contract, not a simulated server implementation. The rail, scope banner, confirmation, stamp,
-range, revert and promotion sheets now have UI tests and a Schedule screen registration. The
-stylesheet is unchanged; #125 supplied its classes and #128 supplied the real DELETE endpoint.
+passes every server-returned clobber date, plus the span's inclusive day count, to one
+asynchronous confirmation callback — `confirm(dates, span)`; `false` cancels. It submits the
+checked span once to `POST /api/overrides` and returns the server's dated window copies. It never
+resolves the `used` record as a template link or fans out requests. Server-side copy isolation
+remains covered by the schedule tests; browser tests guard the wire contract, not a simulated
+server implementation. The rail, scope banner, confirmation, stamp, revert and promotion sheets
+now have UI tests and a Schedule screen registration. The stylesheet is unchanged; #125 supplied
+its classes and #128 supplied the real DELETE endpoint.
+
+**#140 §1 amendment**: `OverrideRangeSheet` (surface B1, "its own sheet, its own verb") is gone —
+`git rm`'d, not deprecated. The range is now a scope on `OverrideStampSheet` (surface B2): one
+sheet, one list, one button, matching the prototype's rejection of B1 in favor of B2. The escape
+(surface A) moved from a full-width "Pick a date…" button to a `.vtog` toggle on the rail's
+`.sec-h.with-tog` line, and its stale open-only handler (`() => setEscapeOpen(true)`, which could
+never close) is fixed as part of the port, not a separate bug ticket.
+
+**#140 review finding 1 — the row's wording is the whole safeguard.** It first read "Keep each
+date's own shape / detaches every date from the pattern without changing what is on it", which was
+the **opposite** of what it did. `DayShape` is `Override[date] ?? Pattern[weekday]` — the coalesce
+is on whether an Override *exists*, not on whether it has content — and `onStamp(null, span)`
+reaches `CreateOverrideSpan`'s null arm, `new DateOverride(date, [], null)`. A zero-window Override
+wins over the Pattern, so the row blanked every date in the span and nothing fired on them
+afterwards; recovery is per date.
+
+The row is **kept, with wording that matches the write**: "Blank every date in the span /
+every window on those dates is removed and nothing will fire on them", a `.pill.due` destructive
+marker, and a `Clear the span` heading separating it from the shapes. Blanking a span is a real
+thing to want (a week away), so the feature stays; only the lie goes. A test asserts the row's text
+contains the removal wording **and matches none of** `keep|preserv|without changing|own shape`, so
+the promise cannot creep back.
+
+There is still no way to *preserve* each date's shape across a span: the endpoint takes one
+template, not per-date windows, and fanning out per date would break this ticket's
+one-check-one-POST invariant. **#144** tracks that missing freeze-this-span server mode.
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 
@@ -1202,10 +1307,12 @@ Additional tests at this subsection's end (existing range and input-node tests r
 - a failed span POST surfaces the error without retrying individual dates
 - picking a date beyond the rail changes the selection without growing or recentering its fixed Chicago span
 - clearing the escape keeps the shown date and fixed rail span
+- `authorOverrideSpan`'s `confirm` callback receives the clobbered dates' span size (inclusive day count) alongside the dates themselves, computed once in the module rather than by each caller
 
 **Override screen integration additions (#107)**
 
-- cancelling replacement keeps the range form and writes nothing
+- cancelling replacement keeps the stamp sheet's range scope open (a shape row still shown, its
+  `From` value retained) and writes nothing
 - a failed stamp keeps the picker open and reports the error inside it
 - an Event marks its rail date and the selected date lists the resolved Event
 - the date view opens the existing Event editor for the selected date
@@ -1220,10 +1327,98 @@ all dates named before a range write, inverted-range disabled state, and post-re
 Remaining cross-ticket display limitations: `DayShape` contains windows, events and
 `isOverridden`, but no template-use name; `GET /api/overrides/{date}` is still a 204 read stub.
 The banner therefore says “Override” when no write response supplied its saved name; it never
-looks up a template to resolve copied windows. The template picker lists the real template read
-without prototype fixture-based season grouping. Window editing and matching-preview controls
-belong to #105; this screen displays the date windows as the prototype promotion list does.
-These limitations are reported on #107, not represented as completed cross-ticket features.
+looks up a template to resolve copied windows. The template picker groups the real template read
+by season use, as `#140 §3` below describes; window editing and matching-preview controls belong
+to #105 — this screen displays the date windows as the prototype promotion list does. These
+limitations are reported on #107, not represented as completed cross-ticket features.
+
+**#140 §1 re-port: the nav, the scope banner and the `sub` degradation** — the nav title and the
+scope banner now render `fmtShort(selectedDate)` (`OverrideFormat.ts`) instead of the raw ISO
+string, matching `nav()`/`scopeBanner()` in the prototype. `ScreenNav`'s `sub` cannot carry the
+prototype's `sh.label` (the day's shape name) because, as recorded above, `DayShape` has no
+template-use name — it degrades to the same source `sub` already had for the "already an
+override" sentence: the label a write in this session supplied (`labels[date]`), else `'One-off
+day'` when `isOverridden`, else `'Following the pattern'`. The `back` prop is omitted: the
+`schedule` tab registers exactly one screen (`overrides.screen.tsx`), so `App.tsx` takes the
+`screens.length === 1` branch and never wraps this screen in the `BackProvider` that supplies
+`ScreenNav`'s context back-action — there is currently no back navigation to wire without editing
+`App.tsx`, which is outside this ticket's lane.
+
+**#140 §2 re-port: the date's window and event rows** — times now render through `hm()` instead
+of `.slice(0, 5)`, and both lists render `dimPills` (`OverrideDimPills.tsx`, shared with the
+promote sheet below) — one `.pill.dim` per declared dimension key, one `.pill.inert` per loose
+tag. The dimension key is rendered lowercased rather than its display label, since resolving the
+label needs `/api/dimensions` and the screen does not fetch it; same gap as `sub` above (no
+`DayShape`-to-template link exists to resolve a name from either). The window row's `.pill.dim`
+"N fit" match-count pill is **not** rendered — this is the same accepted gap the table above
+already lists ("A window match preview (count + first titles) | no endpoint"), now also true of
+the date-window rows, not just the picker. The window row keeps a trailing `<span class="chev">`
+sibling of `.body`, present but inert: the tap-to-expand inline window editor it leads to is
+#105's ticket, not this one.
+
+**#140 §3 re-port: the shape picker groups, strips and toggle** — `OverrideStampSheet` now titles
+itself `fmtShort(date)` (a `date` prop, threaded from `OverrideScreen`) instead of "Stamp a shape",
+and groups its templates into "Already in this season" / "Used by other seasons" / "Not in use"
+(an empty group is omitted), closing with the prototype's shape-count note. The grouping is read
+from `GET /api/day-templates` plus `GET /api/patterns`'s (`PatternEndpoints.cs:21`) `days` for
+whichever Pattern carries `active: true` — **but nothing on the wire carries that flag yet**:
+`PatternResponse` is `(Id, Name, Days)` (`PatternEndpoints.cs:134`), and `GET /api/patterns/active`
+does not exist at all (`schema.d.ts`'s `"/api/patterns/active"` entry has `get?: never` and only a
+`put`, the switch-active-pattern write). #143 tracks adding `bool Active` to `PatternResponse`
+server-side; until it lands, `OverrideStampSheet.tsx` types the extra field locally
+(`ActiveFlagged = PatternResponse & { active?: boolean }`) rather than editing the generated
+`schema.d.ts`, which belongs to the Integration lane. No entry ever matches today, so `activeDays`
+stays `null` and the sheet falls back to one ungrouped `Shapes` list rather than showing an error,
+per this ticket's own contingency — in today's backend that fallback is not a rare path, it is the
+only path, until #143 ships the flag; grouping then starts working with no further Web change.
+`isCurrent`/`aria-pressed="true"`/the `current` pill are never rendered on any row: resolving which
+template a date is currently stamped from needs the same `DayShape`-to-template link the `sub` gap
+above already names, and it does not exist either.
+The view toggle (`Strips`/`Times`, `.vtog`) is one local `useState`, not the prototype's
+cross-surface shared preference — sharing it needs a store outside this ticket's file lane. The
+read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `left`/`width`); the
+tappable `edit` form is #105's inline editor, not ported here.
+
+**#140 review finding 5**: `Strip`'s bars floored `left` at 0 but never capped it at 100, and
+capped `right` at 100 but never floored it at 0 — a window wholly past 11p (e.g. 23:15–23:45)
+rendered a bar past the track's right edge, and a window wholly before 6a (e.g. 04:00–05:00)
+rendered a phantom 1.2%-wide sliver at the track's start, as though the window sat there. Both
+ends now clamp to `[0, 100]` before the width is derived, and a bar whose clamped width is zero
+(both ends landing on the same edge) is skipped rather than drawn. The 1.2 floor still applies to
+bars that clamp to a nonzero width, so a genuinely tiny in-band window stays visible.
+
+**#140 review finding 3**: `ShapeRow`'s `N windows · start–end` summary used to take `windows[0]`
+and `windows[length-1]` verbatim. Windows compare as a multiset (`DateOverride.cs`: "a Window is a
+per-day instance, not a position") and the server passes a template's `Windows` through unsorted
+(`OverrideEndpoints.cs:178`), so an evening-first-authored template rendered an inverted span
+("6p–10a" for a 9a–10a-then-6p–7p day). The summary now derives the earliest start and the latest
+end independently by reducing over all windows, not by indexing a sort — with overlapping
+windows, the window with the latest start is not necessarily the one with the latest end. `Strip`
+itself is order-independent (each bar is positioned from its own window) and needed no change.
+
+**#140 §4 re-port: the promote sheet's prefilled name and dimPills** — `OverridePromoteSheet` now
+takes a `shapeName` prop and initialises its name field to `` `${shapeName} v2` `` in
+`useState`'s initial value, per ADR-0006 — not an effect, so the control never resets itself once
+the user starts typing. The window list now renders `dimPills` alongside the existing `.pill.dur`,
+same as §2's window and event rows.
+
+**#140 review finding 2**: `shapeName` is **not** the degraded `sub` label — `OverrideScreen`
+passes `labels[selectedDate] ?? null`, a real shape name a write in this session supplied, or
+`null`. It previously took `label`, the same status-or-name string `sub` renders, so opening
+*Save as a shape* on a date still following its pattern prefilled the new template's name as
+"Following the pattern v2" — a status phrase, not a shape. `useState(shapeName === null ? '' :
+\`${shapeName} v2\`)` leaves the field empty rather than guessing; the Save button is already
+disabled on an empty name.
+
+- a single date that is its own whole span reads as one date, not as a span of one — *Replace it*
+  and *This date already departs from the pattern*, never *Replace all 1* or *1 of the 1 dates in
+  this span*. This is the commonest clobber path: stamping the date already on screen (#140)
+
+- the ungrouped fallback is tested against **today's real wire shape** — a `/api/patterns` response
+  whose entries carry no `active` marker — not against a stubbed `/api/patterns/active`, which is
+  not a route. A fixture that invents an endpoint hides that the endpoint is missing: the suite was
+  green on that stub while the running app failed the read on every sheet open. The grouping
+  paragraph under *Override a date (#107)* carries the detail and cites #143
 
 ### Web-Now
 
@@ -1420,3 +1615,14 @@ specified under **Shared controls** above and are not restated here.
 - `PUT /api/tasks/{id}/duration` accepts the five canonical buckets and returns 204
 - `PUT /api/tasks/{id}/duration` rejects malformed/invalid input with 400 and refuses absent/derived Tasks with 409
 - OpenAPI declares the Duration request DTO and 204/400/409 route outcomes
+
+**Shared display formatters — #140**
+
+`OverrideFormat.ts` holds the two formats every authoring surface re-ports: `hm` (the prototype's
+`3p` / `7:30a` / `12p`) and `fmtShort` (`Tue 15 Sep`). Both format strings the server already sent;
+neither reads a clock.
+
+- a time renders `6a`, `7:30a`, `12p`, `12a`, `3p`, `11:45p` — never `06:00`
+- a wire time carrying seconds renders the same as one without them
+- an ISO date renders `Tue 15 Sep`, and a single-digit day carries no leading zero — formatted as
+  UTC because the ISO date is already a Chicago calendar date (`DayBoundary.ZoneId`)

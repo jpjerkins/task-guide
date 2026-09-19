@@ -21,12 +21,19 @@ function getRow(container: HTMLElement, label: string): HTMLElement {
   return row as HTMLElement
 }
 
-// The always-present .meta direct child of .body (as opposed to the categorical value
-// container, which is also a .meta but carries the extra .chipset class).
+// The always-present .meta direct child of .body — the first one, holding the algebra and
+// source pills (as opposed to a categorical row's second .meta, which holds its values).
 function getMeta(body: HTMLElement): HTMLElement {
-  const meta = body.querySelector(':scope > .meta:not(.chipset)')
+  const meta = body.querySelector(':scope > .meta')
   expect(meta).toBeInTheDocument()
   return meta as HTMLElement
+}
+
+// A categorical row's value container: its second .meta direct child of .body.
+function getValuesMeta(body: HTMLElement): HTMLElement {
+  const metas = body.querySelectorAll(':scope > .meta')
+  expect(metas.length).toBe(2)
+  return metas[1] as HTMLElement
 }
 
 function getSourcePill(meta: HTMLElement): HTMLElement {
@@ -96,13 +103,16 @@ describe('DimensionsScreen', () => {
       expect(within(row).queryByText('fetched')).not.toBeInTheDocument()
     }
 
-    // Categorical row: the second .meta (.meta.chipset) holds one .pill per value, no buttons.
+    // Categorical row: the second .meta (plain, no .chipset — it is read-only) holds one .pill
+    // per value, no buttons.
     const locationBody = locationRow.querySelector(':scope > .body') as HTMLElement
-    const locationChipset = locationBody.querySelector(':scope > .meta.chipset')
-    expect(locationChipset).toBeInTheDocument()
-    const locationPills = locationChipset!.querySelectorAll(':scope > .pill')
+    const locationValues = getValuesMeta(locationBody)
+    // Read-only values are not tappable chips — the authoring control's .chipset class
+    // belongs to #102, not this viewer.
+    expect(locationValues).not.toHaveClass('chipset')
+    const locationPills = locationValues.querySelectorAll(':scope > .pill')
     expect(Array.from(locationPills).map((pill) => pill.textContent)).toEqual(['home', 'garage'])
-    expect(locationChipset!.querySelectorAll('button')).toHaveLength(0)
+    expect(locationValues.querySelectorAll('button')).toHaveLength(0)
 
     // Ordinal row: the third direct child of .body is OrdinalSlider's .stack root, and the
     // slider found within it belongs to this row (not just floating unscoped on the page).
@@ -193,18 +203,67 @@ describe('DimensionsScreen', () => {
     expect(defaultControl).toBeDisabled()
     expect(defaultControl).toHaveAttribute('aria-pressed', 'true')
 
-    // Categorical rows (Location, Weather): .meta.chipset holds exactly the declared values,
-    // in order, and zero buttons.
+    // Categorical rows (Location, Weather): the values .meta holds exactly the declared
+    // values, in order, and zero buttons.
     for (const [row, values] of [
       [locationRow, ['home', 'garage']],
       [weatherRow, ['dry', 'wet']],
     ] as const) {
       const body = row.querySelector(':scope > .body') as HTMLElement
-      const chipset = body.querySelector(':scope > .meta.chipset')
-      expect(chipset).toBeInTheDocument()
-      const pills = chipset!.querySelectorAll(':scope > .pill')
+      const valuesMeta = getValuesMeta(body)
+      const pills = valuesMeta.querySelectorAll(':scope > .pill')
       expect(Array.from(pills).map((pill) => pill.textContent)).toEqual(values)
-      expect(chipset!.querySelectorAll('button')).toHaveLength(0)
+      expect(valuesMeta.querySelectorAll('button')).toHaveLength(0)
+    }
+  })
+
+  it('renders the source pill for each wire source value, including derived', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            id: 'location',
+            label: 'Location',
+            algebra: 'categorical',
+            values: ['home'],
+            taskDefault: null,
+            windowDefault: null,
+            source: 'authored',
+          },
+          {
+            id: 'season',
+            label: 'Season',
+            algebra: 'categorical',
+            values: ['winter'],
+            taskDefault: null,
+            windowDefault: null,
+            source: 'derived',
+          },
+          {
+            id: 'weather',
+            label: 'Weather',
+            algebra: 'categorical',
+            values: ['dry'],
+            taskDefault: null,
+            windowDefault: null,
+            source: 'fetched',
+          },
+        ]),
+      ),
+    )
+
+    const { container } = render(<DimensionsScreen />)
+    await screen.findByRole('heading', { name: 'Dimensions' })
+
+    for (const [label, source] of [
+      ['Location', 'authored'],
+      ['Season', 'derived'],
+      ['Weather', 'fetched'],
+    ] as const) {
+      const row = getRow(container, label)
+      const body = row.querySelector(':scope > .body') as HTMLElement
+      expect(getSourcePill(getMeta(body))).toHaveTextContent(source)
     }
   })
 

@@ -47,7 +47,7 @@ function DimensionRow({ dimension }: { dimension: DimensionResponse }) {
             id={`${dimension.id}-value`}
           />
         ) : (
-          <div className="meta chipset" aria-label={`${dimension.label} values`}>
+          <div className="meta" aria-label={`${dimension.label} values`}>
             {dimension.values.map((value) => (
               <span className="pill" key={value}>
                 {value}
