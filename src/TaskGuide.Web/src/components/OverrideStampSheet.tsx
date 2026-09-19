@@ -43,13 +43,17 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (view: ViewM
 // Ported from shapeRow() (~946). `isCurrent` is always false here — see the inventory note below
 // this component: the screen has no template id to compare against, only a saved name.
 function ShapeRow({ template, view, busy, onPick }: { template: Template; view: ViewMode; busy: boolean; onPick: () => void }) {
-  const first = template.windows[0]
-  const last = template.windows[template.windows.length - 1]
+  // Windows compare as a multiset (DateOverride.cs) and arrive unsorted (OverrideEndpoints.cs), so
+  // the summary derives the earliest start and the latest end independently rather than trusting
+  // authoring order — with overlap, the last-by-start window is not necessarily the one that ends
+  // last.
+  const earliestStart = template.windows.reduce((min, w) => minutesOf(w.start) < minutesOf(min.start) ? w : min, template.windows[0])
+  const latestEnd = template.windows.reduce((max, w) => minutesOf(w.end) > minutesOf(max.end) ? w : max, template.windows[0])
   return <button className="pickrow" aria-pressed={false} disabled={busy} onClick={onPick}>
     <span className="who">
       <span className="nm">{template.name}</span>
       <span className="sub2">{template.windows.length
-        ? `${template.windows.length} window${template.windows.length === 1 ? '' : 's'} · ${hm(first.start)}–${hm(last.end)}`
+        ? `${template.windows.length} window${template.windows.length === 1 ? '' : 's'} · ${hm(earliestStart.start)}–${hm(latestEnd.end)}`
         : 'no windows — a deliberately silent day'}</span>
       {view === 'strip' ? <Strip windows={template.windows} /> : <span className="meta">
         {template.windows.length

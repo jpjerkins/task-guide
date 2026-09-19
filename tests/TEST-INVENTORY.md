@@ -1356,6 +1356,15 @@ cross-surface shared preference — sharing it needs a store outside this ticket
 read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `left`/`width`); the
 tappable `edit` form is #105's inline editor, not ported here.
 
+**#140 review finding 3**: `ShapeRow`'s `N windows · start–end` summary used to take `windows[0]`
+and `windows[length-1]` verbatim. Windows compare as a multiset (`DateOverride.cs`: "a Window is a
+per-day instance, not a position") and the server passes a template's `Windows` through unsorted
+(`OverrideEndpoints.cs:178`), so an evening-first-authored template rendered an inverted span
+("6p–10a" for a 9a–10a-then-6p–7p day). The summary now derives the earliest start and the latest
+end independently by reducing over all windows, not by indexing a sort — with overlapping
+windows, the window with the latest start is not necessarily the one with the latest end. `Strip`
+itself is order-independent (each bar is positioned from its own window) and needed no change.
+
 **#140 §4 re-port: the promote sheet's prefilled name and dimPills** — `OverridePromoteSheet` now
 takes a `shapeName` prop and initialises its name field to `` `${shapeName} v2` `` in
 `useState`'s initial value, per ADR-0006 — not an effect, so the control never resets itself once

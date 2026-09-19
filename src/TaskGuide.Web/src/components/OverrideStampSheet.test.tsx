@@ -77,6 +77,37 @@ it('a_windowless_template_reads_no_windows_a_deliberately_silent_day_and_a_ghost
   expect(shape.querySelector('.pill.ghost')).toHaveTextContent('silent')
 })
 
+// #140 review finding 3: a template's Windows compare as a multiset (DateOverride.cs: "a Window
+// is a per-day instance, not a position"), and the server passes them through unsorted
+// (OverrideEndpoints.cs:178). A template authored evening-first must not render an inverted span.
+it('the_shape_summary_sorts_windows_before_taking_the_earliest_start_and_latest_end_even_when_authored_out_of_order', async () => {
+  const eveningFirst = { id: 'dt_evening_first', name: 'Evening First', windows: [win('e1', '18:00:00', '19:00:00'), win('e2', '09:00:00', '10:00:00')], eventPrototypes: [], unused: false }
+  stub(patterns([eveningFirst.id]))
+  fetch.mockImplementation(async (url: string) => {
+    if (url === '/api/day-templates') return json([eveningFirst])
+    if (url === '/api/patterns') return json(patterns([eveningFirst.id]))
+    return new Response(null, { status: 404 })
+  })
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  const shape = await screen.findByRole('button', { name: /Evening First/ })
+  expect(shape.querySelector('.who > .sub2')).toHaveTextContent('2 windows · 9a–7p')
+})
+
+// The widest-span case: an overlapping window whose start is later must not steal `last` — the
+// latest END wins, not the last-by-start element.
+it('the_shape_summary_takes_the_latest_end_not_the_end_of_the_last-by-start_window', async () => {
+  const overlapping = { id: 'dt_overlapping', name: 'Overlapping', windows: [win('o1', '09:00:00', '20:00:00'), win('o2', '10:00:00', '11:00:00')], eventPrototypes: [], unused: false }
+  stub(patterns([overlapping.id]))
+  fetch.mockImplementation(async (url: string) => {
+    if (url === '/api/day-templates') return json([overlapping])
+    if (url === '/api/patterns') return json(patterns([overlapping.id]))
+    return new Response(null, { status: 404 })
+  })
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  const shape = await screen.findByRole('button', { name: /Overlapping/ })
+  expect(shape.querySelector('.who > .sub2')).toHaveTextContent('2 windows · 9a–8p')
+})
+
 it('the_strip_positions_ticks_and_window_bars_from_the_6a-11p_span_as_inline_style_and_no_row_is_marked_current', async () => {
   stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
