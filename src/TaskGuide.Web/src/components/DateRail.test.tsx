@@ -2,10 +2,6 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { DateRail } from './DateRail'
 
-// jsdom does not implement scrollIntoView; every render calls it now (#140), so every test needs
-// a stub or it throws.
-Element.prototype.scrollIntoView = vi.fn()
-
 it('the_rail_renders_the_fixed_10_day_span_around_today_21_buttons_ten_back_through_ten_forward_marks_the_selected_date_and_dots_only_the_dates_carrying_an_Override_or_an_Event', () => {
   const props = { from: '2026-10-22', to: '2026-11-11', selected: '2026-11-01', marked: ['2026-10-24', '2026-11-03'], onSelect: vi.fn() }
   const { container, rerender } = render(<DateRail {...props} />)

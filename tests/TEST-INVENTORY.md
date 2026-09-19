@@ -1111,6 +1111,16 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - a range landing on dates that already carry an Override names every one of them in a single
   confirmation before the write, not one prompt per date
 - a range whose end precedes its start is refused, and nothing is written
+- the clobber confirmation (#140 §1 surface C) titles and buttons itself by both counts —
+  `Replace {n} Override{s}?` / `Replace {n} and stamp all {span}`, singular at n=1, and
+  `Replace all {n}` when the whole span is clobbered — renders the clobbered dates as a `.damage`
+  block (`.damage-h`, `.row`, `.pill.due` "already an override") with dates through `fmtShort`
+  rather than ISO, and closes with a note giving the untouched count that drops its first
+  sentence rather than saying "The other 0 dates" when the span is fully clobbered. It does not
+  name each date's current shape — `clobber-check` returns bare dates and `DayShape` carries no
+  template name, so the pill is the only claim that is actually true. `confirm()` now takes
+  `(affected, span)`; **both call sites (`OverrideScreen.tsx`, `OverrideRange.ts`) need the new
+  `span` argument wired — not done in this pass**
 
 **Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
 `clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
