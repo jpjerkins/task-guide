@@ -36,9 +36,9 @@ public static class PatternEndpoints
     private static async Task<Results<Created<PatternResponse>, BadRequest<object>>> CreateAsync(
         PatternRequest request, IStore store, IIdMinter minter, CancellationToken ct)
     {
-        if (!IsValid(request)) return TypedResults.BadRequest<object>(new { error = "a name and seven Day template ids are required" });
+        if (!IsValid(request) || request.Days is not { } days) return TypedResults.BadRequest<object>(new { error = "a name and seven Day template ids are required" });
 
-        var pattern = new Pattern(minter.NextPatternId(), request.Name, request.Days.Select(id => new DayTemplateId(id)).ToArray());
+        var pattern = new Pattern(minter.NextPatternId(), request.Name, days.Select(id => new DayTemplateId(id)).ToArray());
         await new CreatePattern(store).ExecuteAsync(pattern, ct);
         return TypedResults.Created($"/api/patterns/{pattern.Id.Value}", ToResponse(pattern));
     }
@@ -46,9 +46,9 @@ public static class PatternEndpoints
     private static async Task<Results<Ok<PatternResponse>, BadRequest<object>, Conflict<object>>> EditAsync(
         string id, PatternRequest request, IStore store, CancellationToken ct)
     {
-        if (!IsPatternId(id) || !IsValid(request)) return TypedResults.BadRequest<object>(new { error = "a Pattern id, name and seven Day template ids are required" });
+        if (!IsPatternId(id) || !IsValid(request) || request.Days is not { } days) return TypedResults.BadRequest<object>(new { error = "a Pattern id, name and seven Day template ids are required" });
 
-        var pattern = new Pattern(new PatternId(id), request.Name, request.Days.Select(day => new DayTemplateId(day)).ToArray());
+        var pattern = new Pattern(new PatternId(id), request.Name, days.Select(day => new DayTemplateId(day)).ToArray());
         var outcome = await new EditPattern(store).ExecuteAsync(pattern, ct);
         return outcome.Match<Results<Ok<PatternResponse>, BadRequest<object>, Conflict<object>>>(
             edited => TypedResults.Ok(ToResponse(edited.Pattern)),
@@ -113,8 +113,8 @@ public static class PatternEndpoints
 
     private static bool IsValid(PatternRequest request) =>
         !string.IsNullOrWhiteSpace(request.Name)
-        && request.Days.Count == 7
-        && request.Days.All(IsDayTemplateId);
+        && request.Days is { Count: 7 } days
+        && days.All(IsDayTemplateId);
 
     private static bool IsPatternId(string? value) => IsId(value, PatternId.Prefix, 28);
 
@@ -129,7 +129,7 @@ public static class PatternEndpoints
         new(pattern.Id.Value, pattern.Name, pattern.Days.Select(day => day.Value).ToArray());
 }
 
-public sealed record PatternRequest(string Name, IReadOnlyList<string> Days);
+public sealed record PatternRequest(string Name, IReadOnlyList<string>? Days);
 public sealed record SwitchActivePatternRequest(string PatternId);
 public sealed record PatternResponse(string Id, string Name, IReadOnlyList<string> Days);
 public sealed record SwitchImpactResponse(int NewlyOrphaned);

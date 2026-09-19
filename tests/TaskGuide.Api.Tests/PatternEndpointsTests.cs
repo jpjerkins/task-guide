@@ -79,6 +79,24 @@ public sealed class PatternEndpointsTests : IDisposable
         Assert.DoesNotContain(_factory.Services.GetRequiredService<IStore>().Read().Patterns.Patterns, pattern => pattern.Id.Equals(dormant.Id));
     }
 
+    [Fact]
+    public async Task POST_api_patterns_with_a_nonblank_name_and_omitted_days_returns_400()
+    {
+        var response = await _client.PostAsJsonAsync("/api/patterns", new { name = "Missing days" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PATCH_api_patterns_id_with_a_nonblank_name_and_omitted_days_returns_400()
+    {
+        var response = await _client.PatchAsJsonAsync(
+            "/api/patterns/p_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            new { name = "Missing days" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private async Task WriteAsync(params object[] writes)
     {
         var store = _factory.Services.GetRequiredService<IStore>();
