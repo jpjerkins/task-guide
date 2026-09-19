@@ -27,22 +27,32 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
-it('Pick_a_date_opens_the_shared_DateEntry_and_selecting_a_date_beyond_the_rail_shows_that_date_still_without_growing_the_rail', async () => {
+it('Any_date_opens_the_shared_DateEntry_and_selecting_a_date_beyond_the_rail_shows_that_date_still_without_growing_the_rail', async () => {
   const { container } = render(<OverrideScreen />)
   await screen.findByText('Family time')
   expect(container.querySelector('.scope.one > .g')).toHaveTextContent('◈')
   expect(container.querySelector('.scope.one')).toHaveTextContent('The first change copies the day off its shape')
   const rail = container.querySelector('.weekstrip')
   expect(rail?.children).toHaveLength(21)
-  fireEvent.click(screen.getByRole('button', { name: 'Pick a date…' }))
-  const input = screen.getByLabelText('Pick a date…')
+  const secH = container.querySelector('.sec-h.with-tog') as HTMLElement
+  expect(secH).toHaveTextContent('Ten days either side of today')
+  const toggle = within(secH).getByRole('button', { name: 'Any date…' })
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  const input = screen.getByLabelText('Any date')
   fireEvent.change(input, { target: { value: '2027-12-25' } })
   await screen.findByRole('heading', { name: 'Sat 25 Dec' })
   await waitFor(() => expect(container.querySelector('.scope.one')).toHaveTextContent('Sat 25 Dec only'))
-  expect(screen.getByLabelText('Pick a date…')).toBe(input)
+  expect(container.querySelector('.sec-h.with-tog')).toHaveTextContent('Sat 25 Dec · beyond the rail')
+  expect(screen.getByLabelText('Any date')).toBe(input)
   expect(rail?.children).toHaveLength(21)
   expect(rail?.querySelector('[aria-current]')).toBeNull()
   expect(container.querySelector('[style]')).toBeNull()
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.queryByLabelText('Any date')).not.toBeInTheDocument()
 })
 
 it('the_nav_title_is_the_short_date_and_the_sub_falls_back_to_pattern_or_override_when_no_write_supplied_a_label', async () => {

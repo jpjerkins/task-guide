@@ -97,6 +97,7 @@ export function OverrideScreen() {
     } catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
   }
+  const beyondRail = selectedDate < railSpan.from || selectedDate > railSpan.to
   const modalOpen = stampOpen || rangeOpen || promoteOpen || eventOpen
   const shown = day?.date === selectedDate ? day : null
   // The wire's DayShape carries no template-use name (tests/TEST-INVENTORY.md), so the nav's
@@ -106,8 +107,14 @@ export function OverrideScreen() {
   return <>
     <ScreenNav title={fmtShort(selectedDate)} sub={label ?? undefined} />
     <DateRail {...railSpan} selected={selectedDate} marked={marked} disabled={busy || modalOpen} onSelect={dateEntryProps.onChange} />
-    <div className="btn-row"><button className="btn" disabled={busy || modalOpen} onClick={() => setEscapeOpen(true)}>Pick a date…</button></div>
-    {escapeOpen && <div className="stack"><DateEntry {...dateEntryProps} disabled={busy || modalOpen} /></div>}
+    <div className="sec-h with-tog">
+      {beyondRail ? `${fmtShort(selectedDate)} · beyond the rail` : 'Ten days either side of today'}
+      <span className="vtog">
+        <button aria-pressed={escapeOpen} aria-expanded={escapeOpen} disabled={busy || modalOpen}
+          onClick={() => setEscapeOpen(v => !v)}>Any date…</button>
+      </span>
+    </div>
+    {escapeOpen && <DateEntry {...dateEntryProps} label="Any date" disabled={busy || modalOpen} />}
     <div className="scroll" inert={modalOpen}>
       {error && <div className="note" role="alert">{error}</div>}
       {shown && <>
