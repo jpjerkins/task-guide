@@ -122,6 +122,54 @@ it('the_strip_positions_ticks_and_window_bars_from_the_6a-11p_span_as_inline_sty
   expect(bars).toHaveLength(2)
 })
 
+// #140 review finding 5: `left` was floored at 0 but never capped at 100, and `right` was capped
+// at 100 but never floored at 0 — a window wholly past 11p or wholly before 6a rendered a bar
+// outside the track (or, for the before-6a case, a phantom sliver at the very start of the
+// track). Both ends must clamp to [0, 100] and a bar whose clamped width is zero must not render.
+it('a_window_wholly_outside_the_6a-11p_band_renders_no_bar', async () => {
+  const outOfBand = { id: 'dt_out_of_band', name: 'Out Of Band', windows: [win('late', '23:15:00', '23:45:00'), win('early', '04:00:00', '05:00:00')], eventPrototypes: [], unused: false }
+  stub(patterns([outOfBand.id]))
+  fetch.mockImplementation(async (url: string) => {
+    if (url === '/api/day-templates') return json([outOfBand])
+    if (url === '/api/patterns') return json(patterns([outOfBand.id]))
+    return new Response(null, { status: 404 })
+  })
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  const shape = await screen.findByRole('button', { name: /Out Of Band/ })
+  expect(shape.querySelectorAll('.strip i')).toHaveLength(0)
+})
+
+it('a_window_crossing_the_11p_edge_clamps_its_bar_to_the_track_rather_than_spilling_past_it', async () => {
+  const crossing = { id: 'dt_crossing', name: 'Crossing', windows: [win('c1', '22:00:00', '23:30:00')], eventPrototypes: [], unused: false }
+  stub(patterns([crossing.id]))
+  fetch.mockImplementation(async (url: string) => {
+    if (url === '/api/day-templates') return json([crossing])
+    if (url === '/api/patterns') return json(patterns([crossing.id]))
+    return new Response(null, { status: 404 })
+  })
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  const shape = await screen.findByRole('button', { name: /Crossing/ })
+  const bar = shape.querySelector('.strip i') as HTMLElement
+  expect(bar).not.toBeNull()
+  expect(parseFloat(bar.style.left)).toBeLessThanOrEqual(100)
+  expect(parseFloat(bar.style.left) + parseFloat(bar.style.width)).toBeLessThanOrEqual(100.001)
+})
+
+it('a_genuinely_tiny_in-band_window_still_renders_at_the_1_2_percent_floor', async () => {
+  const tiny = { id: 'dt_tiny', name: 'Tiny', windows: [win('t1', '08:00:00', '08:03:00')], eventPrototypes: [], unused: false }
+  stub(patterns([tiny.id]))
+  fetch.mockImplementation(async (url: string) => {
+    if (url === '/api/day-templates') return json([tiny])
+    if (url === '/api/patterns') return json(patterns([tiny.id]))
+    return new Response(null, { status: 404 })
+  })
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  const shape = await screen.findByRole('button', { name: /Tiny/ })
+  const bar = shape.querySelector('.strip i') as HTMLElement
+  expect(bar).not.toBeNull()
+  expect(bar.style.width).toBe('1.2%')
+})
+
 it('when_the_active_pattern_cannot_be_read_it_falls_back_to_one_ungrouped_list_instead_of_an_error', async () => {
   stub('fail')
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)

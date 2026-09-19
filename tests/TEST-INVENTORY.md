@@ -1364,6 +1364,14 @@ cross-surface shared preference — sharing it needs a store outside this ticket
 read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `left`/`width`); the
 tappable `edit` form is #105's inline editor, not ported here.
 
+**#140 review finding 5**: `Strip`'s bars floored `left` at 0 but never capped it at 100, and
+capped `right` at 100 but never floored it at 0 — a window wholly past 11p (e.g. 23:15–23:45)
+rendered a bar past the track's right edge, and a window wholly before 6a (e.g. 04:00–05:00)
+rendered a phantom 1.2%-wide sliver at the track's start, as though the window sat there. Both
+ends now clamp to `[0, 100]` before the width is derived, and a bar whose clamped width is zero
+(both ends landing on the same edge) is skipped rather than drawn. The 1.2 floor still applies to
+bars that clamp to a nonzero width, so a genuinely tiny in-band window stays visible.
+
 **#140 review finding 3**: `ShapeRow`'s `N windows · start–end` summary used to take `windows[0]`
 and `windows[length-1]` verbatim. Windows compare as a multiset (`DateOverride.cs`: "a Window is a
 per-day instance, not a position") and the server passes a template's `Windows` through unsorted

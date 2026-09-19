@@ -21,14 +21,19 @@ function minutesOf(time: string): number {
 // tappable `edit` form is the inline window editor, which is #105's, not this ticket's.
 function Strip({ windows }: { windows: Window[] }) {
   const A = 6 * 60, B = 23 * 60, span = B - A
+  const clamp = (percent: number) => Math.min(100, Math.max(0, percent))
   return <div className={`strip${windows.length ? '' : ' empty-d'}`}>
     {/* left/width are minutes-of-day positioned onto the 6a-11p strip — data, not design;
         index.css's `.strip u`/`.strip i` supply color, height and radius. */}
     {[9, 12, 15, 18, 21].map(h => <u key={h} style={{ left: `${(h * 60 - A) / span * 100}%` }} />)}
-    {windows.map(w => {
-      const left = Math.max(0, (minutesOf(w.start) - A) / span * 100)
-      const right = Math.min(100, (minutesOf(w.end) - A) / span * 100)
-      return <i key={w.id.value} style={{ left: `${left}%`, width: `${Math.max(1.2, right - left)}%` }} />
+    {windows.flatMap(w => {
+      // Clamp both ends to the track before deriving width — a window wholly outside 6a-11p
+      // clamps both ends to the same edge and is skipped rather than drawn as a phantom sliver or
+      // a bar spilling past the track. The 1.2 floor applies only once a bar is known non-empty.
+      const left = clamp((minutesOf(w.start) - A) / span * 100)
+      const right = clamp((minutesOf(w.end) - A) / span * 100)
+      if (right <= left) return []
+      return [<i key={w.id.value} style={{ left: `${left}%`, width: `${Math.max(1.2, right - left)}%` }} />]
     })}
   </div>
 }
