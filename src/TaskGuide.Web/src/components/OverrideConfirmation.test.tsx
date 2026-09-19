@@ -69,3 +69,14 @@ it('confirming_resolves_true_and_cancelling_resolves_false_and_neither_adds_a_se
   fireEvent.click(screen.getByRole('button', { name: 'Replace 1 and stamp all 5' }))
   expect(await result).toBe(true)
 })
+
+// The commonest clobber path by far: stamping the single date you are looking at, when it already
+// carries an Override. "Replace all 1" is not English, and "1 of the 1 dates in this span" is worse.
+it('a_single_date_that_is_its_own_whole_span_reads_as_one_date_not_as_a_span_of_one', async () => {
+  render(<Host />)
+  const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number) => Promise<boolean> }).confirm
+  act(() => { void confirm(['2026-11-03'], 1) })
+  expect(await screen.findByRole('button', { name: 'Replace it' })).toBeInTheDocument()
+  expect(document.querySelector('.damage-h')).toHaveTextContent(
+    'This date already departs from the pattern. Stamping replaces what is on it.')
+})

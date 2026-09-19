@@ -21,12 +21,16 @@ export function useOverrideConfirmation() {
     const { dates, span } = clobber
     const n = dates.length
     const untouched = span - n
+    // A single date stamped on its own is the commonest path, and it is not a span: "Replace all 1"
+    // and "1 of the 1 dates in this span" both read as machine output.
+    const alone = span === 1 && n === 1
     // Dates render through fmtShort, never ISO. No per-date shape detail: clobber-check returns
     // bare dates and DayShape carries no template name, so the .pill.due is what is actually true.
     return <OverrideSheet title={`Replace ${n} Override${n === 1 ? '' : 's'}?`} onCancel={() => finish(false)}>
       <div className="damage">
-        <div className="damage-h">{n} of the {span} dates in this span already depart from the pattern.
-          Stamping replaces what is on them.</div>
+        <div className="damage-h">{alone
+          ? 'This date already departs from the pattern. Stamping replaces what is on it.'
+          : `${n} of the ${span} dates in this span already depart from the pattern. Stamping replaces what is on them.`}</div>
         {dates.map(date => <div className="row" key={date}><div className="body">
           <div className="title">{fmtShort(date)}</div>
           <div className="meta"><span className="pill due">already an override</span></div>
@@ -37,7 +41,7 @@ export function useOverrideConfirmation() {
         Nothing here can be undone in one step — reverting is per date.
       </div>
       <div className="btn-row"><button className="btn danger wide" onClick={() => finish(true)}>
-        {untouched > 0 ? `Replace ${n} and stamp all ${span}` : `Replace all ${n}`}
+        {alone ? 'Replace it' : untouched > 0 ? `Replace ${n} and stamp all ${span}` : `Replace all ${n}`}
       </button></div>
     </OverrideSheet>
   })()

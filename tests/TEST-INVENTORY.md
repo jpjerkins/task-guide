@@ -1318,6 +1318,10 @@ initialises its name field to `` `${label} v2` `` in `useState`'s initial value,
 not an effect, so the control never resets itself once the user starts typing. The window list now
 renders `dimPills` alongside the existing `.pill.dur`, same as §2's window and event rows.
 
+- a single date that is its own whole span reads as one date, not as a span of one — *Replace it*
+  and *This date already departs from the pattern*, never *Replace all 1* or *1 of the 1 dates in
+  this span*. This is the commonest clobber path: stamping the date already on screen (#140)
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and
