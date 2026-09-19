@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { OverrideStampSheet } from './OverrideStampSheet'
 
 function json(body: unknown) { return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } }) }
@@ -99,4 +99,60 @@ it('closes_with_the_shape_count_and_grouping-rationale_note_alongside_the_existi
   const sheet = await screen.findByRole('dialog')
   expect(sheet).toHaveTextContent('3 shapes. Grouping by use keeps the one you want near the top')
   expect(sheet).toHaveTextContent('not a link')
+})
+
+it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switching_to_A_range_reveals_From_To_and_switches_the_title_and_note', async () => {
+  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  expect(await screen.findByRole('dialog', { name: 'Sun 1 Nov' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'This date' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: 'A range…' })).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.queryByLabelText('From')).not.toBeInTheDocument()
+  expect(screen.getByRole('dialog')).toHaveTextContent('Stamp a shape onto this date.')
+  fireEvent.click(screen.getByRole('button', { name: 'A range…' }))
+  expect(screen.getByRole('button', { name: 'This date' })).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.getByRole('button', { name: 'A range…' })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
+  expect(await screen.findByRole('dialog', { name: 'Thu 24 Dec – Mon 28 Dec' })).toBeInTheDocument()
+  expect(screen.getByRole('dialog')).toHaveTextContent('Stamp a shape onto every date in the span.')
+})
+
+it('range_scope_offers_a_Keep_each_dates_own_shape_row_above_the_season_groups_that_calls_onStamp_with_null_and_the_span', async () => {
+  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  const onStamp = vi.fn(async () => {})
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
+  const keepHeading = await screen.findByText('Leave them as they are')
+  expect(keepHeading).toHaveClass('sec-h')
+  expect(keepHeading).not.toHaveClass('with-tog')
+  const keepRow = screen.getByRole('button', { name: /Keep each date's own shape/ })
+  expect(keepRow).toHaveClass('pickrow')
+  expect(keepRow.querySelector('.who > .sub2')).toHaveTextContent('detaches every date from the pattern without changing what is on it')
+  fireEvent.click(keepRow)
+  await waitFor(() => expect(onStamp).toHaveBeenCalledWith(null, { from: '2026-12-24', to: '2026-12-28' }))
+})
+
+it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
+  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  const onStamp = vi.fn(async () => {})
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
+  fireEvent.click(await screen.findByRole('button', { name: /Christmas/ }))
+  await waitFor(() => expect(onStamp).toHaveBeenCalledWith(christmas.id, { from: '2026-12-24', to: '2026-12-28' }))
+})
+
+it('an_inverted_range_disables_every_pickrow_including_Keep_each_dates_own_shape_and_shows_the_refusal_note', async () => {
+  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  render(<OverrideStampSheet date="2026-12-25" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-28' } })
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-24' } })
+  expect(await screen.findByRole('alert')).toHaveTextContent('Choose a start and end date; the end must not precede the start.')
+  expect(screen.getByRole('button', { name: /Keep each date's own shape/ })).toBeDisabled()
+  expect(screen.getByRole('button', { name: /Christmas/ })).toBeDisabled()
 })

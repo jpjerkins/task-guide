@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { getJson } from '../api/client'
 import type { components } from '../api/schema'
 import { OverrideSheet } from './OverrideSheet'
+import { DateEntry } from './shared/DateEntry'
 import { fmtShort, hm } from './OverrideFormat'
 
 type Template = components['schemas']['DayTemplateResponse']
 type Window = components['schemas']['AvailabilityWindow']
 type ViewMode = 'strip' | 'pills'
+type Scope = 'date' | 'range'
 
 function minutesOf(time: string): number {
   return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
@@ -56,7 +58,9 @@ function ShapeRow({ template, view, busy, onPick }: { template: Template; view: 
 }
 
 export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationError }: {
-  date: string; onCancel: () => void; onStamp: (id: string) => Promise<void>; busy: boolean
+  date: string; onCancel: () => void
+  onStamp: (templateId: string | null, span: { from: string; to: string } | null) => Promise<void>
+  busy: boolean
   mutationError?: string
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null)
@@ -66,6 +70,9 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
   const [activeDays, setActiveDays] = useState<string[] | null>(null)
   const [view, setView] = useState<ViewMode>('strip')
   const [error, setError] = useState('')
+  const [scope, setScope] = useState<Scope>('date')
+  const [from, setFrom] = useState<string | null>(date)
+  const [to, setTo] = useState<string | null>(date)
   useEffect(() => {
     let current = true
     getJson<Template[]>('/api/day-templates').then(value => { if (current) setTemplates(value ?? []) })
@@ -82,17 +89,39 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
       { label: 'Used by other seasons', list: templates.filter(t => !activeDays.includes(t.id) && !t.unused) },
       { label: 'Not in use', list: templates.filter(t => !activeDays.includes(t.id) && t.unused) },
     ].filter(g => g.list.length > 0)
+  const inRange = scope === 'range'
+  const invalidRange = inRange && (from === null || to === null || from > to)
+  const span = from !== null && to !== null ? { from, to } : null
+  const rowsDisabled = busy || invalidRange
+  const title = inRange ? `${fmtShort(from ?? date)} – ${fmtShort(to ?? date)}` : fmtShort(date)
   let toggleShown = false
-  return <OverrideSheet title={fmtShort(date)} onCancel={onCancel} busy={busy}>
+  return <OverrideSheet title={title} onCancel={onCancel} busy={busy}>
     {mutationError && <div className="note" role="alert">{mutationError}</div>}
-    <div className="note">Stamp a shape onto this date. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
+    <div className="modebar">
+      <button aria-pressed={scope === 'date'} disabled={busy} onClick={() => setScope('date')}>This date</button>
+      <button aria-pressed={scope === 'range'} disabled={busy} onClick={() => setScope('range')}>A range…</button>
+    </div>
+    {inRange && <>
+      <DateEntry label="From" value={from} onChange={setFrom} disabled={busy} />
+      <DateEntry label="To" value={to} onChange={setTo} disabled={busy} />
+    </>}
+    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
+    {invalidRange && <div className="note" role="alert">Choose a start and end date; the end must not precede the start.</div>}
     {error && <div className="note" role="alert">{error}</div>}
+    {inRange && <>
+      <div className="sec-h">Leave them as they are</div>
+      <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span)}>
+        <span className="who">
+          <span className="nm">Keep each date's own shape</span>
+          <span className="sub2">detaches every date from the pattern without changing what is on it</span>
+        </span></button></div>
+    </>}
     {groups.map(group => {
       const withTog = !toggleShown
       toggleShown = true
       return <div key={group.label ?? 'all'}>
         <div className={`sec-h${withTog ? ' with-tog' : ''}`}>{group.label ?? 'Shapes'}{withTog && <ViewToggle view={view} onChange={setView} />}</div>
-        <div className="list">{group.list.map(t => <ShapeRow key={t.id} template={t} view={view} busy={busy} onPick={() => void onStamp(t.id)} />)}</div>
+        <div className="list">{group.list.map(t => <ShapeRow key={t.id} template={t} view={view} busy={rowsDisabled} onPick={() => void onStamp(t.id, inRange ? span : null)} />)}</div>
       </div>
     })}
     {templates?.length === 0 && <div className="empty">No shapes available.</div>}

@@ -11,8 +11,9 @@ afterEach(() => vi.unstubAllGlobals())
 it('a_range_landing_on_dates_that_already_carry_an_Override_names_every_one_of_them_in_a_single_confirmation_before_the_write_not_one_prompt_per_date', async () => {
   const fetch = vi.fn().mockResolvedValueOnce(json(['2026-12-24', '2026-12-25', '2026-12-27']))
   vi.stubGlobal('fetch', fetch)
-  const confirm = vi.fn(async (dates: readonly string[]) => {
+  const confirm = vi.fn(async (dates: readonly string[], span: number) => {
     expect(dates).toEqual(['2026-12-24', '2026-12-25', '2026-12-27'])
+    expect(span).toBe(5)
     expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/overrides/clobber-check?from=2026-12-24&to=2026-12-28')
     return false
   })
