@@ -1092,6 +1092,10 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   forward — marks the selected date, and dots only the dates carrying an Override or an Event.
   `CONTEXT.md` 721–788 and `src/TaskGuide.Web/README.md` both say ±10 days and win over the
   prototype's `W.date()` loop (~1111), which renders eleven, yesterday through +9
+- the rail scrolls the selected date into view on mount and on every selection change (#140 §1
+  surface A: it opened showing last week with today off the right edge). `block: 'nearest'` keeps
+  the browser from also scrolling the page to the rail. jsdom has no layout, so the test stubs
+  `scrollIntoView` and asserts the call and its target node, not a resulting offset
 - selecting a rail date changes the shown date without adding a rail entry — the rail never grows
 - *Pick a date…* opens the shared `DateEntry` and selecting a date beyond the rail shows that date,
   still without growing the rail
