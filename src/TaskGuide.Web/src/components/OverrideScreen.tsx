@@ -133,7 +133,7 @@ export function OverrideScreen() {
     </div>
     {stampOpen && <OverrideStampSheet date={selectedDate} mutationError={error} onCancel={() => setStampOpen(false)} onStamp={stamp} busy={busy} />}
     {rangeOpen && <OverrideRangeSheet mutationError={error} date={selectedDate} busy={busy} onCancel={() => setRangeOpen(false)} onCreate={createRange} />}
-    {promoteOpen && shown && <OverridePromoteSheet mutationError={error} day={shown} busy={busy} onCancel={() => setPromoteOpen(false)} onPromote={promote} />}
+    {promoteOpen && shown && <OverridePromoteSheet mutationError={error} day={shown} label={label ?? 'One-off day'} busy={busy} onCancel={() => setPromoteOpen(false)} onPromote={promote} />}
     {eventOpen && shown && <EventCreateSheet date={selectedDate} windows={shown.windows} onCancel={() => setEventOpen(false)} onCreated={() => { setEventOpen(false); setRevision(value => value + 1) }} />}
     {presentation}
   </>

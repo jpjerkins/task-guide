@@ -1298,6 +1298,12 @@ cross-surface shared preference — sharing it needs a store outside this ticket
 read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `left`/`width`); the
 tappable `edit` form is #105's inline editor, not ported here.
 
+**#140 §4 re-port: the promote sheet's prefilled name and dimPills** — `OverridePromoteSheet` now
+takes a `label` prop (`OverrideScreen` passes the same degraded label `sub` above renders) and
+initialises its name field to `` `${label} v2` `` in `useState`'s initial value, per ADR-0006 —
+not an effect, so the control never resets itself once the user starts typing. The window list now
+renders `dimPills` alongside the existing `.pill.dur`, same as §2's window and event rows.
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and

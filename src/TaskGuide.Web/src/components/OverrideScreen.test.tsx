@@ -182,12 +182,25 @@ it('promotion_names_the_new_shape_lists_the_windows_it_will_carry_and_states_tha
   expect(sheet.querySelector('.sheet > .list > .row > .body > .title')).toHaveTextContent('Family time')
   expect(sheet).toHaveTextContent('does not re-link')
   expect(sheet).toHaveTextContent('keeps its own copy')
+  expect(within(sheet).getByLabelText('Call it')).toHaveValue('One-off day v2')
   fireEvent.change(within(sheet).getByLabelText('Call it'), { target: { value: 'Family Sunday' } })
   fireEvent.click(within(sheet).getByRole('button', { name: 'Save the shape' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(fetch).toHaveBeenCalledWith('/api/overrides/2026-11-01/promote', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Family Sunday' }) }))
   await screen.findByRole('button', { name: 'Put it back on the pattern' })
   expect(screen.getByText('Family time')).toBeInTheDocument()
+})
+
+it('the_promote_sheets_window_list_carries_dimension_and_loose_tag_pills', async () => {
+  const tagged = { id: { value: 'w_tagged' }, name: 'Tagged', start: '07:30:00', end: '09:00:00', tags: { dimensions: { Location: [{ value: 'Home' }] }, looseTags: [{ value: 'urgent' }] } }
+  days.set('2026-11-01', { date: '2026-11-01', windows: [tagged], events: [], isOverridden: false })
+  render(<OverrideScreen />)
+  await screen.findByText('Tagged')
+  fireEvent.click(screen.getByRole('button', { name: 'Save as a shape' }))
+  const sheet = screen.getByRole('dialog', { name: 'Save this day as a shape' })
+  const row = within(sheet).getByText('Tagged').closest('.row') as HTMLElement
+  expect(row.querySelector('.pill.dim')).toHaveTextContent('location: Home')
+  expect(row.querySelector('.pill.inert')).toHaveTextContent('urgent · inert')
 })
 
 it('cancelling_replacement_keeps_the_range_form_and_writes_nothing', async () => {
