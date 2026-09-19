@@ -1327,15 +1327,20 @@ sibling of `.body`, present but inert: the tap-to-expand inline window editor it
 itself `fmtShort(date)` (a `date` prop, threaded from `OverrideScreen`) instead of "Stamp a shape",
 and groups its templates into "Already in this season" / "Used by other seasons" / "Not in use"
 (an empty group is omitted), closing with the prototype's shape-count note. The grouping is read
-from `GET /api/day-templates` plus `GET /api/patterns/active`'s `days` — **but that GET does not
-exist on the wire**: `schema.d.ts`'s `"/api/patterns/active"` entry has `get?: never` and only a
-`put` (the switch-active-pattern write). `getJson` still issues the request (there is no schema
-gate at the call site), and any non-2xx or thrown response is treated as "no season to group by":
-the sheet falls back to one ungrouped `Shapes` list rather than showing an error, per this
-ticket's own contingency. In today's backend that fallback is not a rare path — it is the only
-path, until a GET is added to that route. `isCurrent`/`aria-pressed="true"`/the `current` pill are
-never rendered on any row: resolving which template a date is currently stamped from needs the
-same `DayShape`-to-template link the `sub` gap above already names, and it does not exist either.
+from `GET /api/day-templates` plus `GET /api/patterns`'s (`PatternEndpoints.cs:21`) `days` for
+whichever Pattern carries `active: true` — **but nothing on the wire carries that flag yet**:
+`PatternResponse` is `(Id, Name, Days)` (`PatternEndpoints.cs:134`), and `GET /api/patterns/active`
+does not exist at all (`schema.d.ts`'s `"/api/patterns/active"` entry has `get?: never` and only a
+`put`, the switch-active-pattern write). #143 tracks adding `bool Active` to `PatternResponse`
+server-side; until it lands, `OverrideStampSheet.tsx` types the extra field locally
+(`ActiveFlagged = PatternResponse & { active?: boolean }`) rather than editing the generated
+`schema.d.ts`, which belongs to the Integration lane. No entry ever matches today, so `activeDays`
+stays `null` and the sheet falls back to one ungrouped `Shapes` list rather than showing an error,
+per this ticket's own contingency — in today's backend that fallback is not a rare path, it is the
+only path, until #143 ships the flag; grouping then starts working with no further Web change.
+`isCurrent`/`aria-pressed="true"`/the `current` pill are never rendered on any row: resolving which
+template a date is currently stamped from needs the same `DayShape`-to-template link the `sub` gap
+above already names, and it does not exist either.
 The view toggle (`Strips`/`Times`, `.vtog`) is one local `useState`, not the prototype's
 cross-surface shared preference — sharing it needs a store outside this ticket's file lane. The
 read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `left`/`width`); the
@@ -1351,13 +1356,11 @@ renders `dimPills` alongside the existing `.pill.dur`, same as §2's window and 
   and *This date already departs from the pattern*, never *Replace all 1* or *1 of the 1 dates in
   this span*. This is the commonest clobber path: stamping the date already on screen (#140)
 
-- the season grouping reads **`GET /api/patterns`**, not `GET /api/patterns/active` — that route is
-  `PUT`-only (`PatternEndpoints.cs:31`; `get?: never` in `schema.d.ts`). The active Pattern is found
-  by an `active` flag on `PatternResponse` which **does not exist on the wire yet** (#143): the
-  record is `(Id, Name, Days)`, `PatternEndpoints.cs:134`. So in the running app today no Pattern
-  matches and the picker degrades to one ungrouped list — tested as such, and asserted to raise no
-  `alert`. When #143 lands the grouping starts working with no Web change. The earlier claim on #140
-  that grouping was already derivable was wrong; this bullet replaces it
+- the ungrouped fallback is tested against **today's real wire shape** — a `/api/patterns` response
+  whose entries carry no `active` marker — not against a stubbed `/api/patterns/active`, which is
+  not a route. A fixture that invents an endpoint hides that the endpoint is missing: the suite was
+  green on that stub while the running app failed the read on every sheet open. The grouping
+  paragraph under *Override a date (#107)* carries the detail and cites #143
 
 ### Web-Now
 
