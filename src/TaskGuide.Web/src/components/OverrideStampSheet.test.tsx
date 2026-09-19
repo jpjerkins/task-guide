@@ -9,9 +9,10 @@ const spare = { id: 'dt_spare', name: 'Spare Sunday', windows: [], eventPrototyp
 const attic = { id: 'dt_attic', name: 'Attic', windows: [win('w3', '08:00:00', '09:00:00')], eventPrototypes: [], unused: true }
 const templates = [christmas, spare, attic]
 let fetch: ReturnType<typeof vi.fn<(url: string) => Promise<Response>>>
-// `GET /api/patterns` is the read that exists (PatternEndpoints.cs:21). `active` is NOT on
-// PatternResponse yet — #143 — so `patterns(...)` below builds the shape that ticket will ship,
-// and `noActiveFlag` builds today's, which must degrade to one ungrouped list.
+// `GET /api/patterns` is the read that exists (PatternEndpoints.cs:21). `active` IS on
+// PatternResponse (#143 landed; PatternEndpoints.cs:138), so `patterns(...)` is the real wire shape.
+// `noActiveFlag` is no longer reachable over the wire — it is kept as a defensive case: the picker
+// must still degrade to one ungrouped list rather than erroring if no Pattern comes back active.
 function stub(body: unknown | 'fail') {
   fetch = vi.fn(async (url: string) => {
     if (url === '/api/day-templates') return json(templates)
@@ -275,10 +276,15 @@ it('an_inverted_range_disables_every_pickrow_including_Keep_each_dates_own_shape
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-24' } })
   expect(await screen.findByRole('alert')).toHaveTextContent('Choose a start and end date; the end must not precede the start.')
   expect(screen.getByRole('button', { name: /Christmas/ })).toBeDisabled()
+  // The name says "every pickrow", so assert the two non-template rows too — without these, dropping
+  // `disabled={rowsDisabled}` from either would pass here and let a click reach authorOverrideSpan,
+  // surfacing its raw "End date must not precede start date" throw instead of the sheet's refusal.
+  expect(screen.getByRole('button', { name: /Keep each date's own shape/ })).toBeDisabled()
+  expect(screen.getByRole('button', { name: /Blank every date in the span/ })).toBeDisabled()
 })
 
-// Today's actual wire shape. This is not a hypothetical: PatternResponse is (Id, Name, Days) with
-// no active marker, so this is what the picker meets in the running app until #143 lands.
+// Not the wire shape any more (#143 shipped `active`), but the picker must not error when no
+// Pattern comes back marked active — an empty store or a season yet to be chosen reads this way.
 it('a_patterns_read_with_no_active_marker_degrades_to_one_ungrouped_list_rather_than_an_error', async () => {
   stub(noActiveFlag([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)

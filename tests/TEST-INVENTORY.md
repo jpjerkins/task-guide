@@ -1326,11 +1326,19 @@ template, not per-date windows, and fanning out per date would break this ticket
 one-check-one-POST invariant. **#144** tracks that missing freeze-this-span server mode.
 
 **Closed by #144/#145**: the server gained a real `mode: 'freeze'` arm (`CreateOverrideSpan`'s
-Freeze case) that copies each date's own current computed shape into its own Override rather than
-stamping a template or blanking it, and the Web picker's range scope offers it back as **"Keep
-each date's own shape"** under a `Detach the span` heading — the row this finding removed, now
-built on a write that actually does what that wording says, with no destructive marker and no
-confirmation (nothing on it is ever replaced).
+Freeze case) that copies each date's current **Windows** into its own Override rather than stamping
+a template or blanking it, and the Web picker's range scope offers it back as **"Keep each date's
+own shape"** under a `Detach the span` heading — the row this finding removed, now built on a write
+that actually does what its wording says, with no destructive marker and no confirmation (nothing
+on it is ever replaced).
+
+**Windows only, not the whole `DayShape`** (#145 review finding 1): `Freeze` is
+`new DateOverride(date, [.. windows], existing?.Used)` — recurring events are *not* captured, and
+`DayShapeReader.For` resolves them from the active Pattern's `EventPrototypes` unconditionally,
+ignoring the Override. So a later Pattern switch still changes the *events* on a frozen date. The
+row's copy says "keeps the windows it has now" for exactly that reason and must not be widened back
+to "what is on it" — that would be #140 finding 1's wording-vs-write mismatch again, moved from
+windows to events. Capturing prototypes in the Freeze arm is a server change and is not #145's.
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 
