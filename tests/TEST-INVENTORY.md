@@ -1097,11 +1097,26 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   the browser from also scrolling the page to the rail. jsdom has no layout, so the test stubs
   `scrollIntoView` and asserts the call and its target node, not a resulting offset
 - selecting a rail date changes the shown date without adding a rail entry — the rail never grows
-- *Pick a date…* opens the shared `DateEntry` and selecting a date beyond the rail shows that date,
-  still without growing the rail
+- the escape (#140 §1 surface A) is a low-weight `.vtog` toggle sharing the `.sec-h.with-tog` line
+  already used for the stamp picker's Strips/Times toggle, not a full-width "Pick a date…" button.
+  Its label doubles as the rail's otherwise-unstated invariant: "Ten days either side of today"
+  when the picked date is on the rail, `{fmtShort} · beyond the rail` when it is not. The toggle
+  opens the shared `DateEntry` (labelled "Any date"), and — unlike the previous button, which only
+  ever opened it — now actually closes it on a second click (a defect, fixed in this pass: the
+  handler was `() => setEscapeOpen(true)` on every click)
+- an earlier draft made the escape the rail's 22nd cell; rejected, not built — `.weekstrip` is an
+  `overflow-x` scroller, so cell 22 sits ten cells past the right edge, further from the thumb
+  than the control it replaces
 - the rail's date control survives its own input event — same DOM node before and after
-- stamping a Day template onto a date renders the copies-the-windows-in note, and sends the stamp
-  for that date alone
+- the date-range override is a **scope on the stamp picker** (#140 §1 surface B2), not a second
+  sheet or a second verb: `OverrideStampSheet` carries a `This date` / `A range…` `.modebar`, and
+  `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, swaps
+  the sheet's title and opening note to name the span, and adds a "Leave them as they are" /
+  "Keep each date's own shape" row above the season groups that detaches every date in the span
+  without stamping a shape (`onStamp(null, span)`)
+- stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
+  sends one clobber-check-then-POST span write — `{ from, to, templateId }`, `from === to` for a
+  single date — never the old per-date `PUT .../stamp`
 - stamping onto a date that already carries an Override confirms the clobber before writing
 - reverting a date removes its Override and the date reads as following the pattern again
 - promotion names the new shape, lists the windows it will carry, and states that the source date
@@ -1110,7 +1125,10 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   same stamp repeated, never a second mechanism and never a multi-day object
 - a range landing on dates that already carry an Override names every one of them in a single
   confirmation before the write, not one prompt per date
-- a range whose end precedes its start is refused, and nothing is written
+- a range whose end precedes its start is refused, and nothing is written — the stamp picker's
+  range scope disables every `.pickrow` (including "Keep each date's own shape") and shows
+  *Choose a start and end date; the end must not precede the start.* This is the same refusal the
+  deleted `OverrideRangeSheet` used to carry; it moved, not disappeared
 - the clobber confirmation (#140 §1 surface C) titles and buttons itself by both counts —
   `Replace {n} Override{s}?` / `Replace {n} and stamp all {span}`, singular at n=1, and
   `Replace all {n}` when the whole span is clobbered — renders the clobbered dates as a `.damage`
@@ -1118,9 +1136,10 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   rather than ISO, and closes with a note giving the untouched count that drops its first
   sentence rather than saying "The other 0 dates" when the span is fully clobbered. It does not
   name each date's current shape — `clobber-check` returns bare dates and `DayShape` carries no
-  template name, so the pill is the only claim that is actually true. `confirm()` now takes
-  `(affected, span)`; **both call sites (`OverrideScreen.tsx`, `OverrideRange.ts`) need the new
-  `span` argument wired — not done in this pass**
+  template name, so the pill is the only claim that is actually true. `confirm()` takes
+  `(affected, span)`; both call sites (`OverrideScreen.tsx`'s unified `stamp`, via
+  `OverrideRange.ts`'s `authorOverrideSpan`) now wire the `span` argument, computed by
+  `authorOverrideSpan`'s own one-line inclusive day count
 
 **Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
 `clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
@@ -1229,13 +1248,21 @@ Until they land, those bullets are testable against fixtures and unreachable in 
 
 The presentation-free slice uses `OverrideRange.ts` and `OverrideDateSelection.ts`. The public
 seams are the existing HTTP client and props for the real shared `DateEntry`. `authorOverrideSpan`
-passes every server-returned clobber date to one asynchronous confirmation callback; `false`
-cancels. It submits the checked span once to `POST /api/overrides` and returns the server's dated
-window copies. It never resolves the `used` record as a template link or fans out requests.
-Server-side copy isolation remains covered by the schedule tests; browser tests guard the wire
-contract, not a simulated server implementation. The rail, scope banner, confirmation, stamp,
-range, revert and promotion sheets now have UI tests and a Schedule screen registration. The
-stylesheet is unchanged; #125 supplied its classes and #128 supplied the real DELETE endpoint.
+passes every server-returned clobber date, plus the span's inclusive day count, to one
+asynchronous confirmation callback — `confirm(dates, span)`; `false` cancels. It submits the
+checked span once to `POST /api/overrides` and returns the server's dated window copies. It never
+resolves the `used` record as a template link or fans out requests. Server-side copy isolation
+remains covered by the schedule tests; browser tests guard the wire contract, not a simulated
+server implementation. The rail, scope banner, confirmation, stamp, revert and promotion sheets
+now have UI tests and a Schedule screen registration. The stylesheet is unchanged; #125 supplied
+its classes and #128 supplied the real DELETE endpoint.
+
+**#140 §1 amendment**: `OverrideRangeSheet` (surface B1, "its own sheet, its own verb") is gone —
+`git rm`'d, not deprecated. The range is now a scope on `OverrideStampSheet` (surface B2): one
+sheet, one list, one button, matching the prototype's rejection of B1 in favor of B2. The escape
+(surface A) moved from a full-width "Pick a date…" button to a `.vtog` toggle on the rail's
+`.sec-h.with-tog` line, and its stale open-only handler (`() => setEscapeOpen(true)`, which could
+never close) is fixed as part of the port, not a separate bug ticket.
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 
@@ -1247,10 +1274,12 @@ Additional tests at this subsection's end (existing range and input-node tests r
 - a failed span POST surfaces the error without retrying individual dates
 - picking a date beyond the rail changes the selection without growing or recentering its fixed Chicago span
 - clearing the escape keeps the shown date and fixed rail span
+- `authorOverrideSpan`'s `confirm` callback receives the clobbered dates' span size (inclusive day count) alongside the dates themselves, computed once in the module rather than by each caller
 
 **Override screen integration additions (#107)**
 
-- cancelling replacement keeps the range form and writes nothing
+- cancelling replacement keeps the stamp sheet's range scope open (the "Keep each date's own
+  shape" row still shown, its `From` value retained) and writes nothing
 - a failed stamp keeps the picker open and reports the error inside it
 - an Event marks its rail date and the selected date lists the resolved Event
 - the date view opens the existing Event editor for the selected date
