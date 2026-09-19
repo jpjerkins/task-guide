@@ -2627,6 +2627,7 @@ export interface components {
             from: string;
             to: string;
             templateId: null | string;
+            mode?: null | string;
         };
         PatternRequest: {
             name: string;
@@ -2636,6 +2637,7 @@ export interface components {
             id: string;
             name: string;
             days: string[];
+            active: boolean;
         };
         PostponeTaskRequest: {
             /** Format: date */
