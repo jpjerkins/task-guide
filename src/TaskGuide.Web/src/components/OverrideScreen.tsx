@@ -85,8 +85,9 @@ export function OverrideScreen() {
   const modalOpen = stampOpen || promoteOpen || eventOpen
   const shown = day?.date === selectedDate ? day : null
   // The wire's DayShape carries no template-use name (tests/TEST-INVENTORY.md), so the nav's
-  // `sub` and the promote sheet's prefill both fall back to this same degraded label: the name a
-  // write in this session supplied, else a generic "override" or "pattern" reading.
+  // `sub` falls back to a degraded label: the name a write in this session supplied, else a
+  // generic "override" or "pattern" reading. The promote sheet's prefill does NOT share this
+  // fallback (#140 review finding 2) — it takes only a real shape name, below.
   const label = shown && (labels[selectedDate] ?? (shown.isOverridden ? 'One-off day' : 'Following the pattern'))
   return <>
     <ScreenNav title={fmtShort(selectedDate)} sub={label ?? undefined} />
@@ -122,7 +123,7 @@ export function OverrideScreen() {
       </>}
     </div>
     {stampOpen && <OverrideStampSheet date={selectedDate} mutationError={error} onCancel={() => setStampOpen(false)} onStamp={stamp} busy={busy} />}
-    {promoteOpen && shown && <OverridePromoteSheet mutationError={error} day={shown} label={label ?? 'One-off day'} busy={busy} onCancel={() => setPromoteOpen(false)} onPromote={promote} />}
+    {promoteOpen && shown && <OverridePromoteSheet mutationError={error} day={shown} shapeName={labels[selectedDate] ?? null} busy={busy} onCancel={() => setPromoteOpen(false)} onPromote={promote} />}
     {eventOpen && shown && <EventCreateSheet date={selectedDate} windows={shown.windows} onCancel={() => setEventOpen(false)} onCreated={() => { setEventOpen(false); setRevision(value => value + 1) }} />}
     {presentation}
   </>

@@ -1357,10 +1357,18 @@ read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `l
 tappable `edit` form is #105's inline editor, not ported here.
 
 **#140 §4 re-port: the promote sheet's prefilled name and dimPills** — `OverridePromoteSheet` now
-takes a `label` prop (`OverrideScreen` passes the same degraded label `sub` above renders) and
-initialises its name field to `` `${label} v2` `` in `useState`'s initial value, per ADR-0006 —
-not an effect, so the control never resets itself once the user starts typing. The window list now
-renders `dimPills` alongside the existing `.pill.dur`, same as §2's window and event rows.
+takes a `shapeName` prop and initialises its name field to `` `${shapeName} v2` `` in
+`useState`'s initial value, per ADR-0006 — not an effect, so the control never resets itself once
+the user starts typing. The window list now renders `dimPills` alongside the existing `.pill.dur`,
+same as §2's window and event rows.
+
+**#140 review finding 2**: `shapeName` is **not** the degraded `sub` label — `OverrideScreen`
+passes `labels[selectedDate] ?? null`, a real shape name a write in this session supplied, or
+`null`. It previously took `label`, the same status-or-name string `sub` renders, so opening
+*Save as a shape* on a date still following its pattern prefilled the new template's name as
+"Following the pattern v2" — a status phrase, not a shape. `useState(shapeName === null ? '' :
+\`${shapeName} v2\`)` leaves the field empty rather than guessing; the Save button is already
+disabled on an empty name.
 
 - a single date that is its own whole span reads as one date, not as a span of one — *Replace it*
   and *This date already departs from the pattern*, never *Replace all 1* or *1 of the 1 dates in

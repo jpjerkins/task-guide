@@ -103,6 +103,29 @@ it('stamping_a_Day_template_onto_a_date_renders_the_copies_the_windows_in_note_a
   await waitFor(() => expect(screen.getByText(/already an override/)).toHaveTextContent('Christmas'))
 })
 
+// #140 review finding 2: the promote sheet's prefill used to read `${label} v2` where `label` is
+// often a status phrase ("Following the pattern", "One-off day"), not a shape name — producing a
+// template literally named "Following the pattern v2". It now prefills only from a real shape
+// name a write in this session supplied (never those fallbacks), leaving the field empty
+// otherwise (asserted above, in the promotion test using the fallback label).
+it('the_promote_sheet_prefills_from_a_real_shape_name_once_a_stamp_supplied_one_never_from_the_status_fallback', async () => {
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === '/api/overrides' && init?.method === 'POST') {
+      days.set('2026-11-01', { date: '2026-11-01', windows: [window], events: [], isOverridden: true })
+      return json([{ date: '2026-11-01', windows: [window], used: { templateId: template.id, templateName: template.name } }])
+    }
+    return read(url)
+  })
+  render(<OverrideScreen />)
+  await screen.findByText('Family time')
+  fireEvent.click(screen.getByRole('button', { name: 'Stamp a whole shape onto this date…' }))
+  fireEvent.click(await screen.findByRole('button', { name: /Christmas/ }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: 'Save as a shape' }))
+  const sheet = screen.getByRole('dialog', { name: 'Save this day as a shape' })
+  expect(within(sheet).getByLabelText('Call it')).toHaveValue('Christmas v2')
+})
+
 it('stamping_onto_a_date_that_already_carries_an_Override_confirms_the_clobber_before_writing', async () => {
   days.set('2026-11-01', { date: '2026-11-01', windows: [window], events: [], isOverridden: true })
   fetch.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -192,7 +215,7 @@ it('promotion_names_the_new_shape_lists_the_windows_it_will_carry_and_states_tha
   expect(sheet.querySelector('.sheet > .list > .row > .body > .title')).toHaveTextContent('Family time')
   expect(sheet).toHaveTextContent('does not re-link')
   expect(sheet).toHaveTextContent('keeps its own copy')
-  expect(within(sheet).getByLabelText('Call it')).toHaveValue('One-off day v2')
+  expect(within(sheet).getByLabelText('Call it')).toHaveValue('')
   fireEvent.change(within(sheet).getByLabelText('Call it'), { target: { value: 'Family Sunday' } })
   fireEvent.click(within(sheet).getByRole('button', { name: 'Save the shape' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

@@ -4,13 +4,16 @@ import { OverrideSheet } from './OverrideSheet'
 import { hm } from './OverrideFormat'
 import { dimPills } from './OverrideDimPills'
 
-export function OverridePromoteSheet({ day, label, busy, onCancel, onPromote, mutationError }: {
-  day: components['schemas']['DayShape']; label: string; busy: boolean; onCancel: () => void; onPromote: (name: string) => Promise<void>
+export function OverridePromoteSheet({ day, shapeName, busy, onCancel, onPromote, mutationError }: {
+  day: components['schemas']['DayShape']; shapeName: string | null; busy: boolean; onCancel: () => void; onPromote: (name: string) => Promise<void>
   mutationError?: string
 }) {
   // Prefilled in the initial value, not an effect (ADR-0006: a control never resets itself from
-  // inside its own input handling path) — the field still starts with the prototype's `${label} v2`.
-  const [name, setName] = useState(`${label} v2`)
+  // inside its own input handling path) — the prototype's `${label} v2`, but only from a real
+  // shape name: `label` upstream can be a status phrase ("Following the pattern", "One-off day"),
+  // and prefilling from that would name the new template after a status, not a shape (#140 review
+  // finding 2). No shapeName means an empty field, not a guess.
+  const [name, setName] = useState(shapeName === null ? '' : `${shapeName} v2`)
   return <OverrideSheet title="Save this day as a shape" busy={busy} onCancel={onCancel}>
     {mutationError && <div className="note" role="alert">{mutationError}</div>}
     <div className="stack"><label className="lbl" htmlFor="override-shape-name">Call it</label>
