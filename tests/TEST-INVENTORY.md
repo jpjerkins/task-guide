@@ -784,6 +784,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   `Task` type is generated from it, so a bare `200: OK` is a broken contract, not a cosmetic gap
 - `GET /api/tasks` documents its 200 as an **array of** `TaskResponse`
 - `POST /api/tasks` documents 201 (with a `TaskResponse` body), 400 and 503
+- `POST /api/tasks` snaps raw Duration minutes up to the declared bucket (45 → `"60"`)
 - `TaskResponse_and_CaptureTaskResponse_duration_are_documented_as_nullable_strings`; both
   response schemas carry a **nullable** string containing the verbatim Duration bucket (`"2"`,
   `"10"`, `"30"`, `"60"`, `"longer"`) or null

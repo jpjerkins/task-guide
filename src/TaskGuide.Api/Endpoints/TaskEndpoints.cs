@@ -6,6 +6,7 @@ using TaskGuide.Application.Rules;
 using TaskGuide.Application.Tasks;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
+using TaskGuide.Domain.Matching;
 using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Time;
 using TaskGuide.Domain.Tasks;
@@ -65,7 +66,7 @@ public static class TaskEndpoints
                 new TagSet(
                     new Dictionary<DimensionId, IReadOnlyList<TagValue>>
                     {
-                        [KnownDimensions.Duration] = [new TagValue(request.Duration.ToString())],
+                        [KnownDimensions.Duration] = [DurationCeiling.SnapUp(request.Duration, KnownDimensions.DurationBuckets)],
                     },
                     LooseTags: []),
                 Deadline: null,

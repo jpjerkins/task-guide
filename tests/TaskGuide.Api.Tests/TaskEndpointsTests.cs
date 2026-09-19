@@ -75,6 +75,19 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task post_api_tasks_snaps_raw_duration_minutes_up_to_the_declared_bucket()
+    {
+        var response = await _client.PostAsJsonAsync("/api/tasks", new { title = "Sort the garage", duration = 45 });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("60", body.GetProperty("duration").GetString());
+
+        var stored = Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Tasks);
+        Assert.Equal("60", stored.Tags.SingleOn(KnownDimensions.Duration)?.Value);
+    }
+
+    [Fact]
     public async Task A_posted_task_appears_in_the_task_list()
     {
         await _client.PostAsJsonAsync("/api/tasks", new { title = "Take the bins out", duration = 2 });
