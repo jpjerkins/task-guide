@@ -31,7 +31,14 @@ internal static class StoreCodecBoundary
         {
             return read();
         }
-        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        catch (Exception exception) when (exception is
+            JsonException or
+            KeyNotFoundException or
+            InvalidOperationException or
+            FormatException or
+            ArgumentException or
+            NullReferenceException or
+            OverflowException)
         {
             throw new BadStoreFileException(filePath, recordIdentity?.Invoke(), invariant, exception);
         }

@@ -18,28 +18,39 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </remarks>
 public static class PatternCodec
 {
-    public static PatternBook Read(string json) =>
-        StoreCodecBoundary.Read("patterns.json", "the Pattern book must satisfy the patterns.json schema", () => ReadCore(json));
+    public static PatternBook Read(string json)
+    {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "patterns.json",
+            "the Pattern book must satisfy the patterns.json schema",
+            () => ReadCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static PatternBook ReadCore(string json)
+    private static PatternBook ReadCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
 
         var activePatternId = new PatternId(root.GetProperty("activePatternId").GetString()!);
+        identify(activePatternId.Value);
 
         var patterns = new List<Pattern>();
 
         foreach (var element in root.GetProperty("patterns").EnumerateArray())
         {
-            patterns.Add(ReadPattern(element));
+            identify(null);
+            patterns.Add(ReadPattern(element, identify));
         }
 
         return new PatternBook(activePatternId, patterns);
     }
 
-    private static Pattern ReadPattern(JsonElement element)
+    private static Pattern ReadPattern(JsonElement element, Action<string?> identify)
     {
+        var id = new PatternId(element.GetProperty("id").GetString()!);
+        identify(id.Value);
         var name = element.GetProperty("name").GetString()!;
 
         var days = element.GetProperty("days").EnumerateArray()
@@ -52,7 +63,7 @@ public static class PatternCodec
                 $"Pattern '{name}' has a `days` array of length {days.Count}; a Pattern must name exactly seven days.");
         }
 
-        return new Pattern(new PatternId(element.GetProperty("id").GetString()!), name, days);
+        return new Pattern(id, name, days);
     }
 
     public static void Write(Utf8JsonWriter writer, PatternBook book)

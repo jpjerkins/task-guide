@@ -13,10 +13,17 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </summary>
 public static class OverrideCodec
 {
-    public static IReadOnlyList<DateOverride> Read(string json) =>
-        StoreCodecBoundary.Read("overrides.json", "each date Override must satisfy the overrides.json schema", () => ReadCore(json));
+    public static IReadOnlyList<DateOverride> Read(string json)
+    {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "overrides.json",
+            "each date Override must satisfy the overrides.json schema",
+            () => ReadCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static IReadOnlyList<DateOverride> ReadCore(string json)
+    private static IReadOnlyList<DateOverride> ReadCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -24,7 +31,9 @@ public static class OverrideCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
+            identify(null);
             var date = CodecPrimitives.ReadDate(element.GetProperty("date"));
+            identify(date.ToString("yyyy-MM-dd"));
 
             var windows = element.GetProperty("windows").EnumerateArray()
                 .Select(CodecPrimitives.ReadWindow)

@@ -17,10 +17,17 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </remarks>
 public static class EventCodec
 {
-    public static IReadOnlyList<Event> Read(string json) =>
-        StoreCodecBoundary.Read("events.json", "each Event must satisfy the events.json schema", () => ReadCore(json));
+    public static IReadOnlyList<Event> Read(string json)
+    {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "events.json",
+            "each Event must satisfy the events.json schema",
+            () => ReadCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static IReadOnlyList<Event> ReadCore(string json)
+    private static IReadOnlyList<Event> ReadCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -28,7 +35,9 @@ public static class EventCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
+            identify(null);
             var id = new EventId(element.GetProperty("id").GetString()!);
+            identify(id.Value);
 
             events.Add(new Event(
                 id,
@@ -65,10 +74,17 @@ public static class EventCodec
         writer.WriteEndArray();
     }
 
-    public static IReadOnlyList<EventException> ReadExceptions(string json) =>
-        StoreCodecBoundary.Read("event-exceptions.json", "each Event exception must satisfy the event-exceptions.json schema", () => ReadExceptionsCore(json));
+    public static IReadOnlyList<EventException> ReadExceptions(string json)
+    {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "event-exceptions.json",
+            "each Event exception must satisfy the event-exceptions.json schema",
+            () => ReadExceptionsCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static IReadOnlyList<EventException> ReadExceptionsCore(string json)
+    private static IReadOnlyList<EventException> ReadExceptionsCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -76,8 +92,10 @@ public static class EventCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
+            identify(null);
             var date = CodecPrimitives.ReadDate(element.GetProperty("date"));
             var prototypeId = new EventPrototypeId(element.GetProperty("prototypeId").GetString()!);
+            identify(EventExceptionIdentity(date, prototypeId));
             var deleted = element.GetProperty("deleted").GetBoolean();
             var name = element.GetProperty("name").ValueKind == JsonValueKind.Null
                 ? null
@@ -94,12 +112,12 @@ public static class EventCodec
             exceptions.Add(new EventException(date, prototypeId, deleted, name, start, end));
         }
 
-        RejectDuplicateKeys(exceptions);
+        RejectDuplicateKeys(exceptions, identify);
 
         return exceptions;
     }
 
-    private static void RejectDuplicateKeys(IReadOnlyList<EventException> exceptions)
+    private static void RejectDuplicateKeys(IReadOnlyList<EventException> exceptions, Action<string?> identify)
     {
         var duplicate = exceptions
             .GroupBy(e => (e.Date, e.PrototypeId))
@@ -107,9 +125,13 @@ public static class EventCodec
 
         if (duplicate is null) return;
 
+        identify(EventExceptionIdentity(duplicate.Key.Date, duplicate.Key.PrototypeId));
         throw new JsonException(
             $"Event exception has duplicate key (date, prototypeId)=({duplicate.Key.Date:yyyy-MM-dd}, {duplicate.Key.PrototypeId.Value}).");
     }
+
+    private static string EventExceptionIdentity(DateOnly date, EventPrototypeId prototypeId) =>
+        $"(date, prototypeId)=({date:yyyy-MM-dd}, {prototypeId.Value})";
 
     public static void WriteExceptions(Utf8JsonWriter writer, IReadOnlyList<EventException> exceptions)
     {

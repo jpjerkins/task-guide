@@ -15,14 +15,17 @@ public static class FireCodec
     private const string FileDateFormat = "yyyy-MM-dd";
 
     /// <summary>`fires/&lt;date&gt;.json` - the date comes from the filename.</summary>
-    public static DayFires Read(DateOnly date, string json) =>
-        StoreCodecBoundary.Read(
+    public static DayFires Read(DateOnly date, string json)
+    {
+        string? recordIdentity = date.ToString(FileDateFormat);
+        return StoreCodecBoundary.Read(
             $"fires/{FileNameFor(date)}",
             "each Fire row must satisfy the Fire log schema",
-            () => ReadCore(date, json),
-            () => date.ToString(FileDateFormat));
+            () => ReadCore(date, json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static DayFires ReadCore(DateOnly date, string json)
+    private static DayFires ReadCore(DateOnly date, string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -30,10 +33,11 @@ public static class FireCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
-            rows.Add(ReadRow(element));
+            identify(date.ToString(FileDateFormat));
+            rows.Add(ReadRow(date, element, identify));
         }
 
-        RejectDuplicateKeys(date, rows);
+        RejectDuplicateKeys(date, rows, identify);
 
         return new DayFires(date, rows);
     }
@@ -63,10 +67,15 @@ public static class FireCodec
         return DateOnly.TryParseExact(withoutExtension, FileDateFormat, out var date) ? date : null;
     }
 
-    private static FireRow ReadRow(JsonElement element) =>
-        new(
-            ReadWindowIdOrNull(element, "windowId"),
-            ReadKind(element.GetProperty("kind")),
+    private static FireRow ReadRow(DateOnly date, JsonElement element, Action<string?> identify)
+    {
+        var windowId = ReadWindowIdOrNull(element, "windowId");
+        var kind = ReadKind(element.GetProperty("kind"));
+        identify(FireIdentity(date, windowId, kind));
+
+        return new FireRow(
+            windowId,
+            kind,
             ReadStringOrNull(element, "windowName"),
             CodecPrimitives.ReadClockTimeOrNull(element, "windowStart"),
             CodecPrimitives.ReadClockTimeOrNull(element, "windowEnd"),
@@ -74,6 +83,7 @@ public static class FireCodec
             CodecPrimitives.ReadInstantOrNull(element, "firedAt"),
             ReadIntOrNull(element, "matched"),
             ReadEventIdOrNull(element, "carried"));
+    }
 
     private static void WriteRowBody(Utf8JsonWriter writer, FireRow row)
     {
@@ -88,7 +98,7 @@ public static class FireCodec
         WriteEventIdOrNull(writer, "carried", row.Carried);
     }
 
-    private static void RejectDuplicateKeys(DateOnly date, IReadOnlyList<FireRow> rows)
+    private static void RejectDuplicateKeys(DateOnly date, IReadOnlyList<FireRow> rows, Action<string?> identify)
     {
         var duplicate = rows
             .GroupBy(KeyOf)
@@ -97,9 +107,13 @@ public static class FireCodec
         if (duplicate is null) return;
 
         var window = duplicate.Key.WindowId?.Value ?? "null";
+        identify(FireIdentity(date, duplicate.Key.WindowId, duplicate.Key.Kind));
         throw new JsonException(
             $"Fire record {date:yyyy-MM-dd} has duplicate key (date, windowId, kind)=({date:yyyy-MM-dd}, {window}, {WriteKind(duplicate.Key.Kind)}).");
     }
+
+    private static string FireIdentity(DateOnly date, WindowId? windowId, FireKind kind) =>
+        $"(date, windowId, kind)=({date:yyyy-MM-dd}, {windowId?.Value ?? "null"}, {WriteKind(kind)})";
 
     private static WindowId? ReadWindowIdOrNull(JsonElement element, string property)
     {

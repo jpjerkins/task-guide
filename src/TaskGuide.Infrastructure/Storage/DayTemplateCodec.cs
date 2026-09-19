@@ -12,10 +12,17 @@ namespace TaskGuide.Infrastructure.Storage;
 /// </summary>
 public static class DayTemplateCodec
 {
-    public static IReadOnlyList<DayTemplate> Read(string json) =>
-        StoreCodecBoundary.Read("day-templates.json", "each Day template must satisfy the day-templates.json schema", () => ReadCore(json));
+    public static IReadOnlyList<DayTemplate> Read(string json)
+    {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "day-templates.json",
+            "each Day template must satisfy the day-templates.json schema",
+            () => ReadCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static IReadOnlyList<DayTemplate> ReadCore(string json)
+    private static IReadOnlyList<DayTemplate> ReadCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -23,7 +30,9 @@ public static class DayTemplateCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
+            identify(null);
             var id = new DayTemplateId(element.GetProperty("id").GetString()!);
+            identify(id.Value);
 
             var windows = element.GetProperty("windows").EnumerateArray()
                 .Select(CodecPrimitives.ReadWindow)

@@ -51,10 +51,17 @@ public static class CompletionCodec
     }
 
     /// <summary>`completions/derived.json`.</summary>
-    public static IReadOnlyList<DerivedCompletionEntry> ReadDerived(string json) =>
-        StoreCodecBoundary.Read("completions/derived.json", "each derived completion must satisfy the derived completion schema", () => ReadDerivedCore(json));
+    public static IReadOnlyList<DerivedCompletionEntry> ReadDerived(string json)
+    {
+        string? recordIdentity = null;
+        return StoreCodecBoundary.Read(
+            "completions/derived.json",
+            "each derived completion must satisfy the derived completion schema",
+            () => ReadDerivedCore(json, id => recordIdentity = id),
+            () => recordIdentity);
+    }
 
-    private static IReadOnlyList<DerivedCompletionEntry> ReadDerivedCore(string json)
+    private static IReadOnlyList<DerivedCompletionEntry> ReadDerivedCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -62,15 +69,16 @@ public static class CompletionCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
-            entries.Add(ReadDerivedEntry(element));
+            identify(null);
+            entries.Add(ReadDerivedEntry(element, identify));
         }
 
-        RejectDuplicateKeys(entries);
+        RejectDuplicateKeys(entries, identify);
 
         return entries;
     }
 
-    private static void RejectDuplicateKeys(IReadOnlyList<DerivedCompletionEntry> entries)
+    private static void RejectDuplicateKeys(IReadOnlyList<DerivedCompletionEntry> entries, Action<string?> identify)
     {
         var duplicate = entries
             .GroupBy(KeyOf)
@@ -78,6 +86,7 @@ public static class CompletionCodec
 
         if (duplicate is null) return;
 
+        identify(DerivedCompletionIdentity(duplicate.Key));
         throw new JsonException(
             $"Derived completion has duplicate key (ruleId, triggerId, due)=({duplicate.Key.RuleId.Value}, {duplicate.Key.TriggerId}, {duplicate.Key.Due:yyyy-MM-dd}).");
     }
@@ -113,12 +122,22 @@ public static class CompletionCodec
         CodecPrimitives.WriteInstant(writer, "done", entry.Done);
     }
 
-    private static DerivedCompletionEntry ReadDerivedEntry(JsonElement element) =>
-        new(
-            new RuleId(element.GetProperty("ruleId").GetString()!),
-            element.GetProperty("triggerId").GetString()!,
-            CodecPrimitives.ReadDate(element.GetProperty("due")),
+    private static DerivedCompletionEntry ReadDerivedEntry(JsonElement element, Action<string?> identify)
+    {
+        var ruleId = new RuleId(element.GetProperty("ruleId").GetString()!);
+        var triggerId = element.GetProperty("triggerId").GetString()!;
+        var due = CodecPrimitives.ReadDate(element.GetProperty("due"));
+        identify(DerivedCompletionIdentity(new DerivedCompletionKey(ruleId, triggerId, due)));
+
+        return new DerivedCompletionEntry(
+            ruleId,
+            triggerId,
+            due,
             CodecPrimitives.ReadInstant(element.GetProperty("done")));
+    }
+
+    private static string DerivedCompletionIdentity(DerivedCompletionKey key) =>
+        $"(ruleId, triggerId, due)=({key.RuleId.Value}, {key.TriggerId}, {key.Due:yyyy-MM-dd})";
 
     private static void WriteDerivedEntryBody(Utf8JsonWriter writer, DerivedCompletionEntry entry)
     {

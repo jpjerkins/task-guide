@@ -23,7 +23,7 @@ public static class TaskCodec
             () => recordIdentity);
     }
 
-    private static IReadOnlyList<TaskItem> ReadCore(string json, Action<string> identify)
+    private static IReadOnlyList<TaskItem> ReadCore(string json, Action<string?> identify)
     {
         using var document = JsonDocument.Parse(json);
 
@@ -31,6 +31,7 @@ public static class TaskCodec
 
         foreach (var element in document.RootElement.EnumerateArray())
         {
+            identify(null);
             var id = new TaskId(element.GetProperty("id").GetString()!);
             identify(id.Value);
 
