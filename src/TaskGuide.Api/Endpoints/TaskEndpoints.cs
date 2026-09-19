@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
 using OneOf;
@@ -7,6 +8,8 @@ using TaskGuide.Application.Tasks;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Matching;
+using TaskGuide.Domain.Ranking;
+using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
 using TaskGuide.Domain.Time;
 using TaskGuide.Domain.Tasks;
@@ -33,21 +36,42 @@ public static class TaskEndpoints
             StaleThresholds staleThresholds,
             TimeProvider timeProvider,
             DayBoundary boundary,
+            IDayShapeReader shapes,
+            ClockTimeResolution resolution,
             DerivedTaskComposer derivedTasks) =>
         {
             var view = store.Read();
+            var now = timeProvider.GetUtcNow();
             var filtered = derivedTasks.Compose(view).AsEnumerable();
             if (Enum.TryParse<Status>(status, ignoreCase: true, out var requestedStatus))
             {
-                var now = timeProvider.GetUtcNow();
                 filtered = filtered.Where(task =>
                     StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary) == requestedStatus);
             }
 
-            return TypedResults.Ok(filtered.Select(ToResponse));
+            var opportunities = new OpportunityCounter(shapes, registry, resolution, boundary);
+            return TypedResults.Ok(filtered.Select(task => ToResponse(
+                task,
+                view,
+                registry,
+                staleThresholds,
+                now,
+                boundary,
+                opportunities)));
         });
 
-        tasks.MapPost("/", async Task<Results<Created<TaskResponse>, BadRequest<object>, ProblemHttpResult>> (CreateTaskRequest request, IStore store, IIdMinter minter, ILogger<TaskEndpointsLogCategory> logger, CancellationToken ct) =>
+        tasks.MapPost("/", async Task<Results<Created<TaskResponse>, BadRequest<object>, ProblemHttpResult>> (
+            CreateTaskRequest request,
+            IStore store,
+            IIdMinter minter,
+            ILogger<TaskEndpointsLogCategory> logger,
+            DimensionRegistry registry,
+            StaleThresholds staleThresholds,
+            TimeProvider timeProvider,
+            DayBoundary boundary,
+            IDayShapeReader shapes,
+            ClockTimeResolution resolution,
+            CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Title))
             {
@@ -89,7 +113,17 @@ public static class TaskEndpoints
                 return TypedResults.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Storage is temporarily unavailable");
             }
 
-            return TypedResults.Created($"/api/tasks/{task.Id.Value}", ToResponse(task));
+            var now = timeProvider.GetUtcNow();
+            return TypedResults.Created(
+                $"/api/tasks/{task.Id.Value}",
+                ToResponse(
+                    task,
+                    store.Read(),
+                    registry,
+                    staleThresholds,
+                    now,
+                    boundary,
+                    new OpportunityCounter(shapes, registry, resolution, boundary)));
         })
         .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
@@ -180,11 +214,55 @@ public static class TaskEndpoints
         return tasks;
     }
 
-    private static TaskResponse ToResponse(TaskItem task) => new(
-        task.Id.Value,
-        task.Title,
-        DurationOf(task),
-        task.CreatedAt);
+    private static TaskResponse ToResponse(
+        TaskItem task,
+        IStoreView view,
+        DimensionRegistry registry,
+        StaleThresholds staleThresholds,
+        DateTimeOffset now,
+        DayBoundary boundary,
+        OpportunityCounter opportunities)
+    {
+        var status = StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary);
+        var patternWeekCount = status is not Status.Active
+            ? (int?)null
+            : opportunities.CountInPatternWeek(task, view.Patterns.Active, view.DayTemplates, boundary.DateOf(now));
+        var eligible = status is Status.Active
+            && StatusRules.IsEligible(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary);
+        var opportunityCount = eligible
+            ? opportunities.CountAhead(task, now, EmptyFetchedValues, FailedFetchedDimensions(task, registry))
+            : null;
+        var zeroKind = status is not Status.Active || patternWeekCount is not { } weekCount
+            ? null
+            : eligible
+                ? OrphanDetection.KindOfZero(status, opportunityCount, weekCount)
+                : OrphanDetection.IsTaskOrphan(status, weekCount) ? ZeroKind.Orphan : null;
+
+        return new TaskResponse(
+            task.Id.Value,
+            task.Title,
+            DurationOf(task),
+            task.CreatedAt,
+            ToWireName(status),
+            opportunityCount,
+            patternWeekCount,
+            zeroKind is { } kind ? ToWireName(kind) : null);
+    }
+
+    private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> EmptyFetchedValues =
+        new Dictionary<DimensionId, IReadOnlyList<TagValue>>();
+
+    private static IReadOnlyList<DimensionId> FailedFetchedDimensions(TaskItem task, DimensionRegistry registry) =>
+        registry.Dimensions
+            .Where(dimension => task.Tags.On(dimension.Id).Count > 0
+                && dimension.Match(
+                    categorical => categorical.WindowSource is WindowValueSource.Fetched,
+                    ordinal => ordinal.WindowSource is WindowValueSource.Fetched))
+            .Select(dimension => dimension.Id)
+            .ToArray();
+
+    private static string ToWireName<TEnum>(TEnum value) where TEnum : struct, Enum =>
+        JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
 
     /// <summary>The one Dimension the walking skeleton (#51) reads back out — the ordinal single value, if any.</summary>
     private static string? DurationOf(TaskItem task) =>
@@ -220,7 +298,15 @@ public static class TaskEndpoints
 /// <summary>Walking skeleton request shape (#51): a Task is a title and a Duration, nothing else.</summary>
 public sealed record CreateTaskRequest(string Title, int Duration);
 
-public sealed record TaskResponse(string Id, string Title, string? Duration, DateTimeOffset CreatedAt);
+public sealed record TaskResponse(
+    string Id,
+    string Title,
+    string? Duration,
+    DateTimeOffset CreatedAt,
+    string Status,
+    int? Opportunities,
+    int? PatternWeekCount,
+    string? ZeroKind);
 
 public sealed record PostponeTaskRequest(DateOnly Date);
 

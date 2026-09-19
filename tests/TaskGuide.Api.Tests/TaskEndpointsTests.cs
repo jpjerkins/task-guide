@@ -143,6 +143,78 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_tasks_carries_derived_status_and_fit_inputs_with_absence_distinct_from_zero()
+    {
+        await _client.PostAsJsonAsync("/api/tasks", new { title = "Active task", duration = 30 });
+        await _client.PostAsJsonAsync("/api/capture", new { title = "Needs processing", duration = (int?)null, source = "in-app" });
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+        var active = list.EnumerateArray().Single(task => task.GetProperty("title").GetString() == "Active task");
+        var unprocessed = list.EnumerateArray().Single(task => task.GetProperty("title").GetString() == "Needs processing");
+
+        Assert.Equal("active", active.GetProperty("status").GetString());
+        Assert.Equal(0, active.GetProperty("opportunities").GetInt32());
+        Assert.Equal(0, active.GetProperty("patternWeekCount").GetInt32());
+        Assert.Equal("orphan", active.GetProperty("zeroKind").GetString());
+
+        Assert.Equal("unprocessed", unprocessed.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, unprocessed.GetProperty("opportunities").ValueKind);
+        Assert.Equal(JsonValueKind.Null, unprocessed.GetProperty("patternWeekCount").ValueKind);
+        Assert.Equal(JsonValueKind.Null, unprocessed.GetProperty("zeroKind").ValueKind);
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_reports_unknown_opportunities_for_an_unavailable_fetched_dimension()
+    {
+        var weatherTask = new TaskItem(
+            new TaskId("t_01ARZ3NDEKTSV4RRFFQ69G5FAW"),
+            "Weather task",
+            Notes: null,
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Duration] = [new TagValue("30")],
+                [KnownDimensions.Weather] = [new TagValue("wet")],
+            }, LooseTags: []),
+            Deadline: null,
+            Defer: null,
+            Postpone: null,
+            Recurrence: null,
+            DateTimeOffset.UtcNow);
+        await SeedTasksAsync(weatherTask);
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+        var response = Assert.Single(list.EnumerateArray());
+
+        Assert.Equal("active", response.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, response.GetProperty("opportunities").ValueKind);
+        Assert.Equal("unknown", response.GetProperty("zeroKind").GetString());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_reports_done_without_fit_inputs_when_completion_precedes_unprocessed()
+    {
+        var capture = await _client.PostAsJsonAsync("/api/capture", new { title = "Completed capture", duration = (int?)null, source = "in-app" });
+        var captured = await capture.Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = new TaskId(captured.GetProperty("id").GetString()!);
+        var store = _factory.Services.GetRequiredService<IStore>();
+        await store.MutateAsync<Never>(
+            _ => new StoreMutation([new CompletionLogWrite(new CompletionLog(
+                taskId,
+                [new CompletionEntry(null, DateTimeOffset.UtcNow)]))]),
+            CancellationToken.None);
+
+        var response = await _client.GetAsync("/api/tasks");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var task = Assert.Single(list.EnumerateArray());
+
+        Assert.Equal("done", task.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, task.GetProperty("opportunities").ValueKind);
+        Assert.Equal(JsonValueKind.Null, task.GetProperty("patternWeekCount").ValueKind);
+        Assert.Equal(JsonValueKind.Null, task.GetProperty("zeroKind").ValueKind);
+    }
+
+    [Fact]
     public async Task A_posted_task_is_persisted_to_tasks_json_on_disk()
     {
         await _client.PostAsJsonAsync("/api/tasks", new { title = "Descale the kettle", duration = 30 });
