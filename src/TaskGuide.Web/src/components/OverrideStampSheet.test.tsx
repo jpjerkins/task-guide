@@ -205,11 +205,12 @@ it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switchin
   expect(screen.getByRole('dialog')).toHaveTextContent('Stamp a shape onto every date in the span.')
 })
 
-// #140 review finding 1: the range scope used to offer a "Keep each date's own shape" row that
-// called onStamp(null, span) — server-side that stamps a zero-window Override, blanking every
-// date in the span, not the "detaches without changing what is on it" the copy promised. There is
-// no per-date-preserving mode on the span endpoint (#144 tracks adding one), so the row is gone
-// rather than relabelled, and no row in range scope may ever pass a null template.
+// #140 review finding 1, closed by #145: the range scope used to offer a "Keep each date's own
+// shape" row that called onStamp(null, span) — server-side that stamped a zero-window Override,
+// blanking every date in the span, not the "detaches without changing what is on it" the copy
+// promised. #145 gave the wire a real, non-destructive freeze arm (mode: 'freeze'), so the row is
+// back with wording that now matches what the write actually does, and every row states its mode
+// explicitly — no row ever again relies on a null-template default.
 it('the_range_scope_offers_a_blank_every_date_row_whose_wording_matches_what_the_write_actually_does', async () => {
   stub(patterns([christmas.id]))
   const onStamp = vi.fn(async () => {})
@@ -219,26 +220,43 @@ it('the_range_scope_offers_a_blank_every_date_row_whose_wording_matches_what_the
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
   await screen.findByRole('button', { name: /Christmas/ })
 
-  // The wire has one null-template arm and it BLANKS the dates (CreateOverrideSpan ->
-  // new DateOverride(date, [], null)). The row is allowed to exist only while it says so: no
-  // wording here may promise that anything is preserved. #144 tracks the real "freeze" mode.
   const row = screen.getByRole('button', { name: /Blank every date in the span/ })
   expect(row).toHaveTextContent('every window on those dates is removed and nothing will fire on them')
-  expect(row.textContent).not.toMatch(/keep|preserv|without changing|own shape/i)
+  expect(row.querySelector('.pill.due')).toHaveTextContent('destructive')
   expect(screen.getByText('Clear the span')).toBeInTheDocument()
 
   fireEvent.click(row)
-  expect(onStamp).toHaveBeenCalledWith(null, { from: '2026-12-24', to: '2026-12-28' })
+  expect(onStamp).toHaveBeenCalledWith(null, { from: '2026-12-24', to: '2026-12-28' }, 'blank')
 })
 
-it('the_blank_every_date_row_is_offered_only_in_range_scope', async () => {
+it('the_range_scope_also_offers_a_freeze_row_above_the_blank_row_distinct_and_undestructive', async () => {
+  stub(patterns([christmas.id]))
+  const onStamp = vi.fn(async () => {})
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
+  await screen.findByRole('button', { name: /Christmas/ })
+
+  expect(screen.getByText('Detach the span')).toBeInTheDocument()
+  const freezeRow = screen.getByRole('button', { name: /Keep each date's own shape/ })
+  expect(freezeRow.querySelector('.pill.due')).toBeNull()
+  const blankRow = screen.getByRole('button', { name: /Blank every date in the span/ })
+  expect(freezeRow).not.toBe(blankRow)
+
+  fireEvent.click(freezeRow)
+  expect(onStamp).toHaveBeenCalledWith(null, { from: '2026-12-24', to: '2026-12-28' }, 'freeze')
+})
+
+it('the_blank_and_freeze_rows_are_offered_only_in_range_scope', async () => {
   stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   await screen.findByRole('button', { name: /Christmas/ })
   expect(screen.queryByRole('button', { name: /Blank every date/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Keep each date's own shape/ })).not.toBeInTheDocument()
 })
 
-it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
+it('range_scope_passes_the_span_and_stamp_mode_alongside_a_picked_template_id', async () => {
   stub(patterns([christmas.id]))
   const onStamp = vi.fn(async () => {})
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
@@ -246,7 +264,7 @@ it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
   fireEvent.click(await screen.findByRole('button', { name: /Christmas/ }))
-  await waitFor(() => expect(onStamp).toHaveBeenCalledWith(christmas.id, { from: '2026-12-24', to: '2026-12-28' }))
+  await waitFor(() => expect(onStamp).toHaveBeenCalledWith(christmas.id, { from: '2026-12-24', to: '2026-12-28' }, 'stamp'))
 })
 
 it('an_inverted_range_disables_every_pickrow_including_Keep_each_dates_own_shape_and_shows_the_refusal_note', async () => {

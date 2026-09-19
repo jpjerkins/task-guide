@@ -7,10 +7,8 @@ import { fmtShort, hm } from './OverrideFormat'
 
 type Template = components['schemas']['DayTemplateResponse']
 type Window = components['schemas']['AvailabilityWindow']
+type Pattern = components['schemas']['PatternResponse']
 type ViewMode = 'strip' | 'pills'
-// `active` is not in the generated schema yet (#143), so it is declared here rather than by
-// editing schema.d.ts, which is the Integration lane's.
-type ActiveFlagged = components['schemas']['PatternResponse'] & { active?: boolean }
 type Scope = 'date' | 'range'
 
 function minutesOf(time: string): number {
@@ -71,15 +69,16 @@ function ShapeRow({ template, view, busy, onPick }: { template: Template; view: 
 
 export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationError }: {
   date: string; onCancel: () => void
-  // A null templateId is the wire's blank-the-dates arm, not "leave them alone" — see the row below.
-  onStamp: (templateId: string | null, span: { from: string; to: string } | null) => Promise<void>
+  // Every call states its arm explicitly (#145) — 'stamp' carries a templateId, 'freeze' and
+  // 'blank' never do; mode is what tells those last two apart.
+  onStamp: (templateId: string | null, span: { from: string; to: string } | null, mode: 'stamp' | 'freeze' | 'blank') => Promise<void>
   busy: boolean
   mutationError?: string
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null)
-  // null: no season to group by — still loading, the read failed, or (today, always) no Pattern
-  // carries an `active` marker. The picker then renders one ungrouped list rather than an error;
-  // a picker that cannot group is still usable. See the inventory note and #143.
+  // null: no season to group by — still loading, the read failed, or no Pattern is marked active.
+  // The picker then renders one ungrouped list rather than an error; a picker that cannot group is
+  // still usable. See the inventory note.
   const [activeDays, setActiveDays] = useState<string[] | null>(null)
   const [view, setView] = useState<ViewMode>('strip')
   const [error, setError] = useState('')
@@ -91,11 +90,9 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
     getJson<Template[]>('/api/day-templates').then(value => { if (current) setTemplates(value ?? []) })
       .catch(reason => { if (current) setError(String(reason)) })
     // GET /api/patterns is the read that exists; GET /api/patterns/active does not — that route is
-    // PUT-only (PatternEndpoints.cs:31, `get?: never` in schema.d.ts). But PatternResponse is
-    // (Id, Name, Days) with no active marker, so nothing on the wire says which season is current.
-    // #143 adds `active`; until it lands no Pattern matches and the ungrouped fallback runs, which
-    // means grouping starts working with no change here.
-    getJson<ActiveFlagged[]>('/api/patterns')
+    // PUT-only (PatternEndpoints.cs:31, `get?: never` in schema.d.ts). PatternResponse now carries
+    // `active` (#143), so grouping works once one Pattern is marked active.
+    getJson<Pattern[]>('/api/patterns')
       .then(value => { if (current) setActiveDays(value?.find(p => p.active)?.days ?? null) })
       .catch(() => { if (current) setActiveDays(null) })
     return () => { current = false }
@@ -127,13 +124,21 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
     {invalidRange && <div className="note" role="alert">Choose a start and end date; the end must not precede the start.</div>}
     {error && <div className="note" role="alert">{error}</div>}
     {inRange && <>
-      {/* The span endpoint's only null-template arm writes `new DateOverride(date, [], null)` —
-          a zero-window Override, which wins over the Pattern because DayShape is
-          `Override[date] ?? Pattern[weekday]`. So this row blanks the dates, and its copy has to
-          say exactly that: an earlier wording ("keep each date's own shape ... without changing
-          what is on it") promised the opposite of what it did. #144 tracks the real freeze mode. */}
+      {/* Freeze (mode: 'freeze') copies each date's own CURRENT computed shape into its own
+          Override — CreateOverrideSpan's Freeze arm reads any existing Override's Windows first,
+          so nothing on the span is ever replaced. It only detaches the dates from future Pattern
+          edits, hence no destructive marker. */}
+      <div className="sec-h">Detach the span</div>
+      <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span, 'freeze')}>
+        <span className="who">
+          <span className="nm">Keep each date's own shape</span>
+          <span className="sub2">each date keeps what is on it, but later Pattern edits will not reach it</span>
+        </span></button></div>
+      {/* Blank (mode: 'blank') writes a zero-window Override for every date in the span — the
+          server's genuinely destructive arm, so it keeps the .pill.due marker the freeze row
+          above does not get. */}
       <div className="sec-h">Clear the span</div>
-      <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span)}>
+      <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span, 'blank')}>
         <span className="who">
           <span className="nm">Blank every date in the span<span className="pill due">destructive</span></span>
           <span className="sub2">every window on those dates is removed and nothing will fire on them</span>
@@ -144,7 +149,7 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
       toggleShown = true
       return <div key={group.label ?? 'all'}>
         <div className={`sec-h${withTog ? ' with-tog' : ''}`}>{group.label ?? 'Shapes'}{withTog && <ViewToggle view={view} onChange={setView} />}</div>
-        <div className="list">{group.list.map(t => <ShapeRow key={t.id} template={t} view={view} busy={rowsDisabled} onPick={() => void onStamp(t.id, inRange ? span : null)} />)}</div>
+        <div className="list">{group.list.map(t => <ShapeRow key={t.id} template={t} view={view} busy={rowsDisabled} onPick={() => void onStamp(t.id, inRange ? span : null, 'stamp')} />)}</div>
       </div>
     })}
     {templates?.length === 0 && <div className="empty">No shapes available.</div>}

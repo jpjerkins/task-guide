@@ -68,13 +68,13 @@ export function OverrideScreen() {
     } catch (reason) { setError(String(reason)) }
     finally { setBusy(false) }
   }
-  // null is the wire's blank-the-dates arm (the stamp sheet's "Blank every date in the span"),
-  // not "leave them alone" — CreateOverrideSpan maps it to a zero-window Override.
-  async function stamp(templateId: string | null, span: { from: string; to: string } | null) {
+  // Three explicit arms on the wire (#145) — mode always says which, never left to a null-template
+  // default. `templateId` is null for both 'freeze' and 'blank'; `mode` is what tells them apart.
+  async function stamp(templateId: string | null, span: { from: string; to: string } | null, mode: 'stamp' | 'freeze' | 'blank') {
     setBusy(true)
     setError('')
     try {
-      const created = await authorOverrideSpan({ ...(span ?? { from: selectedDate, to: selectedDate }), templateId }, confirm)
+      const created = await authorOverrideSpan({ ...(span ?? { from: selectedDate, to: selectedDate }), templateId, mode }, confirm)
       if (created !== null) {
         setLabels(previous => ({ ...previous, ...Object.fromEntries(created.map(day => [day.date, day.used?.templateName ?? 'One-off day'])) }))
         setStampOpen(false)

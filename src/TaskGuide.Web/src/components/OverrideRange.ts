@@ -1,7 +1,9 @@
 import { getJson, sendJson } from '../api/client'
 import type { components, paths } from '../api/schema'
 
-export type OverrideSpan = components['schemas']['OverrideSpanApiRequest']
+// mode narrowed to a literal union and made required — #145 stopped leaning on the wire's loose,
+// optional `mode?: null | string` (whose null used to mean "blank" by default).
+export type OverrideSpan = Omit<components['schemas']['OverrideSpanApiRequest'], 'mode'> & { mode: 'stamp' | 'freeze' | 'blank' }
 type CreatedDays = components['schemas']['DateOverrideResponse'][]
 type AffectedDates = paths['/api/overrides/clobber-check']['get']['responses'][200]['content']['application/json']
 
@@ -10,14 +12,18 @@ type AffectedDates = paths['/api/overrides/clobber-check']['get']['responses'][2
 // null means cancellation (or the shared client's absent POST response); failures propagate.
 export async function authorOverrideSpan(
   request: OverrideSpan,
-  confirm: (dates: Readonly<AffectedDates>, span: number) => Promise<boolean>,
+  confirm: (dates: Readonly<AffectedDates>, span: number, mode: Exclude<OverrideSpan['mode'], 'freeze'>) => Promise<boolean>,
 ): Promise<CreatedDays | null> {
   const span = { ...request }
   if (![span.from, span.to].every(isCalendarDate)) throw new Error('Valid start and end dates are required')
   if (span.to < span.from) throw new Error('End date must not precede start date')
+  // Freeze copies each date's own computed shape into its own Override (CreateOverrideSpan's
+  // Freeze arm), reading any existing Override's Windows first — nothing is ever replaced, so
+  // there is nothing to confirm and no clobber-check round trip to make.
+  if (span.mode === 'freeze') return sendJson<CreatedDays>('POST', '/api/overrides', span)
   const dates = await getJson<AffectedDates>(`/api/overrides/clobber-check?from=${span.from}&to=${span.to}`)
   if (dates === null) throw new Error('Clobber check returned no dates response')
-  if (dates.length && !await confirm(dates, spanSize(span.from, span.to))) return null
+  if (dates.length && !await confirm(dates, spanSize(span.from, span.to), span.mode)) return null
   return sendJson<CreatedDays>('POST', '/api/overrides', span)
 }
 
