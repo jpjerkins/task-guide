@@ -1268,6 +1268,18 @@ day'` when `isOverridden`, else `'Following the pattern'`. The `back` prop is om
 `ScreenNav`'s context back-action — there is currently no back navigation to wire without editing
 `App.tsx`, which is outside this ticket's lane.
 
+**#140 §2 re-port: the date's window and event rows** — times now render through `hm()` instead
+of `.slice(0, 5)`, and both lists render `dimPills` (`OverrideDimPills.tsx`, shared with the
+promote sheet below) — one `.pill.dim` per declared dimension key, one `.pill.inert` per loose
+tag. The dimension key is rendered lowercased rather than its display label, since resolving the
+label needs `/api/dimensions` and the screen does not fetch it; same gap as `sub` above (no
+`DayShape`-to-template link exists to resolve a name from either). The window row's `.pill.dim`
+"N fit" match-count pill is **not** rendered — this is the same accepted gap the table above
+already lists ("A window match preview (count + first titles) | no endpoint"), now also true of
+the date-window rows, not just the picker. The window row keeps a trailing `<span class="chev">`
+sibling of `.body`, present but inert: the tap-to-expand inline window editor it leads to is
+#105's ticket, not this one.
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and

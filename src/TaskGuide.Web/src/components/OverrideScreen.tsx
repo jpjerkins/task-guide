@@ -11,7 +11,8 @@ import { DateRail } from './DateRail'
 import { DateEntry } from './shared/DateEntry'
 import { ScreenNav } from './shared/ScreenNav'
 import { useOverrideDateSelection } from './OverrideDateSelection'
-import { fmtShort } from './OverrideFormat'
+import { fmtShort, hm } from './OverrideFormat'
+import { dimPills } from './OverrideDimPills'
 
 type Day = components['schemas']['DayShape']
 
@@ -114,12 +115,14 @@ export function OverrideScreen() {
           ? <>This date is already an override — <b>{labels[selectedDate] ?? 'Override'}</b>.</>
           : <>The first change copies the day off its shape and this date stops following the pattern.</>}</span></div>
         <div className="sec-h">Windows on this date</div>
+        {/* the "N fit" match-count pill is not rendered — no endpoint supplies it (tests/TEST-INVENTORY.md,
+            "A window match preview"); the chev is a #105 inline editor's, present but inert until that lands. */}
         <div className="list">{shown.windows.map(w => <div className="row" key={w.id.value}><div className="body">
-          <div className="title">{w.name}</div><div className="meta"><span className="pill dur">{w.start.slice(0, 5)}–{w.end.slice(0, 5)}</span></div>
-        </div></div>)}</div>
+          <div className="title">{w.name}</div><div className="meta"><span className="pill dur">{hm(w.start)}–{hm(w.end)}</span>{dimPills(w.tags)}</div>
+        </div><span className="chev">›</span></div>)}</div>
         {shown.windows.length === 0 && <div className="empty">No windows — a completely blank day.</div>}
         {shown.events.length > 0 && <><div className="sec-h">Events</div><div className="list">{shown.events.map(event => <div className="row" key={event.id.value}><div className="body">
-          <div className="title">{event.name}</div><div className="meta"><span className="pill dur">{event.start.slice(0, 5)}–{event.end.slice(0, 5)}</span></div>
+          <div className="title">{event.name}</div><div className="meta"><span className="pill dur">{hm(event.start)}–{hm(event.end)}</span>{dimPills(event.tags)}</div>
         </div></div>)}</div></>}
         <div className="sec"><button className="btn wide" disabled={busy} onClick={() => setStampOpen(true)}>Stamp a whole shape onto this date…</button></div>
         <div className="btn-row"><button className="btn" disabled={busy} onClick={() => setRangeOpen(true)}>Override a date range…</button></div>

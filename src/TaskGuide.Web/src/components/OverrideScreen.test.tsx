@@ -138,6 +138,23 @@ it('a_range_landing_on_dates_that_already_carry_an_Override_names_every_one_of_t
   expect(container.querySelector('.weekstrip')?.children).toHaveLength(21)
 })
 
+it('window_and_event_rows_show_hm_times_dimension_and_loose_tag_pills_and_a_window_row_carries_an_inert_chev', async () => {
+  const tagged = { id: { value: 'w_tagged' }, name: 'Tagged', start: '07:30:00', end: '09:00:00', tags: { dimensions: { Location: [{ value: 'Home' }, { value: 'Office' }] }, looseTags: [{ value: 'urgent' }] } }
+  days.set('2026-11-01', { date: '2026-11-01', windows: [tagged], events: [{ id: { value: 'ev_dinner' }, date: '2026-11-01', name: 'Dinner out', start: '18:00:00', end: '19:00:00', tags: { dimensions: {}, looseTags: [] }, absenceNotice: null }], isOverridden: false })
+  const { container } = render(<OverrideScreen />)
+  await screen.findByText('Tagged')
+  const row = screen.getByText('Tagged').closest('.row') as HTMLElement
+  expect(row.querySelector('.pill.dur')).toHaveTextContent('7:30a–9a')
+  expect(row.querySelector('.pill.dim')).toHaveTextContent('location: Home / Office')
+  expect(row.querySelector('.pill.inert')).toHaveTextContent('urgent · inert')
+  expect(row.querySelector('.chev')).toHaveTextContent('›')
+  expect(container.querySelectorAll('.pill.dim')).not.toHaveLength(0)
+  expect(container.textContent).not.toMatch(/\bfit\b/)
+  const eventRow = screen.getByText('Dinner out').closest('.row') as HTMLElement
+  expect(eventRow.querySelector('.pill.dur')).toHaveTextContent('6p–7p')
+  expect(eventRow.querySelector('.chev')).toBeNull()
+})
+
 it('reverting_a_date_removes_its_Override_and_the_date_reads_as_following_the_pattern_again', async () => {
   days.set('2026-11-01', { date: '2026-11-01', windows: [], events: [], isOverridden: true })
   fetch.mockImplementation(async (url: string, init?: RequestInit) => {
