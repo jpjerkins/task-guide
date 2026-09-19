@@ -1420,3 +1420,14 @@ specified under **Shared controls** above and are not restated here.
 - `PUT /api/tasks/{id}/duration` accepts the five canonical buckets and returns 204
 - `PUT /api/tasks/{id}/duration` rejects malformed/invalid input with 400 and refuses absent/derived Tasks with 409
 - OpenAPI declares the Duration request DTO and 204/400/409 route outcomes
+
+**Shared display formatters — #140**
+
+`OverrideFormat.ts` holds the two formats every authoring surface re-ports: `hm` (the prototype's
+`3p` / `7:30a` / `12p`) and `fmtShort` (`Tue 15 Sep`). Both format strings the server already sent;
+neither reads a clock.
+
+- a time renders `6a`, `7:30a`, `12p`, `12a`, `3p`, `11:45p` — never `06:00`
+- a wire time carrying seconds renders the same as one without them
+- an ISO date renders `Tue 15 Sep`, and a single-digit day carries no leading zero — formatted as
+  UTC because the ISO date is already a Chicago calendar date (`DayBoundary.ZoneId`)
