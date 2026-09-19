@@ -1,4 +1,3 @@
-using System.Text.Json;
 using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -215,13 +214,13 @@ public sealed class JsonStore : IStore
                             // concurrent reader already holds. Every write below makes the same
                             // copy for the same reason.
                             tasks = w.Tasks.ToArray();
-                            await WriteAtomicAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks), cancellationToken);
+                            await AtomicJsonFile.WriteAsync(_tasksPath, writer => TaskCodec.Write(writer, tasks), cancellationToken);
                             break;
 
                         case DayTemplatesWrite w:
                             attemptedWrite = true;
                             dayTemplates = w.Templates.ToArray();
-                            await WriteAtomicAsync(
+                            await AtomicJsonFile.WriteAsync(
                                 Path.Combine(_dataDir, "day-templates.json"),
                                 writer => DayTemplateCodec.Write(writer, dayTemplates),
                                 cancellationToken);
@@ -230,7 +229,7 @@ public sealed class JsonStore : IStore
                         case PatternsWrite w:
                             attemptedWrite = true;
                             patterns = w.Book with { Patterns = w.Book.Patterns.ToArray() };
-                            await WriteAtomicAsync(
+                            await AtomicJsonFile.WriteAsync(
                                 Path.Combine(_dataDir, "patterns.json"),
                                 writer => PatternCodec.Write(writer, patterns),
                                 cancellationToken);
@@ -239,7 +238,7 @@ public sealed class JsonStore : IStore
                         case OverridesWrite w:
                             attemptedWrite = true;
                             overrides = w.Overrides.ToArray();
-                            await WriteAtomicAsync(
+                            await AtomicJsonFile.WriteAsync(
                                 Path.Combine(_dataDir, "overrides.json"),
                                 writer => OverrideCodec.Write(writer, overrides),
                                 cancellationToken);
@@ -248,7 +247,7 @@ public sealed class JsonStore : IStore
                         case EventsWrite w:
                             attemptedWrite = true;
                             events = w.Events.ToArray();
-                            await WriteAtomicAsync(
+                            await AtomicJsonFile.WriteAsync(
                                 Path.Combine(_dataDir, "events.json"),
                                 writer => EventCodec.Write(writer, events),
                                 cancellationToken);
@@ -257,7 +256,7 @@ public sealed class JsonStore : IStore
                         case EventExceptionsWrite w:
                             attemptedWrite = true;
                             eventExceptions = w.Exceptions.ToArray();
-                            await WriteAtomicAsync(
+                            await AtomicJsonFile.WriteAsync(
                                 Path.Combine(_dataDir, "event-exceptions.json"),
                                 writer => EventCodec.WriteExceptions(writer, eventExceptions),
                                 cancellationToken);
@@ -272,7 +271,7 @@ public sealed class JsonStore : IStore
 
                                 var completionsDir = Path.Combine(_dataDir, "completions");
                                 Directory.CreateDirectory(completionsDir);
-                                await WriteAtomicAsync(
+                                await AtomicJsonFile.WriteAsync(
                                     Path.Combine(completionsDir, CompletionCodec.FileNameFor(log.TaskId)),
                                     writer => CompletionCodec.Write(writer, log),
                                     cancellationToken);
@@ -285,7 +284,7 @@ public sealed class JsonStore : IStore
                             {
                                 var completionsDir = Path.Combine(_dataDir, "completions");
                                 Directory.CreateDirectory(completionsDir);
-                                await WriteAtomicAsync(
+                                await AtomicJsonFile.WriteAsync(
                                     Path.Combine(completionsDir, "derived.json"),
                                     writer => CompletionCodec.WriteDerived(writer, derivedCompletions),
                                     cancellationToken);
@@ -301,7 +300,7 @@ public sealed class JsonStore : IStore
 
                                 var firesDir = Path.Combine(_dataDir, "fires");
                                 Directory.CreateDirectory(firesDir);
-                                await WriteAtomicAsync(
+                                await AtomicJsonFile.WriteAsync(
                                     Path.Combine(firesDir, FireCodec.FileNameFor(dayFires.Date)),
                                     writer => FireCodec.Write(writer, dayFires),
                                     cancellationToken);
@@ -358,45 +357,6 @@ public sealed class JsonStore : IStore
         }
     }
 
-    /// <summary>
-    /// Write to a temp file in the same directory, fsync it, then rename over the destination.
-    /// The rename is atomic on the same filesystem — <paramref name="path"/> is never observable
-    /// as a torn or partial write, because nothing touches <paramref name="path"/> itself until
-    /// the very last step.
-    /// </summary>
-    /// <remarks>
-    /// Portability caveat: this also fsyncs the file, but not the containing directory — .NET has
-    /// no portable API for that (it needs a raw file descriptor and an `fsync` syscall on the
-    /// directory, which is POSIX-specific and unavailable through <see cref="System.IO"/>). On a
-    /// host that crashes between the rename and the directory entry reaching stable storage, the
-    /// rename could theoretically be lost. Accepted for the walking skeleton; worth revisiting if
-    /// pi5's storage stack turns out to need it.
-    /// </remarks>
-    private static async Task WriteAtomicAsync(string path, Action<Utf8JsonWriter> writeContent, CancellationToken cancellationToken)
-    {
-        var directory = Path.GetDirectoryName(path)!;
-        var tempPath = Path.Combine(directory, $".{Path.GetFileName(path)}.tmp-{Guid.NewGuid():N}");
-
-        try
-        {
-            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
-                {
-                    writeContent(writer);
-                    await writer.FlushAsync(cancellationToken);
-                }
-
-                stream.Flush(flushToDisk: true);
-            }
-
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(tempPath)) File.Delete(tempPath);
-        }
-    }
 }
 
 internal sealed class StoreView(

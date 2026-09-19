@@ -42,7 +42,8 @@ public sealed class ManifestCodecTests
 /// <summary>
 /// Against `tests/TEST-INVENTORY.md`'s "Sequential · TaskGuide.Storage.Tests" section:
 /// "snapshots keep the last 5", "a Snapshot is a whole-file copy, not a re-serialisation", and
-/// "a Snapshot recreates the relative directory structure of the paths it is given".
+/// "a Snapshot recreates the relative directory structure of the paths it is given", and
+/// "snapshot pruning never deletes a directory that is not a snapshot".
 /// </summary>
 public sealed class SnapshotWriterTests : IDisposable
 {
@@ -69,6 +70,24 @@ public sealed class SnapshotWriterTests : IDisposable
         var remaining = Directory.GetDirectories(snapshotsDir).Select(Path.GetFileName).OrderBy(name => name, StringComparer.Ordinal);
         var expectedRetained = Enumerable.Range(1, 5).Select(i => ExpectedLeafName(start.AddSeconds(i))).OrderBy(name => name, StringComparer.Ordinal);
         Assert.Equal(expectedRetained, remaining);
+    }
+
+    [Fact]
+    public async Task Snapshot_pruning_never_deletes_a_directory_that_is_not_a_snapshot()
+    {
+        File.WriteAllText(Path.Combine(_dataDir, "manifest.json"), "{ \"version\": 1 }");
+        var writer = new SnapshotWriter(_dataDir);
+        var snapshotsDir = Path.Combine(_dataDir, "snapshots");
+        var foreignDirectory = Path.Combine(snapshotsDir, "000-human-notes");
+        Directory.CreateDirectory(foreignDirectory);
+
+        var start = new DateTimeOffset(2026, 8, 28, 10, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 6; i++)
+        {
+            await writer.TakeAsync(["manifest.json"], start.AddSeconds(i), CancellationToken.None);
+        }
+
+        Assert.True(Directory.Exists(foreignDirectory));
     }
 
     [Fact]

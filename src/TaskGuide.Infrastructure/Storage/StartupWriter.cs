@@ -1,4 +1,3 @@
-using System.Text.Json;
 using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -54,26 +53,6 @@ public sealed class StartupWriter(IStore store, string dataDir, SnapshotWriter s
     private async Task WriteManifestAsync(int version, CancellationToken cancellationToken)
     {
         var path = Path.Combine(dataDir, "manifest.json");
-        var tempPath = Path.Combine(dataDir, $".manifest.json.tmp-{Guid.NewGuid():N}");
-
-        try
-        {
-            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
-                {
-                    ManifestCodec.Write(writer, version);
-                    await writer.FlushAsync(cancellationToken);
-                }
-
-                stream.Flush(flushToDisk: true);
-            }
-
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(tempPath)) File.Delete(tempPath);
-        }
+        await AtomicJsonFile.WriteAsync(path, writer => ManifestCodec.Write(writer, version), cancellationToken);
     }
 }

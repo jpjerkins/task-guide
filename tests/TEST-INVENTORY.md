@@ -700,6 +700,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `manifest.json` round-trips its version
 - a snapshot is written once per startup, and **only when that startup will write**
 - snapshots keep the last 5
+- snapshot directory names sort chronologically under an ordinal string sort — Prune picks its victims by that order
+- snapshot pruning never deletes a directory that is not a snapshot
 - a Snapshot is a whole-file copy, not a re-serialisation
 - a Snapshot recreates the relative directory structure of the paths it is given
 - an Event-plus-Override write puts the **Event first**

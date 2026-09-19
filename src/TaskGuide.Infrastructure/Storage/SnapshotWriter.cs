@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace TaskGuide.Infrastructure.Storage;
 
 /// <summary>
@@ -52,7 +54,12 @@ public sealed class SnapshotWriter(string dataDir)
 
     private static void Prune(string snapshotsDir)
     {
-        var directories = Directory.GetDirectories(snapshotsDir).OrderBy(d => d, StringComparer.Ordinal).ToArray();
+        var directories = Directory.GetDirectories(snapshotsDir)
+            .Where(IsSnapshotDirectory)
+            // Correctness depends on the fixed-width, big-endian, zero-padded format sorting
+            // chronologically under ordinal comparison.
+            .OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal)
+            .ToArray();
         var toRemove = directories.Length - SnapshotsToKeep;
 
         for (var i = 0; i < toRemove; i++)
@@ -60,4 +67,12 @@ public sealed class SnapshotWriter(string dataDir)
             Directory.Delete(directories[i], recursive: true);
         }
     }
+
+    private static bool IsSnapshotDirectory(string path) =>
+        DateTime.TryParseExact(
+            Path.GetFileName(path),
+            DirectoryNameFormat,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out _);
 }
