@@ -1151,13 +1151,21 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - an ordinal Dimension renders through the shared `OrdinalSlider` in its read-only presentation —
   ticks and hint present, the leave-at-the-default toggle present only where a default is declared
   (per § *Shared controls*), every control disabled
-- a categorical Dimension renders its values as a read-only chipset — no button, no pressed state
-  to toggle
+- a categorical Dimension renders its values as read-only pills on a plain `.meta` line — no
+  `.chipset` class (that belongs to #102's authoring control, which these read-only values are
+  not), no button, no pressed state to toggle
 - a fetched Dimension renders as fetched and never authored, alongside the authored ones (needs
   the source marker — see *What this list needs* below)
 - nothing on the screen commits — no control is enabled, no draft is held, and the tag-entry
   prototype's `toggleCat` / `setOrd` / `commitDraft` affordances are absent (they are #102's)
 - an empty registry renders the empty state rather than a bare frame
+
+The `source` pill (authored/derived/fetched) is not in the `dimensionsScreen` prototype, which
+predates `DimensionResponse.source` — it is a deliberate addition, not an invention: the schema
+now carries it (`DimensionResponse.source` in `api/schema.d.ts`), and this list already requires
+it, both in the fetched-Dimension bullet above and in #105's own bullet. Per plan constraint 4
+(`docs/superpowers/plans/2026-09-03-application-layer.md`), `CONTEXT.md` and this inventory win
+over a prototype, which is a design artifact, not spec.
 
 **What this list needs from the API that does not exist yet (#104)**
 
