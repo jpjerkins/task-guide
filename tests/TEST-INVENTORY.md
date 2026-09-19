@@ -1251,10 +1251,10 @@ all dates named before a range write, inverted-range disabled state, and post-re
 Remaining cross-ticket display limitations: `DayShape` contains windows, events and
 `isOverridden`, but no template-use name; `GET /api/overrides/{date}` is still a 204 read stub.
 The banner therefore says “Override” when no write response supplied its saved name; it never
-looks up a template to resolve copied windows. The template picker lists the real template read
-without prototype fixture-based season grouping. Window editing and matching-preview controls
-belong to #105; this screen displays the date windows as the prototype promotion list does.
-These limitations are reported on #107, not represented as completed cross-ticket features.
+looks up a template to resolve copied windows. The template picker groups the real template read
+by season use, as `#140 §3` below describes; window editing and matching-preview controls belong
+to #105 — this screen displays the date windows as the prototype promotion list does. These
+limitations are reported on #107, not represented as completed cross-ticket features.
 
 **#140 §1 re-port: the nav, the scope banner and the `sub` degradation** — the nav title and the
 scope banner now render `fmtShort(selectedDate)` (`OverrideFormat.ts`) instead of the raw ISO
@@ -1279,6 +1279,24 @@ already lists ("A window match preview (count + first titles) | no endpoint"), n
 the date-window rows, not just the picker. The window row keeps a trailing `<span class="chev">`
 sibling of `.body`, present but inert: the tap-to-expand inline window editor it leads to is
 #105's ticket, not this one.
+
+**#140 §3 re-port: the shape picker groups, strips and toggle** — `OverrideStampSheet` now titles
+itself `fmtShort(date)` (a `date` prop, threaded from `OverrideScreen`) instead of "Stamp a shape",
+and groups its templates into "Already in this season" / "Used by other seasons" / "Not in use"
+(an empty group is omitted), closing with the prototype's shape-count note. The grouping is read
+from `GET /api/day-templates` plus `GET /api/patterns/active`'s `days` — **but that GET does not
+exist on the wire**: `schema.d.ts`'s `"/api/patterns/active"` entry has `get?: never` and only a
+`put` (the switch-active-pattern write). `getJson` still issues the request (there is no schema
+gate at the call site), and any non-2xx or thrown response is treated as "no season to group by":
+the sheet falls back to one ungrouped `Shapes` list rather than showing an error, per this
+ticket's own contingency. In today's backend that fallback is not a rare path — it is the only
+path, until a GET is added to that route. `isCurrent`/`aria-pressed="true"`/the `current` pill are
+never rendered on any row: resolving which template a date is currently stamped from needs the
+same `DayShape`-to-template link the `sub` gap above already names, and it does not exist either.
+The view toggle (`Strips`/`Times`, `.vtog`) is one local `useState`, not the prototype's
+cross-surface shared preference — sharing it needs a store outside this ticket's file lane. The
+read-only `strip()` is ported verbatim (six-fixed-tick, 6a–11p span, inline `left`/`width`); the
+tappable `edit` form is #105's inline editor, not ported here.
 
 ### Web-Now
 

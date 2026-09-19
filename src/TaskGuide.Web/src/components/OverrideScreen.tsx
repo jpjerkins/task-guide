@@ -131,7 +131,7 @@ export function OverrideScreen() {
         <div className="note">Stamping copies the windows in. It is <b>not</b> a link — edit the shape tomorrow and this date will not follow.</div>
       </>}
     </div>
-    {stampOpen && <OverrideStampSheet mutationError={error} onCancel={() => setStampOpen(false)} onStamp={stamp} busy={busy} />}
+    {stampOpen && <OverrideStampSheet date={selectedDate} mutationError={error} onCancel={() => setStampOpen(false)} onStamp={stamp} busy={busy} />}
     {rangeOpen && <OverrideRangeSheet mutationError={error} date={selectedDate} busy={busy} onCancel={() => setRangeOpen(false)} onCreate={createRange} />}
     {promoteOpen && shown && <OverridePromoteSheet mutationError={error} day={shown} busy={busy} onCancel={() => setPromoteOpen(false)} onPromote={promote} />}
     {eventOpen && shown && <EventCreateSheet date={selectedDate} windows={shown.windows} onCancel={() => setEventOpen(false)} onCreated={() => { setEventOpen(false); setRevision(value => value + 1) }} />}
