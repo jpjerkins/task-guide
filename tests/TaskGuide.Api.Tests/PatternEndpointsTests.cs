@@ -62,6 +62,33 @@ public sealed class PatternEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_patterns_marks_exactly_one_Pattern_as_active()
+    {
+        var template = new DayTemplate(new DayTemplateId("dt_active"), "Template", [], []);
+        var active = Pattern("p_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Active", template.Id);
+        var dormant = Pattern("p_01ARZ3NDEKTSV4RRFFQ69G5FAW", "Dormant", template.Id);
+        await WriteAsync(
+            new DayTemplatesWrite([template]),
+            new PatternsWrite(new PatternBook(active.Id, [active, dormant])));
+
+        var response = await _client.GetAsync("/api/patterns");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var patterns = body.EnumerateArray().ToArray();
+        Assert.All(patterns, pattern => Assert.True(pattern.TryGetProperty("active", out _)));
+        var activePatterns = patterns
+            .Where(pattern => pattern.GetProperty("active").GetBoolean())
+            .ToArray();
+        Assert.Single(activePatterns);
+        Assert.Equal(active.Id.Value, activePatterns[0].GetProperty("id").GetString());
+        Assert.False(patterns
+            .Single(pattern => pattern.GetProperty("id").GetString() == dormant.Id.Value)
+            .GetProperty("active")
+            .GetBoolean());
+    }
+
+    [Fact]
     public async Task DELETE_api_patterns_id_is_refused_for_the_active_Pattern()
     {
         var template = new DayTemplate(new DayTemplateId("dt_delete"), "Template", [], []);

@@ -18,7 +18,11 @@ public static class PatternEndpoints
     public static RouteGroupBuilder MapPatternEndpoints(this RouteGroupBuilder api)
     {
         var patterns = api.MapGroup("/patterns").WithTags("Schedule");
-        patterns.MapGet("/", (IStore store) => TypedResults.Ok(store.Read().Patterns.Patterns.Select(ToResponse)));
+        patterns.MapGet("/", (IStore store) =>
+        {
+            var view = store.Read();
+            return TypedResults.Ok(view.Patterns.Patterns.Select(pattern => ToResponse(pattern, view.Patterns.ActivePatternId)));
+        });
         patterns.MapPost("/", CreateAsync);
         patterns.MapPatch("/{id}", EditAsync);
 
@@ -40,7 +44,7 @@ public static class PatternEndpoints
 
         var pattern = new Pattern(minter.NextPatternId(), request.Name, days.Select(id => new DayTemplateId(id)).ToArray());
         await new CreatePattern(store).ExecuteAsync(pattern, ct);
-        return TypedResults.Created($"/api/patterns/{pattern.Id.Value}", ToResponse(pattern));
+        return TypedResults.Created($"/api/patterns/{pattern.Id.Value}", ToResponse(pattern, store.Read().Patterns.ActivePatternId));
     }
 
     private static async Task<Results<Ok<PatternResponse>, BadRequest<object>, Conflict<object>>> EditAsync(
@@ -51,7 +55,7 @@ public static class PatternEndpoints
         var pattern = new Pattern(new PatternId(id), request.Name, days.Select(day => new DayTemplateId(day)).ToArray());
         var outcome = await new EditPattern(store).ExecuteAsync(pattern, ct);
         return outcome.Match<Results<Ok<PatternResponse>, BadRequest<object>, Conflict<object>>>(
-            edited => TypedResults.Ok(ToResponse(edited.Pattern)),
+            edited => TypedResults.Ok(ToResponse(edited.Pattern, store.Read().Patterns.ActivePatternId)),
             _ => TypedResults.Conflict<object>(new { error = "Pattern was not found" }));
     }
 
@@ -125,11 +129,11 @@ public static class PatternEndpoints
         && value.StartsWith(prefix, StringComparison.Ordinal)
         && value[prefix.Length..].All(character => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".Contains(character));
 
-    private static PatternResponse ToResponse(Pattern pattern) =>
-        new(pattern.Id.Value, pattern.Name, pattern.Days.Select(day => day.Value).ToArray());
+    private static PatternResponse ToResponse(Pattern pattern, PatternId activePatternId) =>
+        new(pattern.Id.Value, pattern.Name, pattern.Days.Select(day => day.Value).ToArray(), pattern.Id.Equals(activePatternId));
 }
 
 public sealed record PatternRequest(string Name, IReadOnlyList<string>? Days);
 public sealed record SwitchActivePatternRequest(string PatternId);
-public sealed record PatternResponse(string Id, string Name, IReadOnlyList<string> Days);
+public sealed record PatternResponse(string Id, string Name, IReadOnlyList<string> Days, bool Active);
 public sealed record SwitchImpactResponse(int NewlyOrphaned);

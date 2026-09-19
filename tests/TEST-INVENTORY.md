@@ -823,6 +823,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - an Override span ending at `DateOnly.MaxValue` writes its final date without overflow
 - `DELETE /api/patterns/{id}` is refused for the active Pattern
 - `GET /api/patterns/active/switch-impact` returns the orphan count **before** the switch
+- `GET /api/patterns marks exactly one Pattern as active`
 - `POST /api/patterns` with a nonblank `name` and omitted `days` returns 400
 - `PATCH /api/patterns/{id}` with a nonblank `name` and omitted `days` returns 400
 - `PUT /api/overrides/{date}/stamp` copies the template's shape and **preserves each Window's id**
