@@ -1141,6 +1141,29 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   longer offered, so a stale resolution is never sent
 - the Event sheet's DOM preserves the prototype's veil/sheet, time-field, scope banner, note and
   button-row class structure
+- every rendered time — the time-field defaults, the clash banner's span, and every option's label
+  and description — renders through `hm()`, never raw 24h; the fields themselves stay lenient on
+  input (ADR-0006: a control must not be remounted or rewritten from inside its own input handler)
+- the `timeHint` note (*Type it how you say it — 3p, 7:30a, 12p*) renders under the time row
+- with more than one overlapping window, each window's option group is preceded by a `.sec-h`
+  header naming that window; with exactly one, no header renders — the clash banner above already
+  names it
+- option copy matches `overlapOptions` verbatim: `replace`/`split`/`truncateStart` labels carry no
+  times (times live in the description only); `truncateEnd`'s label does carry times, which is not
+  a departure. No option repeats `— {window.name}` in its label — see the `.sec-h` line above for
+  how two windows' groups are told apart instead
+- the closing note carries the *move the end time to `{hm}` or later and the split disappears*
+  clause, computed from the first overlapping window, in addition to the one-off-day sentence
+- the sheet's date text (`When — …`, both notes) renders through `fmtShort`, not a local formatter
+- the time row and each option's description render **unstyled** — `index.css` has no class for
+  either, and this sheet does not add one or inline a style. Blocked on **#142** (`.timerow`,
+  `.timerow span`, `.btn .d`); the sheet renders correctly today, just without the prototype's
+  layout for these two spots, until #142 lands
+- interaction stays **select-then-submit** (`aria-pressed` options + a separate "Add event"
+  button), not the prototype's tap-to-apply: `POST /api/events` requires every overlapping
+  window's resolution in one body, refused otherwise with *Every overlapping Window needs a
+  resolution* (see above) — with two overlapping windows there is no single tap that constitutes a
+  complete request, so select-then-submit is the shape the wire already requires
 
 **Read-only dimensions viewer (#112)** — `dimensionsScreen(back, backLabel)` ~948 in
 `ui-screens.prototype.html`; `identityFields()` ~502, `timingFields()` ~513, `brief(v)` ~679 in

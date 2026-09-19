@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { sendJson } from '../api/client'
 import type { components } from '../api/schema'
+import { hm, fmtShort } from './OverrideFormat'
 
 export type EventWindow = components['schemas']['AvailabilityWindow']
 type CreateEventRequest = components['schemas']['CreateEventRequest']
@@ -88,25 +89,20 @@ function optionCopy(option: Resolution, overlap: Overlap): { label: string; desc
   const { window, start, end, windowStart, windowEnd, startMinutes, windowStartMinutes, windowEndMinutes } = overlap
   switch (option) {
     case 'replace':
-      return { label: `Replace the window — ${window.name}`, description: `${window.name} disappears that day` }
+      return { label: 'Replace the window', description: `${window.name} disappears that day` }
     case 'truncateEnd':
-      return { label: `Truncate it to ${windowStart}–${start} — ${window.name}`, description: `Fires at ${windowStart} as before; ${startMinutes - windowStartMinutes} min instead of ${windowEndMinutes - windowStartMinutes}` }
+      return { label: `Truncate it to ${hm(windowStart)}–${hm(start)}`, description: `Fires at ${hm(windowStart)} as before; ${startMinutes - windowStartMinutes} min instead of ${windowEndMinutes - windowStartMinutes}` }
     case 'split':
-      return { label: `Split it around the event — ${windowStart}–${start} and ${end}–${windowEnd} — ${window.name}`, description: `${windowStart}–${start} and ${end}–${windowEnd} — two windows, two fires` }
+      return { label: 'Split it around the event', description: `${hm(windowStart)}–${hm(start)} and ${hm(end)}–${hm(windowEnd)} — two windows, two fires` }
     case 'truncateStart':
-      return { label: `Push it to after the event — ${end}–${windowEnd} — ${window.name}`, description: `${end}–${windowEnd}; the event covers its whole start` }
+      return { label: 'Push it to after the event', description: `${hm(end)}–${hm(windowEnd)}; the event covers its whole start` }
   }
-}
-
-function formatDate(date: string): string {
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-    .format(new Date(`${date}T00:00:00Z`))
 }
 
 export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCreateSheetProps) {
   const [name, setName] = useState('')
-  const [start, setStart] = useState('06:00')
-  const [end, setEnd] = useState('07:00')
+  const [start, setStart] = useState(hm('06:00'))
+  const [end, setEnd] = useState(hm('07:00'))
   const [resolutions, setResolutions] = useState<Record<string, Resolution>>({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -162,12 +158,13 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
         <div className="stack">
           <div className="lbl">Name</div>
           <input aria-label="Name" className="field" value={name} onChange={(event) => setName(event.target.value)} />
-          <div className="lbl">When — {formatDate(date)}</div>
+          <div className="lbl">When — {fmtShort(date)}</div>
           <div>
             <input aria-label="Start" className="field time" value={start} onChange={(event) => setStart(event.target.value)} />
             <span>to</span>
             <input aria-label="End" className="field time" value={end} onChange={(event) => setEnd(event.target.value)} />
           </div>
+          <div className="note">Type it how you say it — <b>3p</b>, <b>7:30a</b>, <b>12p</b>.</div>
           {event === null && <div className="hint">End time must be after the start time.</div>}
         </div>
         {firstOverlap !== undefined && (
@@ -175,32 +172,35 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
             <div className="scope shared">
               <span className="g">⚠</span>
               <span>
-                This clashes with <b>{firstOverlap.window.name}</b>, {firstOverlap.windowStart}–{firstOverlap.windowEnd}. A date has <b>one shape</b>, so the window has to give way somehow.
+                This clashes with <b>{firstOverlap.window.name}</b>, {hm(firstOverlap.windowStart)}–{hm(firstOverlap.windowEnd)}. A date has <b>one shape</b>, so the window has to give way somehow.
                 {overlaps.length > 1 && <> It also overlaps <b>{overlaps.slice(1).map((overlap) => overlap.window.name).join(', ')}</b>.</>}
               </span>
             </div>
             {overlaps.map((overlap) => {
               const id = windowId(overlap.window)
               return (
-                <div className="stack" key={id ?? overlap.window.name}>
-                  {optionsFor(overlap).map((option) => {
-                    const copy = optionCopy(option, overlap)
-                    return (
-                    <button
-                      className="btn wide"
-                      key={option}
-                      onClick={() => id !== null && setResolutions((current) => ({ ...current, [id]: option }))}
-                      aria-pressed={id !== null && resolutions[id] === option}
-                    >
-                      {copy.label}<br />
-                      <span>{copy.description}</span>
-                    </button>
-                    )
-                  })}
+                <div key={id ?? overlap.window.name}>
+                  {overlaps.length > 1 && <div className="sec-h">{overlap.window.name}</div>}
+                  <div className="stack">
+                    {optionsFor(overlap).map((option) => {
+                      const copy = optionCopy(option, overlap)
+                      return (
+                      <button
+                        className="btn wide"
+                        key={option}
+                        onClick={() => id !== null && setResolutions((current) => ({ ...current, [id]: option }))}
+                        aria-pressed={id !== null && resolutions[id] === option}
+                      >
+                        {copy.label}<br />
+                        <span>{copy.description}</span>
+                      </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
-            <div className="note">Only the options that actually produce something are offered. Whichever you pick, {formatDate(date)} becomes a <b>one-off day</b>.</div>
+            <div className="note">Only the options that actually produce something are offered — move the end time to {hm(firstOverlap.windowEnd)} or later and the split disappears, because there would be no tail to keep. Whichever you pick, {fmtShort(date)} becomes a <b>one-off day</b>.</div>
           </>
         )}
         <div className="btn-row">
