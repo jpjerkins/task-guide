@@ -1142,6 +1142,14 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   `OverrideRange.ts`'s `authorOverrideSpan`) now wire the `span` argument, computed by
   `authorOverrideSpan`'s own one-line inclusive day count
 
+**#140 review finding 4**: the untouched-dates sentence pluralized `n` but not `untouched` —
+`untouched === 1` still rendered "The other 1 dates are following the pattern". Now singular at
+`untouched === 1`, matching the title's existing `n === 1` handling. Separately: the note's "will
+be copied off it" and the button's "stamp all {span}" were only false on the null-template path
+(finding 1's now-deleted "Keep each date's own shape" row); with that row gone, every remaining
+path stamps a real template, so both phrases are true in every case this component can now reach —
+checked, no further wording change needed.
+
 **Event create and overlap resolution (#108)** — `eventSheet(dateKey)` ~867,
 `clashesWith(d, ev)` ~852, `overlapOptions(w, ev)` ~855, `applyOverlap(dateKey, winId, how)` ~898
 

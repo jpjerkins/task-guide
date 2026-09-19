@@ -49,6 +49,16 @@ it('the_list_is_a_damage_block_whose_dates_render_through_fmtShort_with_an_alrea
   expect(document.querySelector('.note')).toHaveTextContent('Nothing here can be undone in one step — reverting is per date.')
 })
 
+// #140 review finding 4: `untouched === 1` fell through to the plural form ("The other 1 dates
+// are following the pattern"), the same singular/plural miss `n` already gets on the title.
+it('the_untouched-dates_sentence_is_singular_for_exactly_one_untouched_date', async () => {
+  render(<Host />)
+  const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number) => Promise<boolean> }).confirm
+  act(() => { void confirm(['2026-11-03', '2026-11-04'], 3) })
+  await screen.findByRole('heading', { name: 'Replace 2 Overrides?' })
+  expect(document.querySelector('.note')).toHaveTextContent('The other 1 date is following the pattern and will be copied off it.')
+})
+
 it('drops_the_other-dates_sentence_when_the_whole_span_is_clobbered_but_keeps_the_undo_sentence', async () => {
   render(<Host />)
   const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number) => Promise<boolean> }).confirm

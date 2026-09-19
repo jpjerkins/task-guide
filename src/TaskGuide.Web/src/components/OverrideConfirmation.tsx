@@ -37,7 +37,7 @@ export function useOverrideConfirmation() {
         </div></div>)}
       </div>
       <div className="note">
-        {untouched > 0 && <>The other {untouched} dates are following the pattern and will be copied off it. </>}
+        {untouched > 0 && <>The other {untouched} date{untouched === 1 ? '' : 's'} {untouched === 1 ? 'is' : 'are'} following the pattern and will be copied off it. </>}
         Nothing here can be undone in one step — reverting is per date.
       </div>
       <div className="btn-row"><button className="btn danger wide" onClick={() => finish(true)}>
