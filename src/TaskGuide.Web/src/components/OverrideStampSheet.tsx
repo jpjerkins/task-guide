@@ -8,6 +8,9 @@ import { fmtShort, hm } from './OverrideFormat'
 type Template = components['schemas']['DayTemplateResponse']
 type Window = components['schemas']['AvailabilityWindow']
 type ViewMode = 'strip' | 'pills'
+// `active` is not in the generated schema yet (#143), so it is declared here rather than by
+// editing schema.d.ts, which is the Integration lane's.
+type ActiveFlagged = components['schemas']['PatternResponse'] & { active?: boolean }
 type Scope = 'date' | 'range'
 
 function minutesOf(time: string): number {
@@ -64,9 +67,9 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
   mutationError?: string
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null)
-  // null: no season to group by, either still loading or the read failed — the picker then
-  // renders one ungrouped list rather than an error (there is no GET for this today; see the
-  // inventory note below).
+  // null: no season to group by — still loading, the read failed, or (today, always) no Pattern
+  // carries an `active` marker. The picker then renders one ungrouped list rather than an error;
+  // a picker that cannot group is still usable. See the inventory note and #143.
   const [activeDays, setActiveDays] = useState<string[] | null>(null)
   const [view, setView] = useState<ViewMode>('strip')
   const [error, setError] = useState('')
@@ -77,8 +80,13 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
     let current = true
     getJson<Template[]>('/api/day-templates').then(value => { if (current) setTemplates(value ?? []) })
       .catch(reason => { if (current) setError(String(reason)) })
-    getJson<components['schemas']['PatternResponse']>('/api/patterns/active')
-      .then(value => { if (current) setActiveDays(value?.days ?? null) })
+    // GET /api/patterns is the read that exists; GET /api/patterns/active does not — that route is
+    // PUT-only (PatternEndpoints.cs:31, `get?: never` in schema.d.ts). But PatternResponse is
+    // (Id, Name, Days) with no active marker, so nothing on the wire says which season is current.
+    // #143 adds `active`; until it lands no Pattern matches and the ungrouped fallback runs, which
+    // means grouping starts working with no change here.
+    getJson<ActiveFlagged[]>('/api/patterns')
+      .then(value => { if (current) setActiveDays(value?.find(p => p.active)?.days ?? null) })
       .catch(() => { if (current) setActiveDays(null) })
     return () => { current = false }
   }, [])

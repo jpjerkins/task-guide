@@ -1351,6 +1351,14 @@ renders `dimPills` alongside the existing `.pill.dur`, same as §2's window and 
   and *This date already departs from the pattern*, never *Replace all 1* or *1 of the 1 dates in
   this span*. This is the commonest clobber path: stamping the date already on screen (#140)
 
+- the season grouping reads **`GET /api/patterns`**, not `GET /api/patterns/active` — that route is
+  `PUT`-only (`PatternEndpoints.cs:31`; `get?: never` in `schema.d.ts`). The active Pattern is found
+  by an `active` flag on `PatternResponse` which **does not exist on the wire yet** (#143): the
+  record is `(Id, Name, Days)`, `PatternEndpoints.cs:134`. So in the running app today no Pattern
+  matches and the picker degrades to one ungrouped list — tested as such, and asserted to raise no
+  `alert`. When #143 lands the grouping starts working with no Web change. The earlier claim on #140
+  that grouping was already derivable was wrong; this bullet replaces it
+
 ### Web-Now
 
 The seven Web-Now surfaces. Two rules run through all of them (`src/TaskGuide.Web/README.md`) and

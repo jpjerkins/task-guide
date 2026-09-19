@@ -9,24 +9,32 @@ const spare = { id: 'dt_spare', name: 'Spare Sunday', windows: [], eventPrototyp
 const attic = { id: 'dt_attic', name: 'Attic', windows: [win('w3', '08:00:00', '09:00:00')], eventPrototypes: [], unused: true }
 const templates = [christmas, spare, attic]
 let fetch: ReturnType<typeof vi.fn<(url: string) => Promise<Response>>>
-function stub(activePattern: unknown | 'fail') {
+// `GET /api/patterns` is the read that exists (PatternEndpoints.cs:21). `active` is NOT on
+// PatternResponse yet — #143 — so `patterns(...)` below builds the shape that ticket will ship,
+// and `noActiveFlag` builds today's, which must degrade to one ungrouped list.
+function stub(body: unknown | 'fail') {
   fetch = vi.fn(async (url: string) => {
     if (url === '/api/day-templates') return json(templates)
-    if (url === '/api/patterns/active') return activePattern === 'fail' ? new Response(null, { status: 404 }) : json(activePattern)
+    if (url === '/api/patterns') return body === 'fail' ? new Response(null, { status: 500 }) : json(body)
     return new Response(null, { status: 404 })
   })
   vi.stubGlobal('fetch', fetch)
 }
+const patterns = (days: string[]) => [
+  { id: 'p0', name: 'Autumn', days: [attic.id], active: false },
+  { id: 'p1', name: 'Winter', days, active: true },
+]
+const noActiveFlag = (days: string[]) => [{ id: 'p1', name: 'Winter', days }]
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 it('titles_the_sheet_with_the_short_date_not_a_generic_label', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   expect(await screen.findByRole('dialog', { name: 'Sun 1 Nov' })).toBeInTheDocument()
 })
 
 it('groups_templates_by_season_use_and_omits_an_empty_group', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   await screen.findByRole('button', { name: /Christmas/ })
   const headings = screen.getAllByText(/Already in this season|Used by other seasons|Not in use/)
@@ -39,7 +47,7 @@ it('groups_templates_by_season_use_and_omits_an_empty_group', async () => {
 })
 
 it('only_the_first_group_heading_carries_with-tog_and_the_shared_toggle', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   await screen.findByRole('button', { name: /Christmas/ })
   const secHs = document.querySelectorAll('.sec-h')
@@ -49,7 +57,7 @@ it('only_the_first_group_heading_carries_with-tog_and_the_shared_toggle', async 
 })
 
 it('defaults_to_the_strip_view_and_switching_to_Times_replaces_the_strip_with_duration_pills_on_every_row', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   const shape = await screen.findByRole('button', { name: /Christmas/ })
   expect(shape.querySelector('.strip')).not.toBeNull()
@@ -61,7 +69,7 @@ it('defaults_to_the_strip_view_and_switching_to_Times_replaces_the_strip_with_du
 })
 
 it('a_windowless_template_reads_no_windows_a_deliberately_silent_day_and_a_ghost_silent_pill_in_Times_view', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [spare.id] })
+  stub(patterns([spare.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   const shape = await screen.findByRole('button', { name: /Spare Sunday/ })
   expect(shape.querySelector('.who > .sub2')).toHaveTextContent('no windows — a deliberately silent day')
@@ -70,7 +78,7 @@ it('a_windowless_template_reads_no_windows_a_deliberately_silent_day_and_a_ghost
 })
 
 it('the_strip_positions_ticks_and_window_bars_from_the_6a-11p_span_as_inline_style_and_no_row_is_marked_current', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   const shape = await screen.findByRole('button', { name: /Christmas/ })
   expect(shape).toHaveAttribute('aria-pressed', 'false')
@@ -94,7 +102,7 @@ it('when_the_active_pattern_cannot_be_read_it_falls_back_to_one_ungrouped_list_i
 })
 
 it('closes_with_the_shape_count_and_grouping-rationale_note_alongside_the_existing_not-a-link_note', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   const sheet = await screen.findByRole('dialog')
   expect(sheet).toHaveTextContent('3 shapes. Grouping by use keeps the one you want near the top')
@@ -102,7 +110,7 @@ it('closes_with_the_shape_count_and_grouping-rationale_note_alongside_the_existi
 })
 
 it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switching_to_A_range_reveals_From_To_and_switches_the_title_and_note', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   expect(await screen.findByRole('dialog', { name: 'Sun 1 Nov' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'This date' })).toHaveAttribute('aria-pressed', 'true')
@@ -119,7 +127,7 @@ it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switchin
 })
 
 it('range_scope_offers_a_Keep_each_dates_own_shape_row_above_the_season_groups_that_calls_onStamp_with_null_and_the_span', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   const onStamp = vi.fn(async () => {})
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
   fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
@@ -136,7 +144,7 @@ it('range_scope_offers_a_Keep_each_dates_own_shape_row_above_the_season_groups_t
 })
 
 it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   const onStamp = vi.fn(async () => {})
   render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={onStamp} busy={false} />)
   fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
@@ -147,7 +155,7 @@ it('range_scope_passes_the_span_alongside_a_picked_template_id', async () => {
 })
 
 it('an_inverted_range_disables_every_pickrow_including_Keep_each_dates_own_shape_and_shows_the_refusal_note', async () => {
-  stub({ id: 'p1', name: 'Winter', days: [christmas.id] })
+  stub(patterns([christmas.id]))
   render(<OverrideStampSheet date="2026-12-25" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
   fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-28' } })
@@ -155,4 +163,17 @@ it('an_inverted_range_disables_every_pickrow_including_Keep_each_dates_own_shape
   expect(await screen.findByRole('alert')).toHaveTextContent('Choose a start and end date; the end must not precede the start.')
   expect(screen.getByRole('button', { name: /Keep each date's own shape/ })).toBeDisabled()
   expect(screen.getByRole('button', { name: /Christmas/ })).toBeDisabled()
+})
+
+// Today's actual wire shape. This is not a hypothetical: PatternResponse is (Id, Name, Days) with
+// no active marker, so this is what the picker meets in the running app until #143 lands.
+it('a_patterns_read_with_no_active_marker_degrades_to_one_ungrouped_list_rather_than_an_error', async () => {
+  stub(noActiveFlag([christmas.id]))
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  expect(await screen.findByRole('dialog', { name: 'Sun 1 Nov' })).toBeInTheDocument()
+  await waitFor(() => expect(screen.getAllByRole('button', { name: /Christmas|Spare Sunday|Attic/ })).toHaveLength(3))
+  expect(screen.queryByText('Already in this season')).toBeNull()
+  expect(screen.queryByText('Used by other seasons')).toBeNull()
+  expect(screen.queryByText('Not in use')).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
 })
