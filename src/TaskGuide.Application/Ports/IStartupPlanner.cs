@@ -62,6 +62,12 @@ public partial class StartupRefusal : OneOfBase<RegistryCollision, StoreVersionA
 /// </summary>
 public sealed record RegistryCollision(string Value, IReadOnlyList<DimensionId> ClaimedBy);
 
-/// <summary>`manifest.json`'s version (or a migration walk's landing version) is ahead of this
-/// binary's `ManifestCodec.CurrentVersion` — a rollback must not silently down-migrate.</summary>
-public sealed record StoreVersionAhead(int StoredVersion, int CurrentVersion);
+/// <summary>
+/// Either `manifest.json` is ahead of this binary, or the configured migration walk would land
+/// ahead of it. <paramref name="MigrationLandingVersion"/> discriminates the latter without
+/// conflating the walk's cursor with the version actually stored on disk.
+/// </summary>
+public sealed record StoreVersionAhead(
+    int StoredVersion,
+    int CurrentVersion,
+    int? MigrationLandingVersion = null);

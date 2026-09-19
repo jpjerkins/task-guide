@@ -51,7 +51,10 @@ public static class StartupBootstrap
                     await signalRegistryCollision(exception.Message, cancellationToken);
                     throw exception;
                 },
-                versionAhead => throw new StoreVersionAheadException(versionAhead.StoredVersion, versionAhead.CurrentVersion));
+                versionAhead => throw new StoreVersionAheadException(
+                    versionAhead.StoredVersion,
+                    versionAhead.CurrentVersion,
+                    versionAhead.MigrationLandingVersion));
         }
 
         var writer = new StartupWriter(bootstrap, dataDir, new SnapshotWriter(dataDir), clock);

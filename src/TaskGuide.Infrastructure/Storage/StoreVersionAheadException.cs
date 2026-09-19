@@ -11,11 +11,20 @@ namespace TaskGuide.Infrastructure.Storage;
 /// itself only returns the refusal value, per ADR-0009's "raise refusals, write nothing" rule; the
 /// orchestrator is what turns it into the exception a caller (or a host's failed startup) sees.
 /// </remarks>
-public sealed class StoreVersionAheadException(int storedVersion, int currentVersion)
-    : Exception(
-        $"manifest.json is at version {storedVersion}, ahead of this binary's version {currentVersion}. " +
-        "Refusing to start rather than silently down-migrate.")
+public sealed class StoreVersionAheadException(
+    int storedVersion,
+    int currentVersion,
+    int? migrationLandingVersion = null)
+    : Exception(BuildMessage(storedVersion, currentVersion, migrationLandingVersion))
 {
     public int StoredVersion { get; } = storedVersion;
     public int CurrentVersion { get; } = currentVersion;
+    public int? MigrationLandingVersion { get; } = migrationLandingVersion;
+
+    private static string BuildMessage(int storedVersion, int currentVersion, int? migrationLandingVersion) =>
+        migrationLandingVersion is { } landingVersion
+            ? $"The configured migration walk from manifest.json version {storedVersion} would land at version {landingVersion}, " +
+              $"ahead of this binary's version {currentVersion}. manifest.json remains at version {storedVersion}."
+            : $"manifest.json is at version {storedVersion}, ahead of this binary's version {currentVersion}. " +
+              "Refusing to start rather than silently down-migrate.";
 }

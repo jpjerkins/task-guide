@@ -329,7 +329,10 @@ public sealed class StartupBootstrapTests : IDisposable
 
         var ex = await Assert.ThrowsAsync<StoreVersionAheadException>(() => BootstrapAsync(migrations: migrations));
 
-        Assert.Equal(ManifestCodec.CurrentVersion + 1, ex.StoredVersion);
+        Assert.Equal(ManifestCodec.CurrentVersion, ex.StoredVersion);
+        Assert.Equal(ManifestCodec.CurrentVersion + 1, ex.MigrationLandingVersion);
+        Assert.Contains("migration walk", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains((ManifestCodec.CurrentVersion + 1).ToString(), ex.Message);
         Assert.Equal(ManifestCodec.CurrentVersion, ManifestCodec.Read(File.ReadAllText(ManifestPath)));
         AssertNothingWasWritten("manifest.json");
     }

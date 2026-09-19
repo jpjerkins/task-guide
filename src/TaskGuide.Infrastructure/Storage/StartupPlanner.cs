@@ -193,7 +193,7 @@ public sealed class StartupPlanner(
 
         if (cursor > ManifestCodec.CurrentVersion)
         {
-            return new StartupRefusal(new StoreVersionAhead(cursor, ManifestCodec.CurrentVersion));
+            return new StartupRefusal(new StoreVersionAhead(version, ManifestCodec.CurrentVersion, cursor));
         }
 
         // The walk's own endpoint, not the constant CurrentVersion: `migrations` is supplied at
