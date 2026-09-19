@@ -1,0 +1,340 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>task-guide — the three Override surfaces no prototype covered</title>
+
+<!--
+  PROTOTYPE — throwaway. Not production code.
+  Ticket: https://github.com/jpjerkins/task-guide/issues/140  (§1, "Surfaces with no prototype")
+
+  #107, #108 and #112 were ported by Codex. Three surfaces on the Override screen have no
+  prototype at all — Codex invented them, which was never its call: Phil's rule for the Web
+  lanes is that Claude designs the UI. This page designs those three, and only those three.
+  Everything else on the screen is a port of schedule-editing.prototype.html's W.date() and
+  is not re-litigated here.
+
+      A — the "Pick a date…" escape beside the ±10-day rail
+      B — authoring an Override across a date range          (two readings, B1 / B2)
+      C — the clobber confirmation
+
+  IT LINKS THE REAL STYLESHEET. Unlike the earlier prototypes, which predate
+  src/TaskGuide.Web/src/index.css and were the source it was ported FROM, this one is
+  downstream of it: index.css is frozen for the Web lanes, so a design that needs a class
+  which does not exist is a report to the Integration lane, not an edit. Linking the real
+  file makes that automatic — anything that renders unstyled here is a missing class, visible
+  rather than argued about. Nothing below adds a rule of its own except the .lab annotation
+  chrome, which is this page's scaffolding and does not port.
+
+  In-memory fixtures only. No persistence, no network, no error handling.
+-->
+
+<link rel="stylesheet" href="../../src/TaskGuide.Web/src/index.css">
+
+<style>
+  /* Annotation chrome. This page's own scaffolding — it does not port. */
+  body { margin:0; }
+  .lab { max-width:520px; margin:0 auto; padding:22px 16px 6px;
+         font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+         color:var(--ink); background:var(--ground); }
+  .lab h1 { font-size:20px; letter-spacing:-.02em; margin:0 0 4px; }
+  .lab h2 { font-size:15px; letter-spacing:-.01em; margin:26px 0 3px; }
+  .lab p { color:var(--ink-2); font-size:13.5px; line-height:1.6; margin:5px 0 0; }
+  .lab p b, .lab h2 b { color:var(--ink); }
+  .lab .v { display:inline-block; font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+            letter-spacing:.06em; color:var(--accent-ink); background:var(--accent);
+            padding:4px 7px; border-radius:5px; vertical-align:2px; margin-right:7px; }
+  .lab .rec { color:var(--accent); font-weight:650; }
+  .lab .bad { color:var(--danger); font-weight:650; }
+  .lab ul { margin:7px 0 0; padding-left:19px; }
+  .lab li { color:var(--ink-2); font-size:13.5px; line-height:1.6; margin:3px 0; }
+  .lab li b { color:var(--ink); }
+  .frame { max-width:520px; margin:11px auto 0; background:var(--surface);
+           border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:var(--shadow); }
+  body { background:var(--ground); padding-bottom:70px; }
+</style>
+
+<div class="lab">
+  <h1>The three Override surfaces no prototype covered</h1>
+  <p>Designed for <b>#140 §1</b>. The rest of the Override screen is a port of
+     <code>schedule-editing.prototype.html</code>'s <code>W.date()</code> and is not shown.
+     Every class below already exists in the frozen <code>index.css</code> — that is the
+     constraint this page is written to satisfy, not a coincidence.</p>
+</div>
+
+<div id="surfaces"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ---------------- fixtures ---------------- */
+  const DAY = 864e5;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dAdd = n => new Date(today.getTime() + n*DAY);
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const parseISO = k => new Date(k + "T00:00:00");
+  const fmtShort = d => `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`;
+  const hm = t => { const h = +t.slice(0,2), m = +t.slice(3);
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return (m ? `${h12}:${String(m).padStart(2,"0")}` : `${h12}`) + (h < 12 ? "a" : "p"); };
+  const mins = t => (+t.slice(0,2))*60 + (+t.slice(3));
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+  // Day templates, as GET /api/day-templates returns them, plus the active season's days.
+  const TPL = [
+    { id:"t1", name:"Workday",        unused:false, windows:[{ n:"Morning prep", s:"06:00", e:"07:30" }, { n:"Lunch errands", s:"12:00", e:"12:45" }, { n:"Evening prep", s:"18:00", e:"20:00" }] },
+    { id:"t2", name:"Slow Saturday",  unused:false, windows:[{ n:"Long morning", s:"08:00", e:"11:00" }, { n:"Evening", s:"19:00", e:"21:30" }] },
+    { id:"t3", name:"Sunday reset",   unused:false, windows:[{ n:"Reset block", s:"14:00", e:"17:00" }] },
+    { id:"t4", name:"Travel day",     unused:false, windows:[{ n:"Early window", s:"06:00", e:"06:45" }] },
+    { id:"t5", name:"Silent day",     unused:false, windows:[] },
+    { id:"t6", name:"Old school-year",unused:true,  windows:[{ n:"School run", s:"07:00", e:"08:00" }, { n:"Pickup", s:"15:00", e:"16:00" }] },
+  ];
+  const SEASON_DAYS = ["t1","t1","t1","t1","t1","t2","t3"];   // the active Pattern's seven
+  const inSeason = t => SEASON_DAYS.includes(t.id);
+
+  let state = {
+    date: iso(dAdd(2)),
+    escapeOpen: false,
+    beyond: null,               // a date chosen through the escape that the rail cannot show
+    scope: "date",              // B2's scope: "date" | "range"
+    from: iso(dAdd(2)), to: iso(dAdd(6)),
+    dayview: "strip",
+  };
+
+  /* ---------------- pieces shared with the ported surfaces ---------------- */
+  const strip = t => {
+    const A = 6*60, B = 23*60, span = B - A;
+    const ticks = [9,12,15,18,21].map(h => `<u style="left:${(h*60-A)/span*100}%"></u>`).join("");
+    return `<div class="strip${t.windows.length ? "" : " empty-d"}">${ticks}${t.windows.map(w => {
+      const l = Math.max(0, (mins(w.s)-A)/span*100), r = Math.min(100, (mins(w.e)-A)/span*100);
+      return `<i style="left:${l}%;width:${Math.max(1.2, r-l)}%"></i>`; }).join("")}</div>`;
+  };
+  const viewToggle = () => `<span class="vtog">
+    <button data-act="dayview" data-v="strip" aria-pressed="${state.dayview === "strip"}">Strips</button>
+    <button data-act="dayview" data-v="pills" aria-pressed="${state.dayview === "pills"}">Times</button></span>`;
+  function shapeRow(t, on, extra) {
+    const f = t.windows[0], l = t.windows[t.windows.length-1];
+    return `<button class="pickrow" aria-pressed="${!!on}" ${extra || ""}>
+      <span class="who">
+        <span class="nm">${esc(t.name)}${on ? `<span class="pill dim">current</span>` : ""}</span>
+        <span class="sub2">${t.windows.length
+          ? `${t.windows.length} window${t.windows.length === 1 ? "" : "s"} · ${hm(f.s)}–${hm(l.e)}`
+          : `no windows — a deliberately silent day`}</span>
+        ${state.dayview === "strip" ? strip(t) : `<span class="meta">${
+          t.windows.map(w => `<span class="pill dur">${hm(w.s)}–${hm(w.e)}</span>`).join("")
+          || `<span class="pill ghost">silent</span>`}</span>`}
+      </span></button>`;
+  }
+  function groups(cur, extra) {
+    let first = true;
+    const g = (label, list) => list.length ? `<div class="sec-h${first ? " with-tog" : ""}">${label}${
+      first ? (first = false, viewToggle()) : ""}</div>
+      <div class="list">${list.map(t => shapeRow(t, t.id === cur, extra)).join("")}</div>` : "";
+    return g("Already in this season", TPL.filter(inSeason))
+         + g("Used by other seasons", TPL.filter(t => !inSeason(t) && !t.unused))
+         + g("Not in use", TPL.filter(t => !inSeason(t) && t.unused));
+  }
+
+  /* ================= A — the escape beside the rail ================= */
+  // The rail IS the "fixed intervals" half of the shape #107 points at ("the same shape Postpone
+  // already uses: fixed intervals plus an escape"). Postpone's own control is a row of pressed
+  // mode buttons whose choice REVEALS its input directly beneath — tag-entry.prototype.html ~553:
+  // [None][Date…][In…], and "Date" reveals <input type="date"> on the next line. Nothing about it
+  // spends a full-width button on the escape, because the escape is the rare path.
+  //
+  // So the escape becomes the rail's last cell, in the rail's own row, and reveals the native
+  // input beneath the strip. A date the rail cannot reach shows IN that cell, so the strip still
+  // answers "where am I" when nothing in it is current.
+  function railA(withEscape) {
+    const cells = [];
+    for (let i = -10; i <= 10; i++) {
+      const d = dAdd(i), k = iso(d), cur = !state.beyond && k === state.date;
+      cells.push(`<button data-act="pick" data-v="${k}" ${cur ? 'aria-current="date"' : ""}>
+        <div class="wd">${WD[d.getDay()]}</div><div class="dn">${d.getDate()}</div>
+        <div class="dot${i === 2 || i === 5 ? "" : " blank"}"></div></button>`);
+    }
+    if (withEscape) {
+      const b = state.beyond;
+      cells.push(`<button data-act="escape" ${b ? 'aria-current="date"' : ""}
+        aria-label="Pick any date" aria-expanded="${state.escapeOpen}">
+        <div class="wd">${b ? MO[parseISO(b).getMonth()] : "Date"}</div>
+        <div class="dn">${b ? parseISO(b).getDate() : "⋯"}</div>
+        <div class="dot blank"></div></button>`);
+    }
+    return `<div class="weekstrip">${cells.join("")}</div>`;
+  }
+  const escapeField = () => state.escapeOpen ? `<label class="stack">
+      <span class="lbl">Any date</span>
+      <input class="field" type="date" data-act="beyond" value="${esc(state.beyond || state.date)}">
+    </label>` : "";
+
+  const A_now = () => railA(false) + `
+    <div class="btn-row"><button class="btn">Pick a date…</button></div>
+    <div class="stack"><label class="stack"><span class="lbl">Date</span>
+      <input class="field" type="date" value="${esc(state.date)}"></label></div>`;
+  const A_new = () => railA(true) + escapeField();
+
+  /* ================= B — authoring across a range ================= */
+  const dateField = (f, label) => `<label class="stack"><span class="lbl">${label}</span>
+    <input class="field" type="date" data-act="span" data-f="${f}" value="${esc(state[f])}"></label>`;
+
+  // B1 — as shipped: its own sheet, its own verb, and a bare <select> stands in for the shape
+  // picker that sits one button away.
+  const B1 = () => `<div class="sheet">
+    <div class="grabber"></div>
+    <div class="sheet-h"><h2>Override a date range</h2><button class="icon">Cancel</button></div>
+    <div class="stack">
+      ${dateField("from","Start date")}${dateField("to","End date")}
+      <label class="lbl" for="p-tpl">Day template</label>
+      <select class="field" id="p-tpl">
+        <option>Copy each date’s current shape</option>
+        ${TPL.map(t => `<option>${esc(t.name)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="note">Each date keeps its own copy of the windows. This stamps a shape — it does not create a link.</div>
+    <div class="btn-row"><button class="btn primary wide">Create Overrides</button></div>
+  </div>`;
+
+  // B2 — the range is a SCOPE on the stamp, not a second verb. One sheet, one list, one button.
+  const B2 = () => `<div class="sheet">
+    <div class="grabber"></div>
+    <div class="sheet-h"><h2>${state.scope === "range"
+      ? `${esc(fmtShort(parseISO(state.from)))} – ${esc(fmtShort(parseISO(state.to)))}`
+      : esc(fmtShort(parseISO(state.date)))}</h2><button class="icon">Cancel</button></div>
+    <div class="modebar">
+      <button data-act="scope" data-v="date" aria-pressed="${state.scope === "date"}">This date</button>
+      <button data-act="scope" data-v="range" aria-pressed="${state.scope === "range"}">A range…</button>
+    </div>
+    ${state.scope === "range" ? `<div class="stack">${dateField("from","From")}${dateField("to","To")}</div>` : ""}
+    <div class="note">Stamp a shape onto ${state.scope === "range" ? "every date in the span" : "this date"}.
+      It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
+    ${state.scope === "range" ? `<div class="sec-h">Leave them as they are</div>
+      <div class="list"><button class="pickrow"><span class="who">
+        <span class="nm">Keep each date’s own shape</span>
+        <span class="sub2">detaches every date from the pattern without changing what is on it</span>
+      </span></button></div>` : ""}
+    ${groups(state.scope === "range" ? null : "t1")}
+    <div class="note">${TPL.length} shapes. Grouping by use keeps the one you want near the top without a
+      search box — the shape you need on a Tuesday is nearly always one this season already contains.</div>
+  </div>`;
+
+  /* ================= C — the clobber confirmation ================= */
+  const CLOB = [iso(dAdd(3)), iso(dAdd(4)), iso(dAdd(7))];
+  const SPAN = 12;
+
+  const C_now = () => `<div class="sheet">
+    <div class="grabber"></div>
+    <div class="sheet-h"><h2>Replace Overrides?</h2><button class="icon">Cancel</button></div>
+    <div class="note">These dates already have an Override. Replace their windows?</div>
+    <div class="list">${CLOB.map(k => `<div class="row"><div class="body"><div class="title">${k}</div></div></div>`).join("")}</div>
+    <div class="btn-row"><button class="btn danger wide">Replace Overrides</button></div>
+  </div>`;
+
+  // Cancel stays the default action, in the header where every other sheet keeps it. The count
+  // leads, because the count is the blast radius — ADR's standing line is "warn with a count
+  // before committing; do not block". .damage / .damage-h already exist for exactly this.
+  const C_new = () => `<div class="sheet">
+    <div class="grabber"></div>
+    <div class="sheet-h"><h2>Replace ${CLOB.length} Override${CLOB.length === 1 ? "" : "s"}?</h2>
+      <button class="icon">Cancel</button></div>
+    <div class="damage">
+      <div class="damage-h">${CLOB.length} of the ${SPAN} dates in this span already depart from the pattern.
+        Stamping replaces what is on them.</div>
+      ${CLOB.map(k => `<div class="row"><div class="body">
+        <div class="title">${esc(fmtShort(parseISO(k)))}</div>
+        <div class="meta"><span class="pill due">already an override</span></div>
+      </div></div>`).join("")}
+    </div>
+    <div class="note">The other ${SPAN - CLOB.length} dates are following the pattern and will be copied off it.
+      Nothing here can be undone in one step — reverting is per date.</div>
+    <div class="btn-row"><button class="btn danger wide">Replace ${CLOB.length} and stamp all ${SPAN}</button></div>
+  </div>`;
+
+  /* ---------------- page ---------------- */
+  const frame = html => `<div class="frame">${html}</div>`;
+  const lab = html => `<div class="lab">${html}</div>`;
+
+  function render() {
+    document.getElementById("surfaces").innerHTML = [
+      lab(`<h2><span class="v">A</span>The “Pick a date…” escape</h2>
+        <p><b>#107 settles the shape already</b> — “fixed intervals plus an escape, the same shape
+          Postpone already uses”. Postpone is a row of pressed mode buttons whose choice reveals its
+          input on the next line (<code>tag-entry.prototype.html</code> ~553). Nothing in that shape
+          spends a full-width button on the escape: the escape is the rare path.</p>
+        <p class="bad">As shipped ↓ — two controls competing for the same job, and the revealed field
+          pushes the scope banner and the whole window list down the screen.</p>`),
+      frame(A_now()),
+      lab(`<p class="rec">Designed ↓ — the escape is the rail's last cell, in the rail's own row.
+          Less markup than today, one control instead of two, and a date the rail cannot reach shows
+          <b>in that cell</b>, so the strip still answers “where am I” when nothing in it is current.
+          Tap it to reveal the native field; tap a rail date and it collapses.</p>
+        <ul><li>Classes: <code>.weekstrip</code>, <code>.wd</code>, <code>.dn</code>,
+            <code>.dot.blank</code> — all existing, none new.</li>
+          <li>The rail still never grows: 21 date cells, fixed, plus one escape cell.</li>
+          <li>ADR-0006 holds — the revealed <code>&lt;input type="date"&gt;</code> is the shared
+            <code>DateEntry</code>, never remounted by its own change.</li></ul>`),
+      frame(A_new()),
+
+      lab(`<h2><span class="v">B</span>Authoring an Override across a range</h2>
+        <p class="bad">As shipped ↓ — a second verb with its own sheet, and a bare
+          <code>&lt;select&gt;</code> standing in for the shape picker that sits one button away on
+          the same screen. The dropdown has no grouping, no silhouette, no window counts: you choose
+          a shape from a rich list for one date and from this for twenty.</p>`),
+      frame(B1()),
+      lab(`<p class="rec">Designed ↓ — the range is a <b>scope on the stamp</b>, not a second
+          mechanism. #107's own words: “Range authoring repeats the same operation across a span; do
+          not invent a second mechanism for it.” One sheet, one grouped list, one write. The
+          <code>&lt;select&gt;</code>'s “copy each date's current shape” becomes a row at the top of
+          the list, because it <i>is</i> a shape choice.</p>
+        <ul><li>Toggle the scope to see the sheet's title and its span fields appear.</li>
+          <li>Classes: <code>.modebar</code>, <code>.sec-h.with-tog</code>, <code>.pickrow</code>,
+            <code>.vtog</code>, <code>.strip</code> — all existing.</li>
+          <li>It deletes a surface rather than adding one: no
+            <code>OverrideRangeSheet</code>, and no second entry-point button on the screen.</li></ul>`),
+      frame(B2()),
+
+      lab(`<h2><span class="v">C</span>The clobber confirmation</h2>
+        <p class="bad">As shipped ↓ — ISO dates, no count, and a list that says <i>which</i> dates
+          you are about to overwrite without saying that overwriting is what is happening or how much
+          of the span it is.</p>`),
+      frame(C_now()),
+      lab(`<p class="rec">Designed ↓ — the count leads, in the title and again in the header of a
+          <code>.damage</code> block, because the count <i>is</i> the blast radius. The ADR line is
+          “warn with a count before committing; do not block”. Cancel stays in the header where every
+          other sheet keeps it, and the destructive button names both numbers so the one tap is
+          unambiguous.</p>
+        <ul><li>Classes: <code>.damage</code>, <code>.damage-h</code>, <code>.pill.due</code> — all
+            existing, and <code>.damage</code> was built for exactly this.</li>
+          <li><b>What it deliberately does not claim:</b> each date's <i>current</i> shape.
+            <code>GET /api/overrides/clobber-check</code> returns bare dates, and
+            <code>DayShape</code> carries no template name, so naming what is being destroyed per
+            date needs a wire change. Said plainly with a pill rather than faked.</li></ul>`),
+
+      lab(`<h2>What this page does <b>not</b> decide</h2>
+        <p>The rest of the Override screen — the nav, the window rows, the stamp picker's grouping and
+          strips, the promote sheet — is a port of <code>schedule-editing.prototype.html</code>, in
+          hand and not a design question. Two data gaps stay reported rather than designed around:
+          the <code>N fit</code> pill has no endpoint (<code>TEST-INVENTORY.md</code>'s #104 table),
+          and the day's shape label needs a template link <code>DayShape</code> does not carry.</p>`),
+    ].join("");
+  }
+
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button, [data-act]"); if (!b) return;
+    const act = b.dataset.act;
+    if (act === "pick") { state.date = b.dataset.v; state.beyond = null; state.escapeOpen = false; return render(); }
+    if (act === "escape") { state.escapeOpen = !state.escapeOpen; return render(); }
+    if (act === "scope") { state.scope = b.dataset.v; return render(); }
+    if (act === "dayview") { state.dayview = b.dataset.v; return render(); }
+  });
+  // ADR-0006 in miniature: the date inputs below must NOT re-render on their own input event,
+  // or the native picker is destroyed mid-interaction on iOS Safari (#46, and the probe page).
+  document.addEventListener("input", e => {
+    const act = e.target.dataset.act;
+    if (act === "beyond") { state.beyond = e.target.value; state.date = e.target.value; return; }
+    if (act === "span") { state[e.target.dataset.f] = e.target.value; }
+  });
+  render();
+})();
+</script>
