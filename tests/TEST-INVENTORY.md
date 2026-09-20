@@ -1727,6 +1727,10 @@ specified under **Shared controls** above and are not restated here.
 - an empty pile renders "Nothing to process." rather than being hidden — the heading is the nudge
 - nothing on this screen subscribes to a notification; these two piles nudge only through the
   reminder footer
+- a failed read lands on the same connection-error state as Tasks, rather than presenting empty
+  piles as if there's nothing to triage
+- a refused duration write states that it failed rather than silently re-reading, mirroring the
+  reminder footer's inline repair
 
 ## `TaskGuide.E2E`
 

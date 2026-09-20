@@ -129,4 +129,35 @@ describe('TriageScreen', () => {
     const urls = fetchMock.mock.calls.map(([url]) => url)
     expect(new Set(urls)).toEqual(new Set(['/api/tasks?status=unprocessed', '/api/tasks?status=stale']))
   })
+
+  it('a failed read lands on the connection-error state rather than presenting empty piles', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 500 })))
+
+    render(<TriageScreen />)
+
+    expect(await screen.findByText(/couldn.t load tasks/i)).toBeInTheDocument()
+    expect(screen.queryByText('Nothing to process.')).not.toBeInTheDocument()
+  })
+
+  it('a refused duration write states that it failed rather than silently re-reading', async () => {
+    unprocessed = [{ id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT' && url === '/api/tasks/u1/duration') {
+        return new Response(null, { status: 500 })
+      }
+      return routedFetch(url)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<TriageScreen />)
+    await screen.findByText('File the receipt')
+
+    await user.click(screen.getByRole('button', { name: '2m' }))
+
+    expect(await screen.findByText("Couldn't set this task's duration.")).toBeInTheDocument()
+    // Untouched by the refused write — still in the unprocessed pile, buttons re-enabled.
+    expect(screen.getByText('File the receipt')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2m' })).not.toBeDisabled()
+  })
 })
