@@ -1207,7 +1207,7 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   `OverrideSpanApiRequest`, never a null-`templateId` default standing in for "blank" (#145). The
   `templateId` alone cannot tell `freeze` and `blank` apart — both send `null` — so `mode` is what
   the server and every caller key off
-- stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
+- stamping a Day template onto a date (either scope) renders the copies-the-shape-in note, and
   sends one clobber-check-then-POST span write — `{ from, to, templateId, mode: 'stamp' }`,
   `from === to` for a single date — never the old per-date `PUT .../stamp`
 - freezing a range skips the clobber-check GET entirely and POSTs straight through with no
