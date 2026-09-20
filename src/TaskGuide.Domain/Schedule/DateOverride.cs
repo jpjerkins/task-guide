@@ -30,9 +30,8 @@ public sealed record DateOverride(
     /// <summary>
     /// <c>null</c> = absent — the date's Events come from the active Pattern, exactly as before
     /// this member existed. Non-null, <b>including empty</b>, = present — the date's own Events,
-    /// no prototype leaks through. The two arms are different records, not two spellings of one
-    /// (#153) — ADR-0010's checklist for a new codec ("key it, decide which arm of absence
-    /// applies, wrap the boundary") is what this member answers for <c>Events</c>.
+    /// no prototype leaks through. The two arms are different records, not two spellings of one —
+    /// ADR-0010d, the optional-property arm of absence (#153, written up in #162).
     /// </summary>
     public IReadOnlyList<Event>? Events { get; init; }
 

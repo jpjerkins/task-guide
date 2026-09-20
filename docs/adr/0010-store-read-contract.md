@@ -1,6 +1,7 @@
 # ADR-0010 — What a codec read guarantees: uniqueness, absence, and one catchable failure type
 
-**Status:** Accepted · **Source:** [#52](https://github.com/jpjerkins/task-guide/issues/52), via [#54](https://github.com/jpjerkins/task-guide/issues/54) and [#66](https://github.com/jpjerkins/task-guide/issues/66)
+**Status:** Accepted · **Source:** [#52](https://github.com/jpjerkins/task-guide/issues/52), via [#54](https://github.com/jpjerkins/task-guide/issues/54) and [#66](https://github.com/jpjerkins/task-guide/issues/66)  
+**Amended** 2026-09-20 — a third arm of absence, for an optional property on a stored record, from [#153](https://github.com/jpjerkins/task-guide/issues/153) via [#162](https://github.com/jpjerkins/task-guide/issues/162).
 
 ## Context
 
@@ -56,6 +57,57 @@ Wrapped at each codec boundary, not at the ~70 individual `GetProperty` sites.
 [#63](https://github.com/jpjerkins/task-guide/issues/63) specifies and implements this arm; the rule is
 stated here so it binds every codec written after it, not only the ones #63 touches.
 
+### Amendment — a third arm: an optional property on a stored record, where *absent* and *empty* are different facts
+
+Decision b was written against **sparse collection files**, and its examples are all of that shape:
+`CompletionsFor` and `FiresOn` read a per-task or per-date *file* whose non-existence is the normal
+state of a healthy store. Its "never null, never a throw" is a rule about **how a sparse collection
+read reports an absent file** — it does not reach a property *inside* a record that did load.
+[#153](https://github.com/jpjerkins/task-guide/issues/153) hit the case it does not cover, cited
+decision b for it, and the citation contradicted the code; this amendment is the rule that was
+actually needed.
+
+**The arm.** A property may be added to an existing record type such that *"written before this
+property existed"* and *"deliberately empty"* are different facts about the record. Then the property
+is nullable, and three states are meaningful:
+
+| State | On disk | Meaning |
+|---|---|---|
+| `null` | property **omitted** | the older behaviour — the value comes from wherever it came from before this property existed |
+| present, empty | `"events": []` | the record deliberately holds none; nothing from the old source leaks through |
+| present, non-empty | `"events": [ … ]` | the record's own value |
+
+`DateOverride.Events` is the worked example: absent takes the active Pattern's Event prototypes for
+the weekday, `[]` is a day with no Events at all, non-empty is the date's own.
+
+**The rules this arm carries.**
+
+- **Read with `TryGetProperty`, never `GetProperty`,** wherever absence is meaningful. `GetProperty`
+  throws on the absent arm, which is the arm most of the store is in.
+- **Write by omitting the property — never an explicit JSON `null`.** Two encodings for one meaning is
+  a drift hazard, and omitting is what keeps a pre-existing golden fixture **byte-identical**, which is
+  the evidence that adding the property touched no existing record. #153's `overrides.json` round-trip
+  test pins exactly that, and is the test a new use of this arm copies.
+- **Equality must not unify the arms.** `null` equals `null`, and `null` never equals empty.
+  `StructuralEquality.MultisetEqual` already does this (reference-equal nulls, null vs non-null
+  unequal), so it is a property to preserve rather than new work.
+- **This is not decision b's dangling reference.** Nothing dangled; nothing is inconsistent. The absent
+  arm is a record written by an older binary, which is a normal store, not a broken one.
+
+**When this arm is the wrong tool.** It is a **migration-avoidance device**: it exists so a shape
+change does not have to rewrite existing rows. For #153 a migration would have meant choosing, for
+every Override ever written, either "no Events" or "the Pattern's Events frozen in" — recording as
+fact a decision the user never made. Where a property's absence has **no** natural meaning, do not
+reach for this: make it required and migrate. Three states that a reader cannot tell apart from the
+data is worse than two states plus a migration.
+
+**The rollback cost, stated.** An older binary does not know the property, so it drops it on the next
+whole-file write ([ADR-0001](0001-memory-authoritative-json-store.md), *Rollback is lossy, and that is
+accepted*) and the record reverts to the absent arm — the pre-change behaviour, for that record. #153
+accepted that rather than bumping `manifest.json`, which would make the older binary **refuse to
+start** ([ADR-0009](0009-startup-upgrade-and-the-decide-write-phase-split.md)). That trade is the
+reason this arm is additive-only: it must stay a change an old binary can ignore.
+
 ## What this forbids
 
 - **Do not ship a codec whose record type has a natural key and no duplicate guard at read.** A
@@ -69,6 +121,10 @@ stated here so it binds every codec written after it, not only the ones #63 touc
 - **Do not throw a bare `Single`/`SingleOrDefault` failure across a dangling reference.** If you write
   `.Single(...)` over a store collection, either it cannot dangle or you owe it a named throw.
 - **Do not introduce a new exception type for a read failure.** It goes inside `BadStoreFileException`.
+- **Do not write an explicit `null` for an absent optional property, and do not read one with
+  `GetProperty`.** Omission is the encoding; `TryGetProperty` is the read.
+- **Do not make an optional property's absence and emptiness compare equal.** They are different
+  records, and a round trip that conflates them silently rewrites history.
 
 ## Consequences
 
@@ -78,3 +134,5 @@ stated here so it binds every codec written after it, not only the ones #63 touc
 - Callers of a sparse read never null-check; callers of a reference read never fall back. The read's
   signature says which is which.
 - Each new codec inherits a checklist: key it, decide which arm of absence applies, wrap the boundary.
+  **Three arms, since the 2026-09-20 amendment:** a sparse collection file (empty), a dangling
+  reference (named throw), and an optional property on a record (`null` ≠ empty, omitted on write).

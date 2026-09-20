@@ -15,12 +15,12 @@ ubiquitous language lives in `CONTEXT.md` (start at `CONTEXT-INDEX.md`).
 | [0007](0007-status-is-derived-and-gates-null-duration.md) | Status derived; the gate is what handles null Duration | Task shape, matching, anything reading Duration |
 | [0008](0008-empty-store-guarantee.md) | An empty store must start; the default Pattern's content is not a contract | the startup seed, first-run behaviour, tests over a fresh store |
 | [0009](0009-startup-upgrade-and-the-decide-write-phase-split.md) | Forward-only startup upgrades; every conscious refusal is raised before the first write; the bootstrap plans, then writes, then opens the store | `StartupPlanner`, `StartupWriter`, `StartupBootstrap`, the composition root, migration steps, snapshots, anything that refuses at startup |
-| [0010](0010-store-read-contract.md) | Duplicate keys rejected at read; two arms of absence; one catchable failure type | any codec, store loading, day-shape or Pattern reads |
+| [0010](0010-store-read-contract.md) | Duplicate keys rejected at read; three arms of absence; one catchable failure type | any codec, store loading, day-shape or Pattern reads, **adding an optional property to a stored record** |
 | [0011](0011-nullable-strictness-and-union-representation.md) | Nullable strict repo-wide; closed sets are `OneOf` unions; compare them with `.Equals` | any closed set, any switch over one, any new Domain dependency |
 
 **Amendments are dated in the ADR's own header.** 0004, 0005 and 0009 each carry a 2026-09-03
-amendment from the application-layer resolutions (#67, #68); read the amendment sections, not only the
-original Decision.
+amendment from the application-layer resolutions (#67, #68), and 0010 a 2026-09-20 amendment adding
+the third arm of absence (#162); read the amendment sections, not only the original Decision.
 
 ## Three lines that recur across all ten
 
