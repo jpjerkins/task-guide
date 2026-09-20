@@ -39,9 +39,12 @@ export function useOverrideConfirmation() {
       const soloSpan = span === 1
       return <OverrideSheet title={soloSpan ? 'Blank this date?' : `Blank all ${span} dates?`} onCancel={() => finish(false)}>
         <div className="damage">
+          {/* No "nothing will fire" clause: a dated one-off Event still fires on a blanked date —
+              DayShapeReader concatenates view.Events unconditionally, regardless of the Override.
+              A blank clears the date's windows and its recurring events; dated Events survive. */}
           <div className="damage-h">{soloSpan
-            ? 'Every window on this date is removed and nothing will fire on it.'
-            : 'Every window on these dates is removed and nothing will fire on them.'}</div>
+            ? 'Every window on this date is removed.'
+            : 'Every window on these dates is removed.'}</div>
         </div>
         <div className="note">Nothing here can be undone in one step — reverting is per date.</div>
         <div className="btn-row"><button className="btn danger wide" onClick={() => finish(true)}>

@@ -1251,7 +1251,9 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   about the Overrides it would replace, so nothing clobbered means nothing to confirm.
   `useOverrideConfirmation` renders a count-only sheet for `n === 0` (only reachable in blank
   mode): title `Blank all {span} dates?`, the same inset `.damage` block the clobber list uses
-  (the sentence "Every window on these dates is removed and nothing will fire on them") but
+  (the sentence "Every window on these dates is removed.", with **no "nothing will fire" clause**
+  — `DayShapeReader` concatenates `view.Events` unconditionally, so a dated one-off Event still
+  fires on a blanked date; a blank clears the date's windows and its recurring events) but
   **carrying no per-date rows** — no dates depart from the pattern yet, so there is nothing true
   to list — no untouched-dates sentence (it would restate the same dates twice), the undo note
   verbatim, and button `Blank all {span}`. At `span === 1`
