@@ -203,7 +203,24 @@ public sealed class ScheduleCodecTests
 
         var actual = Assert.Single(roundTripped);
         Assert.NotNull(actual.Events);
-        Assert.Empty(actual.Events!);
+        Assert.Empty(actual.Events);
+    }
+
+    [Fact]
+    public void An_override_event_whose_date_does_not_match_its_rows_date_is_rejected_at_read_naming_both_dates_and_the_event_id()
+    {
+        const string json = """
+            [ { "date": "2026-08-15", "used": null, "windows": [],
+                "events": [
+                  { "id": "evt_frozen_a", "date": "2026-08-16", "name": "Karate",
+                    "start": "18:00", "end": "19:00", "dimensions": {}, "looseTags": [],
+                    "absenceNotice": null }] } ]
+            """;
+
+        var ex = Assert.Throws<BadStoreFileException>(() => OverrideCodec.Read(json));
+        Assert.Contains("evt_frozen_a", ex.Message);
+        Assert.Contains("2026-08-15", ex.Message);
+        Assert.Contains("2026-08-16", ex.Message);
     }
 
 }

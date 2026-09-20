@@ -55,10 +55,30 @@ public static class OverrideCodec
                 ? eventsElement.EnumerateArray().Select(CodecPrimitives.ReadEvent).ToList()
                 : null;
 
+            if (events is not null)
+            {
+                RejectMismatchedEventDate(date, events);
+            }
+
             overrides.Add(new DateOverride(date, windows, ReadUsedOrNull(element.GetProperty("used"))) { Events = events });
         }
 
         return overrides;
+    }
+
+    // The store file is a trust boundary and hand-editing it is an expected repair path
+    // (ADR-0010: the operator's next act is to open the file and fix a row) — every Event
+    // repeats its row's date with nothing else cross-checking it, so one wrong date in a
+    // hand-edited or restored file would otherwise silently put an event on a day it does not
+    // belong to.
+    private static void RejectMismatchedEventDate(DateOnly rowDate, IReadOnlyList<Event> events)
+    {
+        var mismatched = events.FirstOrDefault(e => e.Date != rowDate);
+        if (mismatched is null) return;
+
+        throw new JsonException(
+            $"Override event '{mismatched.Id.Value}' has date ({mismatched.Date:yyyy-MM-dd}) that " +
+            $"does not match its row's date ({rowDate:yyyy-MM-dd}).");
     }
 
     private static DayTemplateUse? ReadUsedOrNull(JsonElement element) =>

@@ -704,6 +704,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - an Override with no `events` property reads as absent and writes none back — every pre-#153 row of
   the golden fixture is byte-identical after a round trip (#153, the absent arm)
 - an Override with an empty `events` array round-trips as present-and-empty, never as absent
+- an Override event whose `date` does not match its row's date is rejected at read, naming both
+  dates and the event id (#153) — the store file is a trust boundary and hand-editing is an
+  expected repair path
 - no codec writes a `status` property, whatever type it would carry — `OverrideCodec`
 - `events.json` round-trips the golden store unchanged
 - an Event's loose Tags survive the round trip, and are what a derived-obligation rule reads
