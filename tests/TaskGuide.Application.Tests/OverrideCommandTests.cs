@@ -89,8 +89,18 @@ public sealed class OverrideCommandTests
         Assert.Equal("Standup", frozenEvent.Name);
     }
 
+    /// <summary>
+    /// #153 review finding 1/5: `Freeze` captures the <b>raw</b> materialisation
+    /// (<c>RecurringEvents.On</c>) and never folds an Event exception in — an exception is a
+    /// separate stored fact the Override must never absorb, so it stays live in
+    /// `event-exceptions.json` and is applied at read by `DayShapeReader` instead. So the frozen
+    /// Override's own <c>Events</c> genuinely does hold the deleted instance raw; the resurrection
+    /// this used to name is not on the Override, it is on the <em>shape</em>, and
+    /// `DayShapeReaderTests` (`TaskGuide.Storage.Tests`, "an Override carrying its own Events...")
+    /// is where that is pinned, through the real reader.
+    /// </summary>
     [Fact]
-    public async Task Freezing_a_date_whose_recurring_instance_was_deleted_by_an_Event_exception_does_not_resurrect_it()
+    public async Task Freezing_a_date_whose_recurring_instance_was_deleted_by_an_Event_exception_captures_it_raw_leaving_the_exception_to_apply_at_read()
     {
         var prototype = Prototype("ep_standup", "Standup");
         var template = new DayTemplate(new DayTemplateId("dt_thursday"), "Thursday", [Window("w_thursday")], [prototype]);
@@ -109,7 +119,9 @@ public sealed class OverrideCommandTests
 
         Assert.True(result.IsT0);
         var frozen = Assert.Single(store.Read().Overrides);
-        Assert.Empty(frozen.Events!);
+        Assert.NotNull(frozen.Events);
+        var captured = Assert.Single(frozen.Events);
+        Assert.Equal("evt_rec_20261224_ep_standup", captured.Id.Value);
     }
 
     [Fact]

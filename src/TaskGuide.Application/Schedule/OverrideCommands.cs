@@ -47,10 +47,12 @@ public sealed class CreateOverrideSpan(IStore store)
     }
 
     /// <summary>
-    /// Captures each date's <b>computed</b> shape — both halves. Because the recurring events are
-    /// the already-materialised instances (deletions folded in by <see cref="RecurringEvents.On"/>),
-    /// freezing can never resurrect an instance an Event exception deleted; that is by
-    /// construction, not a separate check (#153).
+    /// Captures each date's computed shape — both halves. Captures the <b>raw</b> materialisation
+    /// (<see cref="RecurringEvents.On"/>), never folding in an Event exception: an exception is a
+    /// separate stored fact the Override must never absorb, so it stays live and is applied at
+    /// read by <c>DayShapeReader</c> regardless of which arm supplies the date's Events (#153
+    /// review finding 1/5). A deleted instance therefore never resurrects on the <em>shape</em>
+    /// even though the frozen Override's own Events does capture it raw.
     /// </summary>
     private static DateOverride Freeze(DateOnly date, IStoreView view)
     {
@@ -64,7 +66,7 @@ public sealed class CreateOverrideSpan(IStore store)
                 ?? throw new InvalidOperationException(
                     $"Day template {templateId.Value} does not match the active Pattern for {date:yyyy-MM-dd}.");
             windows ??= template.Windows;
-            events ??= RecurringEvents.On(date, template.EventPrototypes, view.EventExceptions);
+            events ??= RecurringEvents.On(date, template.EventPrototypes);
         }
 
         return new DateOverride(date, [.. windows], existing?.Used) { Events = events };

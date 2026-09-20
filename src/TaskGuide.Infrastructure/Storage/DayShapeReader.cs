@@ -25,7 +25,10 @@ public sealed class DayShapeReader(IStoreReader store) : IDayShapeReader
         windows ??= template.Windows;
         var events = view.Events
             .Where(e => e.Date == date)
-            .Concat(dateOverride?.Events ?? RecurringEvents.On(date, template.EventPrototypes, view.EventExceptions))
+            .Concat(RecurringEvents.WithExceptions(
+                date,
+                dateOverride?.Events ?? RecurringEvents.On(date, template.EventPrototypes),
+                view.EventExceptions))
             .ToArray();
 
         return new DayShape(date, windows, events, IsOverridden: dateOverride is not null);
