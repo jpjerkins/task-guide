@@ -53,6 +53,15 @@ describe('App', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(apiPath))
   })
 
+  it('renders the reminder route with no tab bar — a cold notification link has no tabs to return to', async () => {
+    window.history.replaceState({}, '', '/2026-09-13/w_evening')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })))
+
+    render(<App />)
+
+    expect(document.querySelector('.tabbar')).toBeNull()
+  })
+
   it('renders the placeholder for a tab with no registered screen', () => {
     render(<App />)
 
