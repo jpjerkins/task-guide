@@ -159,7 +159,7 @@ internal static class DayTemplateLifecycleHandlers
         }
 
         var template = new DayTemplate(minter.NextDayTemplateId(), request.Name, [], []);
-        var result = await new PromoteOneOffDay(store).ExecuteAsync(sourceDate, template, ct);
+        var result = await new PromoteOneOffDay(store, minter).ExecuteAsync(sourceDate, template, ct);
         return result.Match<Results<Ok<DayTemplateResponse>, BadRequest<object>, Conflict<object>>>(
             promoted =>
             {

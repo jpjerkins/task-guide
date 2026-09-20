@@ -767,9 +767,13 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - the use record survives the date becoming a one-off day
 - re-stamping replaces the use record rather than appending
 - promoting a one-off day writes the source date's use record and **does not re-link**
-- **accepted gap (#153):** `Promote` copies only the Windows half — a promoted frozen one-off day
-  yields a template with no `EventPrototypes`, because turning `Event`s back into prototypes needs
-  minted `EventPrototypeId`s and the Domain has no minter
+- promoting a one-off day's own Events mints one EventPrototype per Event, preserving Name, span,
+  Tags, and AbsenceNotice
+- promotion leaves the source Override's own Events intact
+- promoting an Override with absent Events writes no EventPrototypes and does not materialise active
+  Pattern prototypes
+- a promoted template stamps its EventPrototypes as the target date's Events
+- `POST /api/overrides/{date}/promote` passes the minter and returns and persists EventPrototypes
 - freezing an Override span copies each dates current windows, preserves their ids, and retains an
   existing stamped Override's use record
 - freezing an Override span captures each date's computed recurring events alongside its windows, so

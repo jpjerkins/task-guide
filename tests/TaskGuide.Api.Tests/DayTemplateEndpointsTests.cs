@@ -35,7 +35,12 @@ public sealed class DayTemplateEndpointsTests : IDisposable
         Environment.SetEnvironmentVariable(DataDirEnvVar, _dataDir);
         try
         {
-            _factory = new WebApplicationFactory<Program>();
+            _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<IIdMinter>();
+                    services.AddSingleton<IIdMinter>(new EndpointIdMinter());
+                }));
             _client = _factory.CreateClient();
         }
         finally
@@ -66,11 +71,12 @@ public sealed class DayTemplateEndpointsTests : IDisposable
     }
 
     [Fact]
-    public async Task POST_api_overrides_date_promote_writes_a_new_Day_template_and_does_not_re_link_the_source_date()
+    public async Task POST_api_overrides_date_promote_passes_the_minter_and_returns_and_persists_EventPrototypes()
     {
         var date = new DateOnly(2026, 12, 25);
         var sourceWindow = Window("w_christmas", "Family time");
-        await WriteAsync(new OverridesWrite([new DateOverride(date, [sourceWindow], null)]));
+        var sourceEvent = new Event(new EventId("evt_christmas_dinner"), date, "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
+        await WriteAsync(new OverridesWrite([new DateOverride(date, [sourceWindow], null) { Events = [sourceEvent] }]));
 
         var response = await _client.PostAsJsonAsync($"/api/overrides/{date:yyyy-MM-dd}/promote", new { name = "Christmas" });
 
@@ -80,9 +86,14 @@ public sealed class DayTemplateEndpointsTests : IDisposable
         Assert.StartsWith(DayTemplateId.Prefix, templateId);
         Assert.Equal("Christmas", body.GetProperty("name").GetString());
         Assert.Equal("Family time", body.GetProperty("windows")[0].GetProperty("name").GetString());
+        Assert.Equal("Dinner", body.GetProperty("eventPrototypes")[0].GetProperty("name").GetString());
+        Assert.Equal("ep_from_endpoint", body.GetProperty("eventPrototypes")[0].GetProperty("id").GetProperty("value").GetString());
         var source = Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
         Assert.Equal("Family time", Assert.Single(source.Windows).Name);
+        Assert.Equal([sourceEvent], source.Events);
         Assert.Equal(templateId, Assert.IsType<DayTemplateUse>(source.Used).TemplateId.Value);
+        var persisted = Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().DayTemplates, template => template.Id.Value == templateId);
+        Assert.Equal(new EventPrototype(new EventPrototypeId("ep_from_endpoint"), "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null), Assert.Single(persisted.EventPrototypes));
     }
 
     [Fact]
@@ -364,5 +375,15 @@ public sealed class DayTemplateEndpointsTests : IDisposable
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class EndpointIdMinter : IIdMinter
+    {
+        public TaskId NextTaskId() => throw new NotSupportedException();
+        public WindowId NextWindowId() => throw new NotSupportedException();
+        public DayTemplateId NextDayTemplateId() => new("dt_from_endpoint");
+        public PatternId NextPatternId() => throw new NotSupportedException();
+        public EventId NextEventId() => throw new NotSupportedException();
+        public EventPrototypeId NextEventPrototypeId() => new("ep_from_endpoint");
     }
 }
