@@ -464,6 +464,19 @@ it('Done_for_now_renders_even_when_Snooze_is_suppressed_its_the_pages_exit_not_p
   expect(screen.getByRole('button', { name: 'Done for now' })).toBeInTheDocument()
 })
 
+it('the_error_state_keeps_the_pages_exit_so_a_dead_link_is_not_a_dead_end', async () => {
+  // A cold notification link for a deleted or rescheduled Window 404s, so the error state is the
+  // one most likely to be reached from a push — and it had no exit at all.
+  const assign = vi.fn()
+  vi.stubGlobal('location', { ...window.location, assign })
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })))
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText("Couldn't load this reminder.")
+
+  await userEvent.click(screen.getByRole('button', { name: '‹ Done' }))
+  expect(assign).toHaveBeenCalledWith('/')
+})
+
 it('an_adjustment_reports_back_that_the_date_is_now_an_Override', async () => {
   currentPage = page({ matchingOn: { declared: { weather: ['sunny'] }, defaulted: {} } })
   dimensions = [

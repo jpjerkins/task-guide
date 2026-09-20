@@ -1635,6 +1635,9 @@ specified under **Shared controls** above and are not restated here.
 - `Done for now` renders even when Snooze is suppressed; it is the page's exit, not part of the
   Snooze control
 - the reminder route renders no tab bar
+- the loading and error states carry the same exit as the loaded page — a cold link for a
+  deleted or rescheduled Window 404s, so the error state is the one most likely to be reached
+  from a push, and it must not be the one state with no way out
 
 #### Task list and status filters
 

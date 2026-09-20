@@ -128,10 +128,15 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     // re-read (e.g. after a Snooze) would be wasted traffic for a list that didn't change.
   }, [state.status === 'ready' ? state.page.footer.toProcess : 0, loadUnprocessedTask])
 
+  // Every branch below is reachable from a cold notification link, so every branch carries the
+  // exit — the error branch most of all, since a deleted or rescheduled Window 404s here. A cold
+  // link has no origin screen to name, hence the generic "Done" rather than a destination.
+  const exit = { label: 'Done', onBack: () => window.location.assign('/') }
+
   if (state.status === 'loading') {
     return (
       <div>
-        <ScreenNav title="" />
+        <ScreenNav title="" back={exit} />
         <div className="scroll">
           <div className="empty">Loading…</div>
         </div>
@@ -141,7 +146,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
   if (state.status === 'error') {
     return (
       <div>
-        <ScreenNav title="" />
+        <ScreenNav title="" back={exit} />
         <div className="scroll">
           <div className="empty">Couldn't load this reminder.</div>
         </div>
@@ -248,9 +253,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
 
   return (
     <div>
-      {/* A cold notification link has no origin screen to name, unlike every other ScreenNav's
-          back label — hence the generic "Done" rather than a destination name. */}
-      <ScreenNav title={title} sub={sub} back={{ label: 'Done', onBack: () => window.location.assign('/') }} />
+      <ScreenNav title={title} sub={sub} back={exit} />
       <div className="scroll">
         {page.isLive ? (
           <div className="adjust">
@@ -357,7 +360,7 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
           )}
           {/* The page's other exit, alongside the nav's "Done" back button — unconditional because
               a cold notification link has no origin screen, so it can't disappear with Snooze. */}
-          <button className="btn ghost" onClick={() => window.location.assign('/')}>
+          <button className="btn ghost" onClick={exit.onBack}>
             Done for now
           </button>
         </div>
