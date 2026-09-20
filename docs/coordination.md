@@ -42,7 +42,12 @@ supersedes every earlier role statement in this file, `agent-status.md` and #53)
 - Labels follow the plan's lane split (`docs/superpowers/plans/2026-09-03-application-layer.md`
   § lanes): Claude owns Integration, Adapters, Web-Now and Web-Authoring; Codex owns Firing,
   Schedule and Capture & Tasks. A ticket that needs a file in the other agent's lane (e.g.
-  `App.tsx`, `schema.d.ts`) stops and reports it, per the plan's ownership rules.
+  `App.tsx`) stops and reports it, per the plan's ownership rules. **`schema.d.ts` is the one
+  exception (#171):** it is generated, not authored, so the lane that changes the API document
+  regenerates it in the same commit (`npm run gen:api` from `src/TaskGuide.Web`, API on 8007) and
+  re-runs `./scripts/check-schema-drift.sh` after rebasing onto `origin/main`, before the ff-merge.
+  A lane whose diff touches no API surface still reports pre-existing drift rather than absorbing
+  it — only the lane that changed the document owns regenerating for it.
 
 Phil's latest authorization (Sep 14): "You don't need my approval for changes completed
 according to the GitHub issues. Run." Issue-compliant staging, commits, PRs, merges and

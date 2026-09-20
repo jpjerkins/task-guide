@@ -156,21 +156,27 @@ cd src/TaskGuide.Web && npm test
 ```
 
 **If the diff touches API surface** — any `Api/Endpoints/` file, or a response/request type one
-serializes — also run:
+serializes — you own regenerating `src/TaskGuide.Web/src/api/schema.d.ts`, **whatever lane you are
+on** (#171). It is generated, not authored: merge safety protects intent, and this file has none.
+Regenerate it in the same commit that changes the shape, then verify:
 
 ```sh
-./scripts/check-schema-drift.sh
+cd src/TaskGuide.Web && npm run gen:api   # API running on 8007
+./scripts/check-schema-drift.sh           # from the repo root, API stopped
 ```
 
-It needs port 8007 free — a web lane following `src/TaskGuide.Web/README.md` has the API running
-there for the Vite proxy, so stop it first — and `npm install` in `src/TaskGuide.Web`.
+Both need `npm install` in `src/TaskGuide.Web` — including lanes that otherwise need no Node — and
+the check needs port 8007 free, so stop the API you just generated against (a web lane following
+`src/TaskGuide.Web/README.md` has one running there for the Vite proxy).
 
-It boots the API, regenerates the TypeScript types from the live `/openapi/v1.json`, and diffs them
-against the checked-in `src/TaskGuide.Web/src/api/schema.d.ts`. Non-zero means the checked-in copy is
-stale: the SPA is typed off a contract the server stopped honouring, with no compile error and no
-test failure to say so. `schema.d.ts` is the integration lane's file, so a non-zero exit on your
-branch is a **report**, not an edit — name the drift and the integration lane regenerates it (#135;
-#98, #99 and #133 are the same drift caught late three times).
+The check boots the API, regenerates the types from the live `/openapi/v1.json`, and diffs them
+against the checked-in copy. Non-zero means the checked-in copy is stale: the SPA is typed off a
+contract the server stopped honouring, with no compile error and no test failure to say so (#135;
+#98, #99, #133, #156 and #169 are the same drift caught late five times).
+
+**If your diff touches no API surface, a non-zero exit is still a report, not an edit** — that drift
+is someone else's, and absorbing it puts a generated TypeScript file in a diff that has no business
+carrying one. Name it; the lane that changed the document regenerates for it.
 
 **Write down what Phil settled in-session, before review runs.** A decision that lives only in the
 conversation — an `AskUserQuestion` answer, an accepted consequence, a "yes, do it that way" — is
@@ -265,6 +271,14 @@ and may be stale:
 git fetch origin && git rebase origin/main
 ```
 
+**Then, if your diff touches API surface, re-run `./scripts/check-schema-drift.sh` — even when the
+rebase applied cleanly.** Two lanes editing distant parts of the OpenAPI document both apply without
+a textual conflict and still leave the combined output wrong; the check is seconds and settles it.
+Non-zero means `npm run gen:api` and amend. A `schema.d.ts` *conflict* during the rebase is resolved
+the same way: regenerate, never merge the hunks. This is what keeps `main` matching its own code by
+construction — after the rebase the worktree is the tree that is about to become `main`, and
+`--ff-only` makes `main` bit-identical to it.
+
 Then fast-forward `main` in the main clone and push it. The main clone stays on `main` (step 3),
 so it is already the right checkout, and `--ff-only` is what makes this safe with several lanes
 finishing at once:
@@ -307,8 +321,9 @@ permission — that is step 8, and finishing it is not something to ask about.
 
 Three things are still his:
 
-- **A file another lane owns** (step 6), including any `.csproj`, `task-guide.slnx`, or
-  `src/TaskGuide.Web/src/api/schema.d.ts`. Report it; don't edit it.
+- **A file another lane owns** (step 6), including any `.csproj` or `task-guide.slnx`. Report it;
+  don't edit it. `src/TaskGuide.Web/src/api/schema.d.ts` is no longer on this list — regenerate it
+  yourself when your diff changes the API shape (step 7).
 - **A ticket that looks wrong** — scope, ownership, a blocker the plan didn't anticipate. Report
   it; don't redesign it.
 - **Anything outside the ticket's scope**, however small and however obviously right.

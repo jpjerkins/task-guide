@@ -67,7 +67,7 @@ layer cut forces two lanes to move in lockstep for one feature.
 
 | Lane | Owns | Agent |
 |---|---|---|
-| **Integration** | `Application/Ports/`, `Api/Program.cs`, `TaskGuide.TestSupport/`, `TaskGuide.Infrastructure.Tests/`, `docs/adr/`, `src/TaskGuide.Web/src/api/schema.d.ts`, the Web shell (`App.tsx`, `TabBar.tsx`, `client.ts`), every `.csproj`, `task-guide.slnx` | Claude |
+| **Integration** | `Application/Ports/`, `Api/Program.cs`, `TaskGuide.TestSupport/`, `TaskGuide.Infrastructure.Tests/`, `docs/adr/`, the Web shell (`App.tsx`, `TabBar.tsx`, `client.ts`), every `.csproj`, `task-guide.slnx` | Claude |
 | **Firing** | `Application/Firing/`, `Domain/Firing/`, `Domain/Notifications/{Glance,Reminder}.cs`, `Infrastructure/BackgroundServices/` | Codex |
 | **Adapters** | `Infrastructure/Pushover/`, `Infrastructure/Health/`, `Infrastructure/Weather/`, `Infrastructure/Notifications/` (Glance renderer) | Claude |
 | **Schedule** | `Application/Schedule/`, `Domain/Schedule/`, `Api/Endpoints/{DayTemplate,Pattern,Override,Window,Event}Endpoints.cs` | Codex |
@@ -373,8 +373,16 @@ from the endpoint — no application-layer type in between.
 
 **I2 · Regenerate `schema.d.ts` after Schedule lands.** Unblocks Web-Authoring.
 
-Both exist because `schema.d.ts` is generated, checked in, needs a live server, and every endpoint
-ticket would otherwise edit it — the exact shared-file conflict merge safety exists to prevent.
+Both existed because `schema.d.ts` is generated, checked in, needs a live server, and every endpoint
+ticket would otherwise edit it — seemingly the shared-file conflict merge safety exists to prevent.
+**Retired by [#171][171]:** merge safety protects *authorship*, and this file carries no intent — it
+is a deterministic function of the OpenAPI document. So the lane that changes the API shape
+regenerates it in the same commit, and every lane re-runs `./scripts/check-schema-drift.sh` after
+rebasing onto `origin/main` and before the ff-merge; a rebase conflict in it is resolved by
+regenerating, never by merging hunks. A lane whose diff touches no API surface reports pre-existing
+drift rather than absorbing it. I1 and I2 stand only as the backlog they already were.
+
+[171]: https://github.com/jpjerkins/task-guide/issues/171
 
 ### Web lanes (Claude)
 

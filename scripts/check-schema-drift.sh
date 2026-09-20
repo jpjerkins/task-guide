@@ -67,7 +67,8 @@ fi
 if diff -u src/TaskGuide.Web/src/api/schema.d.ts "$GENERATED"; then
   echo "schema.d.ts matches the live OpenAPI document"
 else
-  echo "error: the checked-in schema.d.ts is stale. Regenerating it is the integration lane's" >&2
-  echo "job — if you're not on that lane, report the drift (see #135)." >&2
+  echo "error: the checked-in schema.d.ts is stale. If this branch changes API surface, that's" >&2
+  echo "yours to fix: 'npm run gen:api' in src/TaskGuide.Web with the API up, then amend (#171)." >&2
+  echo "If it doesn't, the drift is pre-existing — report it, don't absorb it (see #135)." >&2
   exit 1
 fi
