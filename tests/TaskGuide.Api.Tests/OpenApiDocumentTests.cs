@@ -54,7 +54,7 @@ public sealed class OpenApiDocumentTests : IDisposable
         await _client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
 
     [Fact]
-    public async Task TaskResponse_schema_is_present_with_its_eight_members()
+    public async Task TaskResponse_schema_is_present_with_its_seventeen_members()
     {
         var doc = await GetDocumentAsync();
 
@@ -64,15 +64,24 @@ public sealed class OpenApiDocumentTests : IDisposable
         var properties = taskResponse.GetProperty("properties");
         Assert.True(properties.TryGetProperty("id", out _));
         Assert.True(properties.TryGetProperty("title", out _));
+        Assert.True(properties.TryGetProperty("notes", out _));
         Assert.True(properties.TryGetProperty("duration", out _));
+        Assert.True(properties.TryGetProperty("dimensions", out _));
+        Assert.True(properties.TryGetProperty("looseTags", out _));
         Assert.True(properties.TryGetProperty("createdAt", out _));
         Assert.True(properties.TryGetProperty("status", out _));
+        Assert.True(properties.TryGetProperty("eligible", out _));
+        Assert.True(properties.TryGetProperty("deadline", out _));
+        Assert.True(properties.TryGetProperty("defer", out _));
+        Assert.True(properties.TryGetProperty("postpone", out _));
+        Assert.True(properties.TryGetProperty("recurring", out _));
+        Assert.True(properties.TryGetProperty("derived", out _));
         Assert.True(properties.TryGetProperty("opportunities", out _));
         Assert.True(properties.TryGetProperty("patternWeekCount", out _));
         Assert.True(properties.TryGetProperty("zeroKind", out _));
 
         Assert.Equal(
-            ["createdAt", "duration", "id", "opportunities", "patternWeekCount", "status", "title", "zeroKind"],
+            ["createdAt", "deadline", "defer", "derived", "dimensions", "duration", "eligible", "id", "looseTags", "notes", "opportunities", "patternWeekCount", "postpone", "recurring", "status", "title", "zeroKind"],
             properties.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
     }
 

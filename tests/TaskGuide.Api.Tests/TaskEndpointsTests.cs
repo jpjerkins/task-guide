@@ -215,6 +215,89 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_tasks_carries_the_list_s_defer_postpone_deadline_eligibility_recurring_and_derived_operands()
+    {
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var deferred = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Deadline = tomorrow.AddDays(7),
+            Defer = new AbsoluteDefer(tomorrow),
+        };
+        var postponed = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAX") with { Postpone = tomorrow };
+        var recurring = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAY") with
+        {
+            Recurrence = new Recurrence(RecurrenceAnchor.Calendar, new EveryNDays(1), tomorrow),
+        };
+        var derived = Task("t_derived_absence_event_1") with
+        {
+            Provenance = new DerivedProvenance(new RuleId("absence"), "event_1"),
+        };
+        await SeedTasksAsync(deferred, postponed, recurring, derived);
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+        var deferredResponse = list.EnumerateArray().Single(task => task.GetProperty("id").GetString() == deferred.Id.Value);
+        var postponedResponse = list.EnumerateArray().Single(task => task.GetProperty("id").GetString() == postponed.Id.Value);
+        var recurringResponse = list.EnumerateArray().Single(task => task.GetProperty("id").GetString() == recurring.Id.Value);
+        var derivedResponse = list.EnumerateArray().Single(task => task.GetProperty("id").GetString() == derived.Id.Value);
+
+        Assert.Equal(tomorrow.ToString("yyyy-MM-dd"), deferredResponse.GetProperty("defer").GetString());
+        Assert.Equal(tomorrow.AddDays(7).ToString("yyyy-MM-dd"), deferredResponse.GetProperty("deadline").GetString());
+        Assert.False(deferredResponse.GetProperty("eligible").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, deferredResponse.GetProperty("postpone").ValueKind);
+
+        Assert.Equal(tomorrow.ToString("yyyy-MM-dd"), postponedResponse.GetProperty("postpone").GetString());
+        Assert.False(postponedResponse.GetProperty("eligible").GetBoolean());
+        Assert.True(recurringResponse.GetProperty("recurring").GetBoolean());
+        Assert.True(derivedResponse.GetProperty("derived").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_status_orphan_returns_only_orphan_Tasks()
+    {
+        await _client.PostAsJsonAsync("/api/tasks", new { title = "Orphan task", duration = 30 });
+        await _client.PostAsJsonAsync("/api/capture", new { title = "Unprocessed task", duration = (int?)null, source = "in-app" });
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks?status=orphan");
+
+        var task = Assert.Single(list.EnumerateArray());
+        Assert.Equal("Orphan task", task.GetProperty("title").GetString());
+        Assert.Equal("orphan", task.GetProperty("zeroKind").GetString());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_returns_notes_Deadline_Dimension_values_loose_Tags_and_fit_inputs()
+    {
+        var deadline = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5);
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Notes = "Use the brass screws",
+            Deadline = deadline,
+            Tags = new TagSet(
+                new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+                {
+                    [KnownDimensions.Duration] = [new TagValue("30")],
+                    [KnownDimensions.Location] = [new TagValue("garage")],
+                },
+                [new LooseTag("garge")]),
+        };
+        await SeedTasksAsync(task);
+
+        var response = await _client.GetAsync($"/api/tasks/{task.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Use the brass screws", body.GetProperty("notes").GetString());
+        Assert.Equal(deadline.ToString("yyyy-MM-dd"), body.GetProperty("deadline").GetString());
+        Assert.Equal("30", body.GetProperty("dimensions").GetProperty(KnownDimensions.Duration.Value)[0].GetString());
+        Assert.Equal("garage", body.GetProperty("dimensions").GetProperty(KnownDimensions.Location.Value)[0].GetString());
+        Assert.Equal("garge", Assert.Single(body.GetProperty("looseTags").EnumerateArray()).GetString());
+        Assert.Equal("active", body.GetProperty("status").GetString());
+        Assert.Equal(0, body.GetProperty("opportunities").GetInt32());
+        Assert.Equal(0, body.GetProperty("patternWeekCount").GetInt32());
+        Assert.Equal("orphan", body.GetProperty("zeroKind").GetString());
+    }
+
+    [Fact]
     public async Task A_posted_task_is_persisted_to_tasks_json_on_disk()
     {
         await _client.PostAsJsonAsync("/api/tasks", new { title = "Descale the kettle", duration = 30 });

@@ -42,22 +42,27 @@ public static class TaskEndpoints
         {
             var view = store.Read();
             var now = timeProvider.GetUtcNow();
-            var filtered = derivedTasks.Compose(view).AsEnumerable();
-            if (Enum.TryParse<Status>(status, ignoreCase: true, out var requestedStatus))
-            {
-                filtered = filtered.Where(task =>
-                    StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary) == requestedStatus);
-            }
-
             var opportunities = new OpportunityCounter(shapes, registry, resolution, boundary);
-            return TypedResults.Ok(filtered.Select(task => ToResponse(
+            var responses = derivedTasks.Compose(view).Select(task => ToResponse(
                 task,
                 view,
                 registry,
                 staleThresholds,
                 now,
                 boundary,
-                opportunities)));
+                opportunities));
+
+            if (string.Equals(status, "orphan", StringComparison.OrdinalIgnoreCase))
+            {
+                responses = responses.Where(task => task.ZeroKind == ToWireName(ZeroKind.Orphan));
+            }
+            else if (Enum.TryParse<Status>(status, ignoreCase: true, out var requestedStatus))
+            {
+                var requestedWireName = ToWireName(requestedStatus);
+                responses = responses.Where(task => task.Status == requestedWireName);
+            }
+
+            return TypedResults.Ok(responses);
         });
 
         tasks.MapPost("/", async Task<Results<Created<TaskResponse>, BadRequest<object>, ProblemHttpResult>> (
@@ -129,7 +134,33 @@ public static class TaskEndpoints
 
         // ?status=unprocessed|stale|active|done|orphan — Status is derived per request, never read
         // from storage. `orphan` is a third, disjoint filter, not a Status.
-        tasks.MapGet("/{id}", (string id) => Results.NoContent());
+        tasks.MapGet("/{id}", Results<Ok<TaskResponse>, NotFound> (
+            string id,
+            IStore store,
+            DimensionRegistry registry,
+            StaleThresholds staleThresholds,
+            TimeProvider timeProvider,
+            DayBoundary boundary,
+            IDayShapeReader shapes,
+            ClockTimeResolution resolution,
+            DerivedTaskComposer derivedTasks) =>
+        {
+            var view = store.Read();
+            var task = derivedTasks.Compose(view).SingleOrDefault(task => task.Id.Value == id);
+            if (task is null)
+            {
+                return TypedResults.NotFound();
+            }
+
+            return TypedResults.Ok(ToResponse(
+                task,
+                view,
+                registry,
+                staleThresholds,
+                timeProvider.GetUtcNow(),
+                boundary,
+                new OpportunityCounter(shapes, registry, resolution, boundary)));
+        });
         // An absolute date is for a one-off Task; recurring Tasks carry a moving, per-instance
         // offset from their generated deadline instead.
         tasks.MapPatch("/{id}", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (string id, DeferTaskRequest request, IStore store, DerivedTaskComposer derivedTasks, CancellationToken ct) =>
@@ -224,6 +255,7 @@ public static class TaskEndpoints
         OpportunityCounter opportunities)
     {
         var status = StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary);
+        var log = view.CompletionsFor(task.Id);
         var patternWeekCount = status is not Status.Active
             ? (int?)null
             : opportunities.CountInPatternWeek(task, view.Patterns.Active, view.DayTemplates, boundary.DateOf(now));
@@ -241,9 +273,20 @@ public static class TaskEndpoints
         return new TaskResponse(
             task.Id.Value,
             task.Title,
+            task.Notes,
             DurationOf(task),
+            task.Tags.Dimensions.ToDictionary(
+                dimension => dimension.Key.Value,
+                dimension => (IReadOnlyList<string>)[.. dimension.Value.Select(value => value.Value)]),
+            [.. task.Tags.LooseTags.Select(tag => tag.Value)],
             task.CreatedAt,
             ToWireName(status),
+            eligible,
+            DeadlineOf(task, log, now, boundary),
+            DeferRules.ResolvedFor(task, log, now, boundary),
+            task.Postpone,
+            task.Recurrence is not null,
+            task.Provenance is not null,
             opportunityCount,
             patternWeekCount,
             zeroKind is { } kind ? ToWireName(kind) : null);
@@ -267,6 +310,15 @@ public static class TaskEndpoints
     /// <summary>The one Dimension the walking skeleton (#51) reads back out — the ordinal single value, if any.</summary>
     private static string? DurationOf(TaskItem task) =>
         task.Tags.SingleOn(KnownDimensions.Duration)?.Value;
+
+    private static DateOnly? DeadlineOf(
+        TaskItem task,
+        CompletionLog log,
+        DateTimeOffset now,
+        DayBoundary boundary) =>
+        task.Recurrence is { } recurrence
+            ? RecurrenceRules.LiveInstanceDeadline(recurrence, task.CreatedAt, log, now, boundary)
+            : task.Deadline;
 
     private static bool IsTaskId(string id) =>
         IsMintedTaskId(id) || IsDerivedTaskId(id);
@@ -301,9 +353,18 @@ public sealed record CreateTaskRequest(string Title, int Duration);
 public sealed record TaskResponse(
     string Id,
     string Title,
+    string? Notes,
     string? Duration,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> Dimensions,
+    IReadOnlyList<string> LooseTags,
     DateTimeOffset CreatedAt,
     string Status,
+    bool Eligible,
+    DateOnly? Deadline,
+    DateOnly? Defer,
+    DateOnly? Postpone,
+    bool Recurring,
+    bool Derived,
     int? Opportunities,
     int? PatternWeekCount,
     string? ZeroKind);
