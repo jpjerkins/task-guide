@@ -84,7 +84,8 @@ public sealed class OverrideCommandTests
 
         Assert.True(result.IsT0);
         var frozen = Assert.Single(store.Read().Overrides);
-        var frozenEvent = Assert.Single(frozen.Events!);
+        Assert.NotNull(frozen.Events);
+        var frozenEvent = Assert.Single(frozen.Events);
         Assert.Equal("evt_rec_20261224_ep_standup", frozenEvent.Id.Value);
         Assert.Equal("Standup", frozenEvent.Name);
     }
@@ -146,7 +147,8 @@ public sealed class OverrideCommandTests
         Assert.True(result.IsT0);
         Assert.Equal([datedEvent], store.Read().Events);
         var frozen = Assert.Single(store.Read().Overrides);
-        Assert.DoesNotContain(frozen.Events!, e => e.Id == datedEvent.Id);
+        Assert.NotNull(frozen.Events);
+        Assert.DoesNotContain(frozen.Events, e => e.Id == datedEvent.Id);
 
         var deleted = await new DeleteOverride(store).ExecuteAsync(date, CancellationToken.None);
         Assert.True(deleted.IsT0);
@@ -162,7 +164,8 @@ public sealed class OverrideCommandTests
 
         var stamped = DayTemplateLifecycle.Stamp(date, template);
 
-        var frozenEvent = Assert.Single(stamped.Events!);
+        Assert.NotNull(stamped.Events);
+        var frozenEvent = Assert.Single(stamped.Events);
         Assert.Equal("evt_rec_20261224_ep_standup", frozenEvent.Id.Value);
         Assert.Equal("Standup", frozenEvent.Name);
     }
@@ -180,7 +183,7 @@ public sealed class OverrideCommandTests
         Assert.True(result.IsT0);
         var blanked = Assert.Single(store.Read().Overrides);
         Assert.NotNull(blanked.Events);
-        Assert.Empty(blanked.Events!);
+        Assert.Empty(blanked.Events);
     }
 
     [Fact]

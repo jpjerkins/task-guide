@@ -176,7 +176,9 @@ public sealed class ScheduleCodecTests
         var written = RoundTripOverrides(overrides);
         var roundTripped = OverrideCodec.Read(written);
 
-        var actual = Assert.Single(Assert.Single(roundTripped).Events!);
+        var roundTrippedOverride = Assert.Single(roundTripped);
+        Assert.NotNull(roundTrippedOverride.Events);
+        var actual = Assert.Single(roundTrippedOverride.Events);
         Assert.Equal("evt_frozen_a", actual.Id.Value);
     }
 
