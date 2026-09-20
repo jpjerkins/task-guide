@@ -6,7 +6,7 @@ using Xunit;
 namespace TaskGuide.Domain.Tests;
 
 /// <summary>
-/// `tests/TEST-INVENTORY.md`'s "`Unused`" bullets, plus `OverrideSpanRequest.Dates()`.
+/// `tests/TEST-INVENTORY.md`'s "`Unused`" bullets.
 /// </summary>
 public sealed class DayTemplateLifecycleTests
 {
@@ -139,29 +139,4 @@ public sealed class DayTemplateLifecycleTests
         Assert.Equal(new DayTemplateUse(Volleyball, "Volleyball Tuesday"), promotedSource.Used);
     }
 
-    /// <summary>Beyond-inventory: a one-date span yields exactly that date.</summary>
-    [Fact]
-    public void An_Override_span_of_one_date_yields_exactly_that_date()
-    {
-        var request = new OverrideSpanRequest(Today, Today, null);
-
-        var dates = request.Dates().ToList();
-
-        Assert.Equal([Today], dates);
-    }
-
-    /// <summary>Beyond-inventory: a multi-date span yields every date inclusive of both ends, ascending.</summary>
-    [Fact]
-    public void An_Override_span_yields_every_date_inclusive_of_both_ends_in_ascending_order()
-    {
-        var from = Today;
-        var to = Today.AddDays(3);
-        var request = new OverrideSpanRequest(from, to, null);
-
-        var dates = request.Dates().ToList();
-
-        Assert.Equal(
-            [from, from.AddDays(1), from.AddDays(2), to],
-            dates);
-    }
 }

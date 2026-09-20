@@ -16,7 +16,11 @@ public sealed class OverrideCommandTests
         var store = new FakeStore(new FakeStoreViewBuilder().WithDayTemplates([template]).Build());
 
         var result = await new CreateOverrideSpan(store).ExecuteAsync(
-            new OverrideSpanRequest(new DateOnly(2026, 12, 24), new DateOnly(2026, 12, 26), template.Id), CancellationToken.None);
+            new OverrideSpanCommandRequest(
+                new DateOnly(2026, 12, 24),
+                new DateOnly(2026, 12, 26),
+                (OverrideSpanMode)new StampOverrideSpan(template.Id)),
+            CancellationToken.None);
 
         Assert.True(result.IsT0);
         Assert.Equal([new DateOnly(2026, 12, 24), new DateOnly(2026, 12, 25), new DateOnly(2026, 12, 26)],
@@ -67,10 +71,39 @@ public sealed class OverrideCommandTests
         var date = DateOnly.MaxValue;
         var store = new FakeStore();
 
-        var result = await new CreateOverrideSpan(store).ExecuteAsync(new OverrideSpanRequest(date, date, null), CancellationToken.None);
+        var result = await new CreateOverrideSpan(store).ExecuteAsync(
+            new OverrideSpanCommandRequest(date, date, (OverrideSpanMode)new BlankOverrideSpan()),
+            CancellationToken.None);
 
         Assert.True(result.IsT0);
         Assert.Equal(date, Assert.Single(store.Read().Overrides).Date);
+    }
+
+    /// <summary>Beyond-inventory: a one-date span yields exactly that date.</summary>
+    [Fact]
+    public void An_Override_span_of_one_date_yields_exactly_that_date()
+    {
+        var date = new DateOnly(2026, 8, 28);
+        var request = new OverrideSpanCommandRequest(date, date, (OverrideSpanMode)new BlankOverrideSpan());
+
+        var dates = request.Dates().ToList();
+
+        Assert.Equal([date], dates);
+    }
+
+    /// <summary>Beyond-inventory: a multi-date span yields every date inclusive of both ends, ascending.</summary>
+    [Fact]
+    public void An_Override_span_yields_every_date_inclusive_of_both_ends_in_ascending_order()
+    {
+        var from = new DateOnly(2026, 8, 28);
+        var to = from.AddDays(3);
+        var request = new OverrideSpanCommandRequest(from, to, (OverrideSpanMode)new BlankOverrideSpan());
+
+        var dates = request.Dates().ToList();
+
+        Assert.Equal(
+            [from, from.AddDays(1), from.AddDays(2), to],
+            dates);
     }
 
     [Fact]

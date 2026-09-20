@@ -73,9 +73,7 @@ public static class OverrideEndpoints
     {
         if (request.Mode is null)
         {
-            return request.TemplateId is null
-                ? OneOf<OverrideSpanMode, string>.FromT0((OverrideSpanMode)new BlankOverrideSpan())
-                : ValidatedStamp(request.TemplateId);
+            return OneOf<OverrideSpanMode, string>.FromT1("mode is required; accepted values are stamp, freeze, blank");
         }
 
         if (string.Equals(request.Mode, "stamp", StringComparison.OrdinalIgnoreCase))

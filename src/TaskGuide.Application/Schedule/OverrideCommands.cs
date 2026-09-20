@@ -7,14 +7,6 @@ namespace TaskGuide.Application.Schedule;
 
 public sealed class CreateOverrideSpan(IStore store)
 {
-    public async Task<OverrideSpanOutcome> ExecuteAsync(OverrideSpanRequest request, CancellationToken cancellationToken)
-    {
-        var mode = request.Stamp is { } templateId
-            ? (OverrideSpanMode)new StampOverrideSpan(templateId)
-            : (OverrideSpanMode)new BlankOverrideSpan();
-        return await ExecuteAsync(new OverrideSpanCommandRequest(request.From, request.To, mode), cancellationToken);
-    }
-
     public async Task<OverrideSpanOutcome> ExecuteAsync(
         OverrideSpanCommandRequest request,
         CancellationToken cancellationToken)

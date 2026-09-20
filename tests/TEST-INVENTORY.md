@@ -828,6 +828,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
 - `POST /api/overrides` freeze copies each date's current shape and preserves Window ids
+- `a span POST with no mode is refused with 400 and writes nothing, whatever templateId carries`
+- `each existing 400 still refuses: stamp with no templateId, a templateId on freeze or blank, and an unrecognised mode`
+- `all three arms still succeed when mode is stated`
 - `GET /api/overrides/clobber-check` names every date in the range that already has one
 - `PATCH /api/overrides/{date}` on a stamped date makes it a one-off day and its use record survives
 - `DELETE /api/overrides/{date}` removes that date's Override
