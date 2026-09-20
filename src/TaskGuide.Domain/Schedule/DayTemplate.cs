@@ -94,16 +94,27 @@ public static class DayTemplateLifecycle
     /// <summary>
     /// Copies a one-off day's shape into its new named template and records that the source date
     /// wore that template. The source remains an Override: promotion never re-links it.
+    /// Copies only the <c>Windows</c> half (accepted gap, `tests/TEST-INVENTORY.md`) — turning a
+    /// frozen date's own Events back into <c>EventPrototypes</c> needs minted
+    /// <c>EventPrototypeId</c>s, and the Domain has no minter.
     /// </summary>
     public static (DayTemplate Template, DateOverride Source) Promote(DateOverride source, DayTemplate template) =>
         (template with { Windows = [.. source.Windows] }, source with { Used = new DayTemplateUse(template.Id, template.Name) });
 
     /// <summary>
     /// Lays a template's Windows onto a date. This is a value copy of the collection, while each
-    /// Window retains its id so a Fire row already recorded for the date still matches.
+    /// Window retains its id so a Fire row already recorded for the date still matches. Also
+    /// materialises the template's Event prototypes as the date's own Events (#153) — the raw
+    /// materialisation, with no Event exception folded in. An exception is a separate stored fact
+    /// the Override never absorbs; it stays live and is applied at read by <c>DayShapeReader</c>
+    /// regardless (#153 review finding 1/5), so a stamp cannot resurrect a deletion recorded for
+    /// this date.
     /// </summary>
     public static DateOverride Stamp(DateOnly date, DayTemplate template) =>
-        new(date, [.. template.Windows], new DayTemplateUse(template.Id, template.Name));
+        new(date, [.. template.Windows], new DayTemplateUse(template.Id, template.Name))
+        {
+            Events = RecurringEvents.On(date, template.EventPrototypes),
+        };
 
     /// <summary>Drops an `Unused` template; Overrides need no repair because they hold copies.</summary>
     public static IReadOnlyList<DayTemplate> Delete(

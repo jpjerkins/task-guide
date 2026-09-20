@@ -282,7 +282,16 @@ public sealed class StartupPlanner(
                     return w with { Tags = newTags };
                 }).ToArray();
 
-                return o with { Windows = windows };
+                // null stays null: sweeping must never turn the absent Events arm into the
+                // present one.
+                var events = o.Events?.Select(e =>
+                {
+                    var newTags = RegistrySweep.Sweep(e.Tags, registry);
+                    if (!e.Tags.Equals(newTags)) changed = true;
+                    return e with { Tags = newTags };
+                }).ToArray();
+
+                return o with { Windows = windows, Events = events };
             }).ToArray();
 
             return (swept, changed);

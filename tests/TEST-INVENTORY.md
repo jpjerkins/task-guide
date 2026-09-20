@@ -153,6 +153,11 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - `DayTemplate` `Windows` and `EventPrototypes` compare equal regardless of order, and hash equal —
   a Window is a per-day instance, not a position (`CONTEXT.md` § Availability Window)
 - `DateOverride.Windows` compares equal regardless of order, and hashes equal
+- `DateOverride.Events` compares equal regardless of order, and hashes equal
+- a `DateOverride` whose `Events` is absent compares unequal to one whose `Events` is empty — the
+  two arms of absence are different records, not two spellings of one (#153) — the choice
+  ADR-0010's checklist for a new codec ("key it, decide which arm of absence applies, wrap the
+  boundary") asks every codec to make for itself
 - `DayShape` `Windows` and `Events` compare equal regardless of order, and hash equal
 - **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
   and `this[DayOfWeek]` indexes them positionally
@@ -321,6 +326,23 @@ duplicate-count-sensitive, following `TagSet`): everything else.
   derived — the rule is stateless
 - every other Dimension value stays frozen at the original Window's
 - an empty re-fire pushes once and ends the chain
+
+### Recurring-event materialisation (#153)
+
+`RecurringEvents.On` — the prototype-to-Event materialisation `DayShapeReader` owned privately
+until `Freeze` and `Stamp` needed it too, so it moved to `Domain/Schedule/`. The DayShapeReader
+section below pins the same rules *through the reader*; these pin them at the shared home, which is
+what keeps the three callers from drifting.
+
+- a recurring instance's Event id is `evt_rec_{yyyyMMdd}_{prototypeId}` — #24 makes Fire rows keyed
+  on that id load-bearing, so the format is the contract, not an implementation detail
+- a deleted instance's Event exception drops it
+- an edited instance's Event exception replaces its name and span, leaving the prototype untouched
+- an Event exception is applied over an Override's own Events, not only over the template's — a
+  deleted instance stays deleted on a frozen or stamped date, so the shape and `AbsenceRule` can
+  never disagree (`CONTEXT.md` § Event exception: deleting an instance does not stamp an Override)
+- an exception matches an Override's Event by its `evt_rec_{yyyyMMdd}_{prototypeId}` id, so a
+  promoted or hand-authored one-off Event on the same date is left untouched
 
 ### Derived-obligation rules
 
@@ -678,6 +700,13 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - no codec writes a `status` property, whatever type it would carry — `PatternCodec`
 - `overrides.json` round-trips the golden store unchanged
 - a one-off day round-trips with a null `used`
+- an Override's own `events` round-trip, preserving each Event's id
+- an Override with no `events` property reads as absent and writes none back — every pre-#153 row of
+  the golden fixture is byte-identical after a round trip (#153, the absent arm)
+- an Override with an empty `events` array round-trips as present-and-empty, never as absent
+- an Override event whose `date` does not match its row's date is rejected at read, naming both
+  dates and the event id (#153) — the store file is a trust boundary and hand-editing is an
+  expected repair path
 - no codec writes a `status` property, whatever type it would carry — `OverrideCodec`
 - `events.json` round-trips the golden store unchanged
 - an Event's loose Tags survive the round trip, and are what a derived-obligation rule reads
@@ -704,6 +733,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - the registry sweep makes no `MutateAsync` call when nothing moved
 - the registry sweep promotes a loose Tag the registry now claims, and writes the change
 - the registry sweep promotes a loose Tag on a Day template Window
+- the registry sweep demotes a retired Dimension value inside a frozen Override's own Events (#153)
+- the registry sweep leaves an Override's absent Events absent (#153)
 - an empty `/data` starts and the active Pattern resolves without throwing
 - a fresh `/data` seeds one vanilla weekly Pattern of a single plain Day template
 - the default Pattern seed takes no snapshot
@@ -738,8 +769,23 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - the use record survives the date becoming a one-off day
 - re-stamping replaces the use record rather than appending
 - promoting a one-off day writes the source date's use record and **does not re-link**
+- **accepted gap (#153):** `Promote` copies only the Windows half — a promoted frozen one-off day
+  yields a template with no `EventPrototypes`, because turning `Event`s back into prototypes needs
+  minted `EventPrototypeId`s and the Domain has no minter
 - freezing an Override span copies each dates current windows, preserves their ids, and retains an
   existing stamped Override's use record
+- freezing an Override span captures each date's computed recurring events alongside its windows, so
+  a later Pattern switch reaches neither half
+- freezing a date whose recurring instance was deleted by an Event exception captures it raw,
+  leaving the exception to apply at read, so the resurrection is prevented on the shape, not in the
+  stored Override
+- freezing leaves the date's dated Events in `events.json` uncopied, so deleting the Override
+  restores the Pattern's events with nothing lost and nothing left over
+- stamping a Day template lays its Event prototypes down as the date's own Events
+- blanking a date writes an empty Events list, not an absent one
+- creating an overlapping Event on a blanked date leaves its empty Events empty — the one-off day it
+  generates preserves the Override's Events arm rather than resetting it to absent
+- creating an overlapping Event on a frozen date leaves the frozen Events intact
 - `Unused` is false for a template referenced only by a **dormant** Pattern
 - `Unused` is false for a template stamped within ±13 months, in **either** direction
 - deleting an `Unused` template corrupts no record
@@ -794,6 +840,16 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - an Event exception for a different prototype on the same date changes nothing
 - reading a day's shape writes nothing — no Override is materialised and `MutateAsync` is never called
 - a recurring instance's Event id is the same on two reads of the same date
+- an Override carrying its own Events supplies them, and the weekday template's prototypes do not
+  leak through
+- an Override with an empty Events list is a shape, not an absence — no recurring instance leaks
+  through, the same way zero Windows is a shape
+- an Override whose Events is absent still takes its recurring instances from the weekday template,
+  so a pre-#153 Override reads exactly as it did
+- a dated Event on the date appears in the shape even when the Override carries its own Events
+- a deleted instance's Event exception drops it from a date whose Override carries its own Events
+- a moved instance's Event exception renames and re-spans it on a date whose Override carries its
+  own Events, so the absence rule still sees a move rather than an absence
 
 ---
 
@@ -1151,7 +1207,7 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   `OverrideSpanApiRequest`, never a null-`templateId` default standing in for "blank" (#145). The
   `templateId` alone cannot tell `freeze` and `blank` apart — both send `null` — so `mode` is what
   the server and every caller key off
-- stamping a Day template onto a date (either scope) renders the copies-the-windows-in note, and
+- stamping a Day template onto a date (either scope) renders the copies-the-shape-in note, and
   sends one clobber-check-then-POST span write — `{ from, to, templateId, mode: 'stamp' }`,
   `from === to` for a single date — never the old per-date `PUT .../stamp`
 - freezing a range skips the clobber-check GET entirely and POSTs straight through with no
@@ -1361,13 +1417,22 @@ own shape"** under a `Detach the span` heading — the row this finding removed,
 that actually does what its wording says, with no destructive marker and no confirmation (nothing
 on it is ever replaced).
 
-**Windows only, not the whole `DayShape`** (#145 review finding 1): `Freeze` is
-`new DateOverride(date, [.. windows], existing?.Used)` — recurring events are *not* captured, and
-`DayShapeReader.For` resolves them from the active Pattern's `EventPrototypes` unconditionally,
-ignoring the Override. So a later Pattern switch still changes the *events* on a frozen date. The
-row's copy says "keeps the windows it has now" for exactly that reason and must not be widened back
-to "what is on it" — that would be #140 finding 1's wording-vs-write mismatch again, moved from
-windows to events. Capturing prototypes in the Freeze arm is a server change and is not #145's.
+**Windows only, not the whole `DayShape`** (#145 review finding 1): `Freeze` was
+`new DateOverride(date, [.. windows], existing?.Used)` — recurring events were *not* captured, and
+`DayShapeReader.For` resolved them from the active Pattern's `EventPrototypes` unconditionally,
+ignoring the Override. So a later Pattern switch still changed the *events* on a frozen date. The
+row's copy said "keeps the windows it has now" for exactly that reason and was not to be widened
+back to "what is on it" — that would have been #140 finding 1's wording-vs-write mismatch again,
+moved from windows to events. Capturing prototypes in the Freeze arm was a server change and was
+not #145's.
+
+**Closed by #153**: `DateOverride` gained its own `Events` (null = absent, taking the Pattern's, the
+pre-#153 meaning; present, including `[]` = the date's own, `CONTEXT.md` § Override). `Freeze` now
+captures each date's computed recurring events alongside its Windows, and `DayShapeReader.For`
+consults an Override's Events when it has them. The narrowing above is now stale on purpose — the
+gap it described is closed, not reopened — and the row's copy was widened from "windows" to
+"shape" to match. The visible row name, `Keep each date's own shape`, never changed; only `.sub2`
+did, and no test pins its exact text, so widening it needed no test edit.
 
 Additional tests at this subsection's end (existing range and input-node tests remain above):
 

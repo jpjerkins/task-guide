@@ -11,8 +11,9 @@ namespace TaskGuide.Infrastructure.Storage;
 /// <summary>
 /// The shared JSON codec primitives every store codec is built from: the three date/time
 /// encodings (`TaskCodec` fixture README — authored clock times, calendar dates, recorded
-/// instants), <see cref="TagSet"/>, <see cref="Offset"/>, and the Availability Window shape
-/// shared by `day-templates.json` and `overrides.json`.
+/// instants), <see cref="TagSet"/>, <see cref="Offset"/>, the Availability Window shape shared by
+/// `day-templates.json` and `overrides.json`, and the Event shape shared by `events.json` and an
+/// Override's own `events` (`overrides.json`, #153).
 /// </summary>
 /// <remarks>
 /// Extracted from `TaskCodec`, which was the first and, until now, only codec. Behaviour is
@@ -215,6 +216,31 @@ public static class CodecPrimitives
         WriteClockTime(w, "start", window.Start);
         WriteClockTime(w, "end", window.End);
         WriteTagSet(w, window.Tags);
+        w.WriteEndObject();
+    }
+
+    // ---- Event (shared by events.json and an Override's own events) ----
+
+    public static Event ReadEvent(JsonElement e) =>
+        new(
+            new EventId(e.GetProperty("id").GetString()!),
+            ReadDate(e.GetProperty("date")),
+            e.GetProperty("name").GetString()!,
+            ReadClockTime(e.GetProperty("start")),
+            ReadClockTime(e.GetProperty("end")),
+            ReadTagSet(e),
+            ReadOffsetOrNull(e, "absenceNotice"));
+
+    public static void WriteEvent(Utf8JsonWriter w, Event @event)
+    {
+        w.WriteStartObject();
+        w.WriteString("id", @event.Id.Value);
+        WriteDateOrNull(w, "date", @event.Date);
+        w.WriteString("name", @event.Name);
+        WriteClockTime(w, "start", @event.Start);
+        WriteClockTime(w, "end", @event.End);
+        WriteTagSet(w, @event.Tags);
+        WriteOffsetOrNull(w, "absenceNotice", @event.AbsenceNotice);
         w.WriteEndObject();
     }
 }

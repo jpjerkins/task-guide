@@ -123,18 +123,20 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
     {invalidRange && <div className="note" role="alert">Choose a start and end date; the end must not precede the start.</div>}
     {error && <div className="note" role="alert">{error}</div>}
     {inRange && <>
-      {/* Freeze (mode: 'freeze') copies each date's current WINDOWS into its own Override —
-          CreateOverrideSpan's Freeze arm is `new DateOverride(date, [.. windows], existing?.Used)`,
-          reading any existing Override's Windows first, so nothing on the span is ever replaced and
-          the row carries no destructive marker. Windows only, NOT the whole DayShape: recurring
-          events resolve from the active Pattern's EventPrototypes unconditionally
-          (DayShapeReader.For), so a later Pattern switch still changes the events on a frozen date.
-          The copy below says "windows" for that reason and must not be widened to "shape". */}
+      {/* Freeze (mode: 'freeze') copies each date's current WHOLE SHAPE — windows and events —
+          into its own Override. CreateOverrideSpan's Freeze arm reads any existing Override's
+          Windows and Events first, falling back to the active Pattern's template (its Windows and
+          its EventPrototypes materialised for the date) only for whichever half is missing, so
+          nothing on the span is ever replaced and the row carries no destructive marker. #153
+          closed the gap this comment used to warn about: recurring events used to resolve from
+          the active Pattern unconditionally (DayShapeReader.For), so a later Pattern switch still
+          reached the events on an otherwise-frozen date — DateOverride now carries its own Events,
+          and DayShapeReader consults them, so a freeze reaches both halves. */}
       <div className="sec-h">Detach the span</div>
       <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span, 'freeze')}>
         <span className="who">
           <span className="nm">Keep each date's own shape</span>
-          <span className="sub2">each date keeps the windows it has now, and later Pattern edits will not reach them</span>
+          <span className="sub2">each date keeps the shape it has now, and later Pattern edits will not reach them</span>
         </span></button></div>
       {/* Blank (mode: 'blank') writes a zero-window Override for every date in the span — the
           server's genuinely destructive arm, so it keeps the .pill.due marker the freeze row
@@ -143,14 +145,14 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
       <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span, 'blank')}>
         <span className="who">
           <span className="nm">Blank every date in the span<span className="pill due">destructive</span></span>
-          <span className="sub2">every window on those dates is removed and nothing will fire on them</span>
+          <span className="sub2">the whole shape on those dates is removed and nothing will fire on them</span>
         </span></button></div>
     </>}
     {/* Captions the shape list, and must stay below the freeze and blank rows. In range scope the
         sheet offers three arms and only this one stamps — at the top of the sheet the sentence
         reads as the sheet's own instruction and is then false for the two rows above. Date scope
         renders neither of those rows, so it is the first thing under the modebar there either way. */}
-    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
+    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the shape in — <b>not</b> a link, so editing the shape later will not follow.</div>
     {groups.map(group => {
       const withTog = !toggleShown
       toggleShown = true

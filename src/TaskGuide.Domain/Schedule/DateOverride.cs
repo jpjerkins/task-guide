@@ -27,16 +27,31 @@ public sealed record DateOverride(
     /// <summary>A one-off day has no use record — nothing was stamped.</summary>
     public bool IsOneOffDay => Used is null;
 
-    /// <summary><see cref="Windows"/> compares as a multiset — a Window is a per-day instance,
-    /// not a position (`CONTEXT.md` § Availability Window).</summary>
+    /// <summary>
+    /// <c>null</c> = absent — the date's Events come from the active Pattern, exactly as before
+    /// this member existed. Non-null, <b>including empty</b>, = present — the date's own Events,
+    /// no prototype leaks through. The two arms are different records, not two spellings of one
+    /// (#153) — ADR-0010's checklist for a new codec ("key it, decide which arm of absence
+    /// applies, wrap the boundary") is what this member answers for <c>Events</c>.
+    /// </summary>
+    public IReadOnlyList<Event>? Events { get; init; }
+
+    /// <summary><see cref="Windows"/> and <see cref="Events"/> compare as multisets — a Window or
+    /// Event is a per-day instance, not a position (`CONTEXT.md` § Availability Window). A
+    /// <c>null</c> <see cref="Events"/> never compares equal to an empty one.</summary>
     public bool Equals(DateOverride? other) =>
         other is not null
         && Date == other.Date
         && StructuralEquality.MultisetEqual(Windows, other.Windows)
+        && StructuralEquality.MultisetEqual(Events, other.Events)
         && Equals(Used, other.Used);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Date, StructuralEquality.MultisetHash(Windows), Used);
+        HashCode.Combine(
+            Date,
+            StructuralEquality.MultisetHash(Windows),
+            Events is null ? 0 : StructuralEquality.MultisetHash(Events),
+            Used);
 }
 
 /// <summary>

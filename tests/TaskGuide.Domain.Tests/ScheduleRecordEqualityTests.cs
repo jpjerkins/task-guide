@@ -61,6 +61,29 @@ public sealed class ScheduleRecordEqualityTests
     }
 
     [Fact]
+    public void DateOverride_Events_compares_equal_regardless_of_order_and_hashes_equal()
+    {
+        var e1 = Event("evt_1", "Concert");
+        var e2 = Event("evt_2", "Dentist");
+
+        var a = new DateOverride(new DateOnly(2026, 1, 1), [], null) { Events = new[] { e1, e2 } };
+        var b = new DateOverride(new DateOnly(2026, 1, 1), [], null) { Events = new[] { e2, e1 } };
+
+        Assert.NotSame(a.Events, b.Events);
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void A_DateOverride_whose_Events_is_absent_compares_unequal_to_one_whose_Events_is_empty()
+    {
+        var absent = new DateOverride(new DateOnly(2026, 1, 1), [], null);
+        var present = new DateOverride(new DateOnly(2026, 1, 1), [], null) { Events = [] };
+
+        Assert.False(absent.Equals(present));
+    }
+
+    [Fact]
     public void DayShape_Windows_and_Events_compare_equal_regardless_of_order()
     {
         var w1 = Window("w_1", "Morning");

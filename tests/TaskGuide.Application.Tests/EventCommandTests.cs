@@ -30,6 +30,52 @@ public sealed class EventCommandTests
         Assert.IsType<OverridesWrite>(mutation.OrderedWrites[1]);
     }
 
+    [Fact]
+    public async Task An_overlapping_Event_created_on_a_blanked_date_leaves_its_empty_Events_empty()
+    {
+        var date = new DateOnly(2026, 10, 10);
+        var window = new AvailabilityWindow(new WindowId("w_afternoon"), "Afternoon", new TimeOnly(13, 0), new TimeOnly(17, 0), TagSet.Empty);
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithOverrides([new DateOverride(date, [window], null) { Events = [] }])
+            .Build());
+        var @event = new Event(new EventId("evt_tournament"), date, "Sam's tournament", new TimeOnly(14, 0), new TimeOnly(16, 0), TagSet.Empty, null);
+
+        await new CreateEvent(store, new TestIdMinter()).ExecuteAsync(
+            @event,
+            new Dictionary<WindowId, OverlapResolution> { [window.Id] = OverlapResolution.Split },
+            CancellationToken.None);
+
+        var mutation = Assert.Single(store.Mutations);
+        var write = Assert.IsType<OverridesWrite>(mutation.OrderedWrites[1]);
+        var overrideDay = Assert.Single(write.Overrides, o => o.Date == date);
+        Assert.NotNull(overrideDay.Events);
+        Assert.Empty(overrideDay.Events);
+    }
+
+    [Fact]
+    public async Task An_overlapping_Event_created_on_a_frozen_date_leaves_its_Events_intact()
+    {
+        var date = new DateOnly(2026, 10, 10);
+        var window = new AvailabilityWindow(new WindowId("w_afternoon"), "Afternoon", new TimeOnly(13, 0), new TimeOnly(17, 0), TagSet.Empty);
+        var frozenEvent = new Event(new EventId("evt_frozen_karate"), date, "Karate", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithOverrides([new DateOverride(date, [window], null) { Events = [frozenEvent] }])
+            .Build());
+        var @event = new Event(new EventId("evt_tournament"), date, "Sam's tournament", new TimeOnly(14, 0), new TimeOnly(16, 0), TagSet.Empty, null);
+
+        await new CreateEvent(store, new TestIdMinter()).ExecuteAsync(
+            @event,
+            new Dictionary<WindowId, OverlapResolution> { [window.Id] = OverlapResolution.Split },
+            CancellationToken.None);
+
+        var mutation = Assert.Single(store.Mutations);
+        var write = Assert.IsType<OverridesWrite>(mutation.OrderedWrites[1]);
+        var overrideDay = Assert.Single(write.Overrides, o => o.Date == date);
+        Assert.NotNull(overrideDay.Events);
+        var actual = Assert.Single(overrideDay.Events);
+        Assert.Equal(frozenEvent, actual);
+    }
+
     private sealed class TestIdMinter : IIdMinter
     {
         public TaskId NextTaskId() => throw new NotSupportedException();

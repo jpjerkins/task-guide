@@ -25,30 +25,12 @@ public sealed class DayShapeReader(IStoreReader store) : IDayShapeReader
         windows ??= template.Windows;
         var events = view.Events
             .Where(e => e.Date == date)
-            .Concat(template.EventPrototypes.SelectMany(p => RecurringInstance(view, date, p)))
+            .Concat(RecurringEvents.WithExceptions(
+                date,
+                dateOverride?.Events ?? RecurringEvents.On(date, template.EventPrototypes),
+                view.EventExceptions))
             .ToArray();
 
         return new DayShape(date, windows, events, IsOverridden: dateOverride is not null);
     }
-
-    private static IEnumerable<Event> RecurringInstance(IStoreView view, DateOnly date, EventPrototype prototype)
-    {
-        var exception = view.EventExceptions.SingleOrDefault(e => e.Date == date && e.PrototypeId == prototype.Id);
-        if (exception?.Deleted == true)
-        {
-            yield break;
-        }
-
-        yield return new Event(
-            RecurringEventId(date, prototype.Id),
-            date,
-            exception?.Name ?? prototype.Name,
-            exception?.Start ?? prototype.Start,
-            exception?.End ?? prototype.End,
-            prototype.Tags,
-            prototype.AbsenceNotice);
-    }
-
-    private static EventId RecurringEventId(DateOnly date, EventPrototypeId prototype) =>
-        new($"evt_rec_{date:yyyyMMdd}_{prototype.Value}");
 }

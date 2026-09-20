@@ -447,6 +447,54 @@ public sealed class StartupBootstrapTests : IDisposable
     }
 
     /// <summary>
+    /// #153 gave Overrides a fifth tag-carrying location — an Override's own Events — and the
+    /// sweep originally reached only the other four (Tasks, Day template Windows, Override
+    /// Windows, dated Events). A frozen Override's Events is where a retired Dimension value
+    /// would otherwise survive the sweep silently.
+    /// </summary>
+    [Fact]
+    public async Task The_registry_sweep_demotes_a_retired_Dimension_value_inside_a_frozen_Overrides_own_Events()
+    {
+        SeedUnrelatedPatternFileRaw();
+        var store = new JsonStore(_dataDir);
+        var date = new DateOnly(2026, 8, 31);
+        var retiredTagged = new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>> { [new DimensionId("loc")] = [new TagValue("garage")] }, []);
+        var frozenEvent = new Event(new EventId("evt_frozen_karate"), date, "Karate", new TimeOnly(18, 0), new TimeOnly(19, 0), retiredTagged, null);
+        var frozenOverride = new DateOverride(date, [], null) { Events = [frozenEvent] };
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([frozenOverride])]), CancellationToken.None);
+
+        await RunAsync(store, registry: new DimensionRegistry([]));
+
+        var reloaded = new JsonStore(_dataDir);
+        var sweptOverride = Assert.Single(reloaded.Read().Overrides);
+        Assert.NotNull(sweptOverride.Events);
+        var sweptEvent = Assert.Single(sweptOverride.Events);
+        Assert.Empty(sweptEvent.Tags.On(new DimensionId("loc")));
+        var demoted = Assert.Single(sweptEvent.Tags.LooseTags);
+        Assert.Equal("garage", demoted.Value);
+    }
+
+    /// <summary>
+    /// The sweep must never turn the absent arm into the present one — an Override untouched by
+    /// #153 keeps reading exactly as it did before Events existed.
+    /// </summary>
+    [Fact]
+    public async Task The_registry_sweep_leaves_an_Overrides_absent_Events_absent()
+    {
+        SeedUnrelatedPatternFileRaw();
+        var store = new JsonStore(_dataDir);
+        var date = new DateOnly(2026, 8, 31);
+        var plainOverride = new DateOverride(date, [], null);
+        await store.MutateAsync<Never>(_ => new StoreMutation([new OverridesWrite([plainOverride])]), CancellationToken.None);
+
+        await RunAsync(store);
+
+        var reloaded = new JsonStore(_dataDir);
+        var sweptOverride = Assert.Single(reloaded.Read().Overrides);
+        Assert.Null(sweptOverride.Events);
+    }
+
+    /// <summary>
     /// Task 8c, Part 1's regression net. <see cref="PatternBook.Active"/> calls
     /// <c>Patterns.Single(...)</c>, which throws on an empty list — a genuinely fresh `/data`,
     /// before this seed exists, crashes here on the first day-shape read. Deliberately does not
