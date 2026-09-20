@@ -70,6 +70,8 @@ const retainedSelectors = new Set([
   '.range.unset',
   '.ticks',
   '.hint',
+  // tag-entry.prototype.html:148 — a third prototype this guard does not source; see #177
+  'input.field.date',
 ]);
 // schedule-editing is later and supplies every shared-selector value, so it overrides ui-screens
 const source = rules(styleFrom('docs/prototypes/ui-screens.prototype.html'));

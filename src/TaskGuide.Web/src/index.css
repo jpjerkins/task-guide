@@ -1,7 +1,9 @@
 /* Union of docs/prototypes/ui-screens.prototype.html and schedule-editing.prototype.html.
    schedule-editing is later and supplies every shared-selector cosmetic value.
    `.icon` intentionally widens the prototypes' `.nav button.icon` (a sheet-header Cancel has no
-   `.nav` ancestor); see #125 and selectorAliases in scripts/check-css-union.mjs. */
+   `.nav` ancestor); see #125 and selectorAliases in scripts/check-css-union.mjs.
+   `input.field.date` is ported from a third prototype, tag-entry.prototype.html, which this guard
+   does not source; it rides retainedSelectors and so is exempt from declaration drift. See #177. */
 
 :root, :root[data-theme="light"] {
     --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2; --surface-3:#DFE4EA;
