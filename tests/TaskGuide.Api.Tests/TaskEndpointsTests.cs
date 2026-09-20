@@ -317,6 +317,17 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_tasks_id_returns_404_for_a_well_formed_id_that_does_not_exist()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW");
+        await SeedTasksAsync(task);
+
+        var response = await _client.GetAsync("/api/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FBX");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task A_posted_task_is_persisted_to_tasks_json_on_disk()
     {
         await _client.PostAsJsonAsync("/api/tasks", new { title = "Descale the kettle", duration = 30 });
