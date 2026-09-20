@@ -155,7 +155,9 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - `DateOverride.Windows` compares equal regardless of order, and hashes equal
 - `DateOverride.Events` compares equal regardless of order, and hashes equal
 - a `DateOverride` whose `Events` is absent compares unequal to one whose `Events` is empty — the
-  two arms of absence are different records, not two spellings of one (ADR-0010b)
+  two arms of absence are different records, not two spellings of one (#153) — the choice
+  ADR-0010's checklist for a new codec ("key it, decide which arm of absence applies, wrap the
+  boundary") asks every codec to make for itself
 - `DayShape` `Windows` and `Events` compare equal regardless of order, and hash equal
 - **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
   and `this[DayOfWeek]` indexes them positionally
@@ -700,7 +702,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - a one-off day round-trips with a null `used`
 - an Override's own `events` round-trip, preserving each Event's id
 - an Override with no `events` property reads as absent and writes none back — every pre-#153 row of
-  the golden fixture is byte-identical after a round trip (ADR-0010b, the absent arm)
+  the golden fixture is byte-identical after a round trip (#153, the absent arm)
 - an Override with an empty `events` array round-trips as present-and-empty, never as absent
 - no codec writes a `status` property, whatever type it would carry — `OverrideCodec`
 - `events.json` round-trips the golden store unchanged

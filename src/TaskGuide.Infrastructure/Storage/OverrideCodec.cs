@@ -11,10 +11,12 @@ namespace TaskGuide.Infrastructure.Storage;
 /// and the optional <see cref="DayTemplateUse"/> use record carries the template name exactly as
 /// it was captured, not resolved by looking the id up in `day-templates.json`.
 /// <para>
-/// The optional <c>events</c> property is #153's two-armed absence (ADR-0010b): missing means
+/// The optional <c>events</c> property is #153's two-armed absence: missing means
 /// <see cref="DateOverride.Events"/> is <c>null</c> — the date's Events still come from the
 /// Pattern — and present, including <c>[]</c>, means the date's own Events. Never written as an
-/// explicit JSON <c>null</c>, which would be a third encoding of the same absence.
+/// explicit JSON <c>null</c>, which would be a third encoding of the same absence. This is the
+/// choice ADR-0010's checklist for a new codec ("key it, decide which arm of absence applies,
+/// wrap the boundary") asks every codec to make for itself.
 /// </para>
 /// </summary>
 public static class OverrideCodec
@@ -45,10 +47,10 @@ public static class OverrideCodec
                 .Select(CodecPrimitives.ReadWindow)
                 .ToList();
 
-            // Absence has two arms (ADR-0010b): the property missing means the date's Events
-            // still come from the Pattern (an Override written before #153); present — including
-            // an empty array — means the date's own Events. TryGetProperty, not GetProperty,
-            // precisely because absence is meaningful here.
+            // #153's two-armed absence: the property missing means the date's Events still come
+            // from the Pattern (an Override written before #153); present — including an empty
+            // array — means the date's own Events. TryGetProperty, not GetProperty, precisely
+            // because absence is meaningful here.
             IReadOnlyList<Event>? events = element.TryGetProperty("events", out var eventsElement)
                 ? eventsElement.EnumerateArray().Select(CodecPrimitives.ReadEvent).ToList()
                 : null;
@@ -84,7 +86,7 @@ public static class OverrideCodec
 
             // Omitted, not `null`, when absent — a written `null` would be a third on-disk
             // encoding of the same thing `TryGetProperty`'s absence already means, and omitting
-            // keeps every pre-#153 fixture row byte-identical (ADR-0010b).
+            // keeps every pre-#153 fixture row byte-identical.
             if (dateOverride.Events is { } events)
             {
                 writer.WritePropertyName("events");
