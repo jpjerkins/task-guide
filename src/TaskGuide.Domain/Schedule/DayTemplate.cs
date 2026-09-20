@@ -94,6 +94,9 @@ public static class DayTemplateLifecycle
     /// <summary>
     /// Copies a one-off day's shape into its new named template and records that the source date
     /// wore that template. The source remains an Override: promotion never re-links it.
+    /// Copies only the <c>Windows</c> half (accepted gap, `tests/TEST-INVENTORY.md`) — turning a
+    /// frozen date's own Events back into <c>EventPrototypes</c> needs minted
+    /// <c>EventPrototypeId</c>s, and the Domain has no minter.
     /// </summary>
     public static (DayTemplate Template, DateOverride Source) Promote(DateOverride source, DayTemplate template) =>
         (template with { Windows = [.. source.Windows] }, source with { Used = new DayTemplateUse(template.Id, template.Name) });
