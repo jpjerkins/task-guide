@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchDimensions, fetchTasks } from './client'
+import { fetchDimensions, fetchTasks, setTaskDuration } from './client'
 
 // The generated `TaskResponse.duration` is `number | string | null` — .NET 10's OpenAPI
 // generator describes an int32 as permitting a string on the wire. `client.ts` is the boundary
@@ -100,5 +100,42 @@ describe('fetchDimensions', () => {
     const dimensions = await fetchDimensions()
 
     expect(dimensions).toEqual([])
+  })
+})
+
+describe('fetchTasks with a status filter', () => {
+  it('requests the unprocessed status filter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchTasks('unprocessed')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/tasks?status=unprocessed')
+  })
+
+  it('requests the stale status filter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchTasks('stale')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/tasks?status=stale')
+  })
+})
+
+describe('setTaskDuration', () => {
+  it('PUTs the bucket to the duration endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await setTaskDuration('t1', '30')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/tasks/t1/duration',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ duration: '30' }),
+      }),
+    )
   })
 })

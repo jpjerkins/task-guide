@@ -64,9 +64,14 @@ function toTask(raw: TaskResponse): Task {
   }
 }
 
-export async function fetchTasks(): Promise<Task[]> {
-  const raw = await getJson<TaskResponse[]>('/api/tasks')
+export async function fetchTasks(status?: 'unprocessed' | 'stale'): Promise<Task[]> {
+  const path = status ? `/api/tasks?status=${status}` : '/api/tasks'
+  const raw = await getJson<TaskResponse[]>(path)
   return raw === null ? [] : raw.map(toTask)
+}
+
+export async function setTaskDuration(id: string, duration: string): Promise<void> {
+  await sendJson('PUT', `/api/tasks/${id}/duration`, { duration })
 }
 
 export async function createTask(task: NewTask): Promise<void> {
