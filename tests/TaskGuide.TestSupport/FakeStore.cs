@@ -38,7 +38,22 @@ public sealed class FakeStore : IStore
     /// write lock (<see cref="IStore"/>'s doc), and two concurrent callers racing this fake
     /// unlocked would let the second silently discard the first's writes (#77 review finding 3).
     /// </summary>
+    // JsonStore.MutateAsync is async, so every throw inside it reaches the caller as a faulted
+    // Task, never a synchronous throw out of the call itself. A caller that starts two mutations
+    // before awaiting either must see the same shape here (#117 finding 2).
     public Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Task.FromResult(Mutate(mutation, cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<OneOf<Applied, T>>(ex);
+        }
+    }
+
+    private OneOf<Applied, T> Mutate<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -49,7 +64,7 @@ public sealed class FakeStore : IStore
             if (!outcome.IsT0)
             {
                 RefusalCount++;
-                return Task.FromResult(OneOf<Applied, T>.FromT1(outcome.AsT1));
+                return OneOf<Applied, T>.FromT1(outcome.AsT1);
             }
 
             var storeMutation = outcome.AsT0;
@@ -92,7 +107,7 @@ public sealed class FakeStore : IStore
             // review finding 4).
             _mutations.Add(storeMutation);
 
-            return Task.FromResult(OneOf<Applied, T>.FromT0(new Applied()));
+            return OneOf<Applied, T>.FromT0(new Applied());
         }
     }
 

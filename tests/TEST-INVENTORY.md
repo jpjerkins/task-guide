@@ -600,6 +600,9 @@ directly.
   matching `JsonStore` (#116)
 - an unrecognised payload as the very first write leaves `LastWriteSucceeded` untouched,
   matching `JsonStore` (#116)
+- `MutateAsync` faults its returned `Task` instead of throwing synchronously, for an
+  already-cancelled token, for a `FailNextWrite` failure, and for an unrecognised write —
+  matching `JsonStore`, whose `MutateAsync` is `async` (#117)
 
 ### The Reminder landing page read (#129)
 

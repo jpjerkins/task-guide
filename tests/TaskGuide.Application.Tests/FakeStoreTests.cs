@@ -341,4 +341,43 @@ public sealed class FakeStoreTests
 
         Assert.Null(store.LastWriteSucceeded);
     }
+
+    /// <summary>#117 finding 2: <c>JsonStore.MutateAsync</c> is an <c>async</c> method, so a throw
+    /// anywhere inside it reaches the caller as a faulted <see cref="Task"/>, never a synchronous
+    /// throw out of the call itself. A caller that starts two mutations before awaiting either
+    /// (e.g. <c>Task.WhenAll</c>) must see the same shape against this fake.</summary>
+    [Fact]
+    public async Task MutateAsync_faults_its_Task_instead_of_throwing_synchronously_for_an_already_cancelled_token()
+    {
+        var store = new FakeStore();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var task = store.MutateAsync<Never>(_ => new StoreMutation([]), cts.Token);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => task);
+    }
+
+    /// <summary>#117 finding 2: same shape for the <see cref="FakeStore.FailNextWrite"/> path.</summary>
+    [Fact]
+    public async Task MutateAsync_faults_its_Task_instead_of_throwing_synchronously_for_a_failed_write()
+    {
+        var store = new FakeStore();
+        var task = NewTask("t_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Water the plants");
+        store.FailNextWrite();
+
+        var mutateTask = store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite([task])]), CancellationToken.None);
+
+        await Assert.ThrowsAsync<IOException>(() => mutateTask);
+    }
+
+    /// <summary>#117 finding 2: same shape for an unrecognised write payload.</summary>
+    [Fact]
+    public async Task MutateAsync_faults_its_Task_instead_of_throwing_synchronously_for_an_unrecognised_write()
+    {
+        var store = new FakeStore();
+
+        var task = store.MutateAsync<Never>(_ => new StoreMutation([new UnrecognisedWrite()]), CancellationToken.None);
+
+        await Assert.ThrowsAsync<NotImplementedException>(() => task);
+    }
 }
