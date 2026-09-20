@@ -134,7 +134,7 @@ public static class TaskEndpoints
 
         // ?status=unprocessed|stale|active|done|orphan — Status is derived per request, never read
         // from storage. `orphan` is a third, disjoint filter, not a Status.
-        tasks.MapGet("/{id}", Results<Ok<TaskResponse>, NotFound> (
+        tasks.MapGet("/{id}", Results<Ok<TaskResponse>, BadRequest<object>, NotFound<object>> (
             string id,
             IStore store,
             DimensionRegistry registry,
@@ -145,11 +145,16 @@ public static class TaskEndpoints
             ClockTimeResolution resolution,
             DerivedTaskComposer derivedTasks) =>
         {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
+            }
+
             var view = store.Read();
             var task = derivedTasks.Compose(view).SingleOrDefault(task => task.Id.Value == id);
             if (task is null)
             {
-                return TypedResults.NotFound();
+                return TypedResults.NotFound<object>(new { error = "Task was not found" });
             }
 
             return TypedResults.Ok(ToResponse(

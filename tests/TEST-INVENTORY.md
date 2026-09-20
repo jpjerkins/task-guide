@@ -897,6 +897,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/tasks?status=orphan returns only orphan Tasks`
 - `GET /api/tasks/{id} returns notes, Deadline, Dimension values, loose Tags, and fit inputs`
 - `GET /api/tasks/{id} returns 404 for a well-formed Task id that does not exist`
+- `GET /api/tasks/{id} rejects a malformed Task id`
 - `PUT /api/tasks/{id}/postpone` rejects a malformed Task id
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date

@@ -325,6 +325,18 @@ public sealed class TaskEndpointsTests : IDisposable
         var response = await _client.GetAsync("/api/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FBX");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Task was not found", body.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_rejects_a_malformed_task_id()
+    {
+        var response = await _client.GetAsync("/api/tasks/banana");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("id must be a Task id", body.GetProperty("error").GetString());
     }
 
     [Fact]
