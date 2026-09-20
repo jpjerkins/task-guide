@@ -364,7 +364,7 @@ public sealed class FakeStoreTests
     /// before awaiting either (e.g. <c>Task.WhenAll</c>), or branches on <c>Task.IsCanceled</c>,
     /// must see the same shape against this fake.</summary>
     [Fact]
-    public async Task MutateAsync_faults_its_Task_instead_of_throwing_synchronously_for_an_already_cancelled_token()
+    public async Task MutateAsync_cancels_its_Task_instead_of_throwing_synchronously_for_an_already_cancelled_token()
     {
         var store = new FakeStore();
         using var cts = new CancellationTokenSource();
