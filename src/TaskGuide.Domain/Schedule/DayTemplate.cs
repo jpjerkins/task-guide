@@ -93,13 +93,26 @@ public static class DayTemplateLifecycle
 
     /// <summary>
     /// Copies a one-off day's shape into its new named template and records that the source date
-    /// wore that template. The source remains an Override: promotion never re-links it.
-    /// Copies only the <c>Windows</c> half (accepted gap, `tests/TEST-INVENTORY.md`) — turning a
-    /// frozen date's own Events back into <c>EventPrototypes</c> needs minted
-    /// <c>EventPrototypeId</c>s, and the Domain has no minter.
+    /// wore that template. The source remains an Override: promotion never re-links it. An
+    /// Override with absent Events leaves the promoted template with no Event prototypes; its
+    /// stored Events, when present, are the whole raw material for those prototypes.
     /// </summary>
-    public static (DayTemplate Template, DateOverride Source) Promote(DateOverride source, DayTemplate template) =>
-        (template with { Windows = [.. source.Windows] }, source with { Used = new DayTemplateUse(template.Id, template.Name) });
+    public static (DayTemplate Template, DateOverride Source) Promote(DateOverride source, DayTemplate template, IIdMinter minter) =>
+        (
+            template with
+            {
+                Windows = [.. source.Windows],
+                EventPrototypes = source.Events is null
+                    ? []
+                    : [.. source.Events.Select(sourceEvent => new EventPrototype(
+                        minter.NextEventPrototypeId(),
+                        sourceEvent.Name,
+                        sourceEvent.Start,
+                        sourceEvent.End,
+                        sourceEvent.Tags,
+                        sourceEvent.AbsenceNotice))],
+            },
+            source with { Used = new DayTemplateUse(template.Id, template.Name) });
 
     /// <summary>
     /// Lays a template's Windows onto a date. This is a value copy of the collection, while each

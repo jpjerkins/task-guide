@@ -19,9 +19,10 @@ public sealed class DayTemplateLifecycleCommandTests
     [Fact]
     public async Task Promoting_a_one_off_day_writes_the_source_dates_use_record_and_does_not_re_link()
     {
-        var source = new DateOverride(Today, [FamilyWindow], null);
+        var sourceEvent = new Event(new EventId("evt_christmas_dinner"), Today, "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
+        var source = new DateOverride(Today, [FamilyWindow], null) { Events = [sourceEvent] };
         var store = new FakeStore(new FakeStoreViewBuilder().WithOverrides([source]).Build());
-        var command = new PromoteOneOffDay(store);
+        var command = new PromoteOneOffDay(store, new EventPrototypeIdMinter());
         var template = new DayTemplate(TemplateId, "Christmas", [FamilyWindow], []);
 
         var result = await command.ExecuteAsync(Today, template, CancellationToken.None);
@@ -36,11 +37,32 @@ public sealed class DayTemplateLifecycleCommandTests
         var sourceAfterPromotion = Assert.Single(store.Read().Overrides);
         Assert.Equal(new DayTemplateUse(TemplateId, "Christmas"), sourceAfterPromotion.Used);
         Assert.Equal("Family time", Assert.Single(sourceAfterPromotion.Windows).Name);
+        Assert.Equal([sourceEvent], sourceAfterPromotion.Events);
 
         var edited = promoted with { Windows = [FamilyWindow with { Name = "Edited elsewhere" }] };
         await store.MutateAsync<Never>(_ => new StoreMutation([new DayTemplatesWrite([edited])]), CancellationToken.None);
 
         Assert.Equal("Family time", Assert.Single(store.Read().Overrides).Windows.Single().Name);
+    }
+
+    [Fact]
+    public async Task Promoting_an_Override_with_absent_Events_writes_no_EventPrototypes_and_does_not_materialise_active_Pattern_prototypes()
+    {
+        var recurringPrototype = new EventPrototype(new EventPrototypeId("ep_weekly_dinner"), "Weekly dinner", new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
+        var activeTemplate = new DayTemplate(new DayTemplateId("dt_active"), "Active", [], [recurringPrototype]);
+        var activePattern = new Pattern(new PatternId("p_active"), "Active", [.. Enumerable.Repeat(activeTemplate.Id, 7)]);
+        var source = new DateOverride(Today, [FamilyWindow], null);
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithDayTemplates([activeTemplate])
+            .WithPatterns(new PatternBook(activePattern.Id, [activePattern]))
+            .WithOverrides([source])
+            .Build());
+        var proposed = new DayTemplate(TemplateId, "Christmas", [], []);
+
+        var result = await new PromoteOneOffDay(store, new EventPrototypeIdMinter()).ExecuteAsync(Today, proposed, CancellationToken.None);
+
+        Assert.Empty(Assert.IsType<DayTemplate>(result.AsT0).EventPrototypes);
+        Assert.Empty(Assert.Single(store.Read().DayTemplates, template => template.Id == TemplateId).EventPrototypes);
     }
 
     [Fact]
@@ -99,5 +121,17 @@ public sealed class DayTemplateLifecycleCommandTests
     private sealed class FakeTimeProvider(DateOnly date) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => new(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+    }
+
+    private sealed class EventPrototypeIdMinter : IIdMinter
+    {
+        private int _eventPrototypes;
+
+        public TaskId NextTaskId() => throw new NotSupportedException();
+        public WindowId NextWindowId() => throw new NotSupportedException();
+        public DayTemplateId NextDayTemplateId() => throw new NotSupportedException();
+        public PatternId NextPatternId() => throw new NotSupportedException();
+        public EventId NextEventId() => throw new NotSupportedException();
+        public EventPrototypeId NextEventPrototypeId() => new($"ep_promoted_{++_eventPrototypes}");
     }
 }

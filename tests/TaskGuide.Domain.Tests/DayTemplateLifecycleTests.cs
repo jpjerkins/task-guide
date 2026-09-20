@@ -1,6 +1,8 @@
 using TaskGuide.Domain.Common;
+using TaskGuide.Domain.Dimensions;
 using TaskGuide.Domain.Schedule;
 using TaskGuide.Domain.Tags;
+using TaskGuide.Domain.Tasks;
 using Xunit;
 
 namespace TaskGuide.Domain.Tests;
@@ -126,7 +128,7 @@ public sealed class DayTemplateLifecycleTests
         var source = new DateOverride(Today, [sourceWindow], null);
         var proposed = new DayTemplate(Volleyball, "Volleyball Tuesday", [], []);
 
-        var (template, promotedSource) = DayTemplateLifecycle.Promote(source, proposed);
+        var (template, promotedSource) = DayTemplateLifecycle.Promote(source, proposed, new EventPrototypeIdMinter());
         var editedTemplate = template with { Windows = [sourceWindow with { Name = "Edited template" }] };
         var editedSource = promotedSource with { Windows = [sourceWindow with { Name = "Edited date" }] };
 
@@ -137,6 +139,71 @@ public sealed class DayTemplateLifecycleTests
         Assert.Equal("Edited date", Assert.Single(editedSource.Windows).Name);
         Assert.Equal("Evening", Assert.Single(template.Windows).Name);
         Assert.Equal(new DayTemplateUse(Volleyball, "Volleyball Tuesday"), promotedSource.Used);
+    }
+
+    [Fact]
+    public void Promoting_a_one_off_days_own_Events_mints_one_EventPrototype_per_Event_preserving_Name_span_Tags_and_AbsenceNotice()
+    {
+        var tags = new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [new LooseTag("family")]);
+        Offset absenceNotice = new BeforeOffset(2, OffsetUnit.Days);
+        var source = new DateOverride(Today, [Evening()], null)
+        {
+            Events =
+            [
+                new Event(new EventId("evt_dinner"), Today, "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 30), tags, absenceNotice),
+                new Event(new EventId("evt_show"), Today, "Show", new TimeOnly(20, 0), new TimeOnly(21, 0), TagSet.Empty, null),
+            ],
+        };
+        var proposed = new DayTemplate(Volleyball, "Volleyball Tuesday", [], []);
+
+        var (template, _) = DayTemplateLifecycle.Promote(source, proposed, new EventPrototypeIdMinter());
+
+        Assert.Equal(
+            [
+                new EventPrototype(new EventPrototypeId("ep_promoted_1"), "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 30), tags, absenceNotice),
+                new EventPrototype(new EventPrototypeId("ep_promoted_2"), "Show", new TimeOnly(20, 0), new TimeOnly(21, 0), TagSet.Empty, null),
+            ],
+            template.EventPrototypes);
+    }
+
+    [Fact]
+    public void Promotion_leaves_the_source_Overrides_own_Events_intact()
+    {
+        var sourceEvent = new Event(new EventId("evt_dinner"), Today, "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 30), TagSet.Empty, null);
+        var source = new DateOverride(Today, [Evening()], null) { Events = [sourceEvent] };
+        var proposed = new DayTemplate(Volleyball, "Volleyball Tuesday", [], []);
+
+        var (_, promotedSource) = DayTemplateLifecycle.Promote(source, proposed, new EventPrototypeIdMinter());
+
+        Assert.Equal([sourceEvent], promotedSource.Events);
+    }
+
+    [Fact]
+    public void A_promoted_template_stamps_its_EventPrototypes_as_the_target_dates_Events()
+    {
+        var sourceEvent = new Event(new EventId("evt_dinner"), Today, "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 30), TagSet.Empty, null);
+        var source = new DateOverride(Today, [Evening()], null) { Events = [sourceEvent] };
+        var proposed = new DayTemplate(Volleyball, "Volleyball Tuesday", [], []);
+        var target = Today.AddDays(7);
+
+        var (template, _) = DayTemplateLifecycle.Promote(source, proposed, new EventPrototypeIdMinter());
+        var stamped = DayTemplateLifecycle.Stamp(target, template);
+
+        Assert.Equal(
+            new Event(new EventId($"evt_rec_{target:yyyyMMdd}_ep_promoted_1"), target, "Dinner", new TimeOnly(18, 0), new TimeOnly(19, 30), TagSet.Empty, null),
+            Assert.Single(stamped.Events ?? throw new InvalidOperationException("Stamp must materialise the promoted Event prototype.")));
+    }
+
+    private sealed class EventPrototypeIdMinter : IIdMinter
+    {
+        private int _eventPrototypes;
+
+        public TaskId NextTaskId() => throw new NotSupportedException();
+        public WindowId NextWindowId() => throw new NotSupportedException();
+        public DayTemplateId NextDayTemplateId() => throw new NotSupportedException();
+        public PatternId NextPatternId() => throw new NotSupportedException();
+        public EventId NextEventId() => throw new NotSupportedException();
+        public EventPrototypeId NextEventPrototypeId() => new($"ep_promoted_{++_eventPrototypes}");
     }
 
 }

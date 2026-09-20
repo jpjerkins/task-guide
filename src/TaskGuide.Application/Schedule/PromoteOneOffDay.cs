@@ -5,7 +5,7 @@ using TaskGuide.Domain.Schedule;
 
 namespace TaskGuide.Application.Schedule;
 
-public sealed class PromoteOneOffDay(IStore store)
+public sealed class PromoteOneOffDay(IStore store, IIdMinter minter)
 {
     public async Task<PromoteOneOffDayOutcome> ExecuteAsync(
         DateOnly sourceDate,
@@ -25,7 +25,7 @@ public sealed class PromoteOneOffDay(IStore store)
                 return new PromoteOneOffDayRefused("Only a one-off day can be promoted");
             }
 
-            var promoted = DayTemplateLifecycle.Promote(source, template);
+            var promoted = DayTemplateLifecycle.Promote(source, template, minter);
             return OneOf<StoreMutation, PromoteOneOffDayRefused>.FromT0(new StoreMutation([
                 new OverridesWrite([.. view.Overrides.Where(overrideDay => overrideDay.Date != sourceDate), promoted.Source]),
                 // The use record names the template. Persist it first so a crash leaves a detectable
