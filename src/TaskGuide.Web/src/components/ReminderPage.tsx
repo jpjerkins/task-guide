@@ -197,7 +197,8 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     setDurationBusyId(taskId)
     const finishDuration = async () => {
       await reload()
-      await loadUnprocessedTask()
+      // No explicit re-read here: the count-keyed effect above already re-reads the
+      // unprocessed list whenever `reload()` changes `footer.toProcess`.
       setDurationBusyId(null)
     }
     try {

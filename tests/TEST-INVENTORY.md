@@ -1600,6 +1600,8 @@ specified under **Shared controls** above and are not restated here.
   land here having genuinely pushed, and must not claim otherwise
 - an `Unprocessed` Task in the footer count is repairable inline — one Task plus the same five
   Duration buttons capture offers — because this page, not the notification, is where triage lives
+- repairing one of several unprocessed Tasks re-reads the list once, not twice — the count-keyed
+  effect that watches `footer.toProcess` is the only thing that re-reads it
 - the Snooze control names the interval the server gave it; the `clamp(25%, 5, 30)` arithmetic is
   never recomputed client-side
 - when the server reports Snooze unavailable the control is **suppressed, not hidden** — replaced by

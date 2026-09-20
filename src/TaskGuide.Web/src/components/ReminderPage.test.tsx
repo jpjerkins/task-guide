@@ -130,6 +130,30 @@ it('an_Unprocessed_Task_in_the_footer_count_is_repairable_inline', async () => {
   const reminderReads = fetch.mock.calls.filter(([url, init]) => !init?.method && url === `/api/reminders/${DATE}/${WINDOW_ID}`)
   const taskReads = fetch.mock.calls.filter(([url, init]) => !init?.method && url === '/api/tasks?status=unprocessed')
   expect(reminderReads).toHaveLength(2)
+  expect(taskReads).toHaveLength(1)
+})
+
+it('repairing_one_of_two_unprocessed_Tasks_re_reads_the_list_exactly_once', async () => {
+  currentPage = page({ footer: { toProcess: 2, stale: 0, orphans: 0 } })
+  unprocessed = [
+    { id: 'tu1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+    { id: 'tu2', title: 'Water the plants', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+  ]
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/tasks/tu1/duration') {
+      currentPage = page({ footer: { toProcess: 1, stale: 0, orphans: 0 } })
+      unprocessed = [{ id: 'tu2', title: 'Water the plants', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+      return json(null, 204)
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('File the receipt')
+  await user.click(screen.getByRole('button', { name: '2m' }))
+
+  await screen.findByText('Water the plants')
+  const taskReads = fetch.mock.calls.filter(([url, init]) => !init?.method && url === '/api/tasks?status=unprocessed')
   expect(taskReads).toHaveLength(2)
 })
 
