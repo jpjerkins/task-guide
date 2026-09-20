@@ -1731,6 +1731,16 @@ specified under **Shared controls** above and are not restated here.
   piles as if there's nothing to triage
 - a refused duration write states that it failed rather than silently re-reading, mirroring the
   reminder footer's inline repair
+- `.nav` and `.scroll` render as siblings with no wrapping element, since `.scroll`'s flex sizing
+  only takes effect as a direct child of `.device`
+- the screen renders a loading state before the first read resolves, rather than presenting both
+  piles as empty
+- the subtitle's pile counts do not appear when the read failed — they come from the same load
+  state as the body, not a stale snapshot beside the error
+- a duration-write failure note is set before the reload it triggers, and survives even when that
+  reload also lands on the connection error
+- a row's duration-write failure note is not cleared by a different row's duration button; it
+  persists until replaced by that row's own outcome
 
 ## `TaskGuide.E2E`
 

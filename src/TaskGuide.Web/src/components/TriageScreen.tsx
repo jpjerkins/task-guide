@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchTasks, setTaskDuration, type Task } from '../api/client'
 import { ScreenNav } from './shared/ScreenNav'
 
@@ -10,21 +10,38 @@ function durLabel(bucket: string) {
   return Number.isNaN(Number(bucket)) ? 'Longer' : `${bucket}m`
 }
 
+// Same three-state shape as DimensionsScreen.tsx: a loading arm so the first paint doesn't say
+// "nothing to triage" before the first read returns, and an error arm the ready counts can't leak
+// past.
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; unprocessed: Task[]; stale: Task[] }
+
+// A duration write's failure note, scoped to the row that produced it — a later click on a
+// *different* row must not clear it out from under the row it actually describes.
+interface TaskActionNote {
+  taskId: string
+  text: string
+}
+
 export function TriageScreen() {
-  const [unprocessed, setUnprocessed] = useState<Task[]>([])
-  const [stale, setStale] = useState<Task[]>([])
-  const [loadError, setLoadError] = useState(false)
+  const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [taskActionNote, setTaskActionNote] = useState<string | null>(null)
+  const [taskActionNote, setTaskActionNote] = useState<TaskActionNote | null>(null)
+  // Guards against an earlier `load()` call's response arriving after a later one's: only the
+  // most recently issued call's result is applied.
+  const loadToken = useRef(0)
 
   const load = useCallback(async () => {
+    const token = ++loadToken.current
     try {
-      const [un, st] = await Promise.all([fetchTasks('unprocessed'), fetchTasks('stale')])
-      setUnprocessed(un)
-      setStale(st)
-      setLoadError(false)
+      const [unprocessed, stale] = await Promise.all([fetchTasks('unprocessed'), fetchTasks('stale')])
+      if (loadToken.current !== token) return
+      setState({ status: 'ready', unprocessed, stale })
     } catch {
-      setLoadError(true)
+      if (loadToken.current !== token) return
+      setState({ status: 'error' })
     }
   }, [])
 
@@ -33,35 +50,43 @@ export function TriageScreen() {
   }, [load])
 
   async function handleDuration(taskId: string, bucket: string) {
-    setTaskActionNote(null)
+    setTaskActionNote((prev) => (prev?.taskId === taskId ? null : prev))
     setBusyId(taskId)
     try {
       await setTaskDuration(taskId, bucket)
     } catch {
+      // Set before the reload, and rendered independently of the error arm below: offline, the
+      // reload this triggers can fail too, and the note must survive that rather than being
+      // dropped along with the ready-state body it would otherwise live inside.
+      setTaskActionNote({ taskId, text: "Couldn't set this task's duration." })
       await load()
       setBusyId(null)
-      setTaskActionNote("Couldn't set this task's duration.")
       return
     }
     await load()
     setBusyId(null)
   }
 
+  const sub =
+    state.status === 'ready' ? `${state.unprocessed.length} unprocessed · ${state.stale.length} stale` : undefined
+
   return (
-    <div>
-      <ScreenNav title="Process" sub={`${unprocessed.length} unprocessed · ${stale.length} stale`} />
+    <>
+      <ScreenNav title="Process" sub={sub} />
       <div className="scroll">
-        {loadError ? (
+        {taskActionNote && <div className="note">{taskActionNote.text}</div>}
+        {state.status === 'loading' && <div className="empty">Loading…</div>}
+        {state.status === 'error' && (
           <div className="empty">Couldn't load tasks. Check your connection and try again.</div>
-        ) : (
+        )}
+        {state.status === 'ready' && (
           <>
-            {taskActionNote && <div className="note">{taskActionNote}</div>}
             <div className="sec-h">Missing a duration</div>
             <div className="list">
-              {unprocessed.length === 0 ? (
+              {state.unprocessed.length === 0 ? (
                 <div className="empty">Nothing to process.</div>
               ) : (
-                unprocessed.map((t) => (
+                state.unprocessed.map((t) => (
                   <div className="row" key={t.id}>
                     <div className="body">
                       <div className="title">{t.title}</div>
@@ -84,13 +109,13 @@ export function TriageScreen() {
             </div>
             <div className="sec-h">Stale — reword, slice smaller, or delete</div>
             <div className="list">
-              {stale.length === 0 ? (
+              {state.stale.length === 0 ? (
                 // The inventory names exactly one empty-pile string ("Nothing to process.") and is
                 // silent on whether an empty stale pile gets a different one — this is a reading of
                 // the spec, reusing the same literal, not a copy-paste.
                 <div className="empty">Nothing to process.</div>
               ) : (
-                stale.map((t) => (
+                state.stale.map((t) => (
                   <div className="row" key={t.id}>
                     <div className="body">
                       <div className="title">{t.title}</div>
@@ -109,6 +134,6 @@ export function TriageScreen() {
           </>
         )}
       </div>
-    </div>
+    </>
   )
 }
