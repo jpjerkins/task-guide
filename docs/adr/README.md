@@ -22,7 +22,7 @@ ubiquitous language lives in `CONTEXT.md` (start at `CONTEXT-INDEX.md`).
 amendment from the application-layer resolutions (#67, #68), and 0010 a 2026-09-20 amendment adding
 the third arm of absence (#162); read the amendment sections, not only the original Decision.
 
-## Three lines that recur across all ten
+## Three lines that recur across all eleven
 
 - **Facts stored, everything else derived.** Status, Opportunities, Orphan-ness and `Unused` are
   computed on read and never persisted.

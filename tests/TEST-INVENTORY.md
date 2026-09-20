@@ -155,7 +155,7 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - `DateOverride.Windows` compares equal regardless of order, and hashes equal
 - `DateOverride.Events` compares equal regardless of order, and hashes equal
 - a `DateOverride` whose `Events` is absent compares unequal to one whose `Events` is empty — the
-  two arms of absence are different records, not two spellings of one (ADR-0010d, #153)
+  absent and empty arms are different records, not two spellings of one (ADR-0010d, #153)
 - `DayShape` `Windows` and `Events` compare equal regardless of order, and hash equal
 - **`Pattern.Days` compares unequal when reordered** — seven weekday slots, so order is the meaning,
   and `this[DayOfWeek]` indexes them positionally

@@ -37,6 +37,11 @@ is to open the file and delete a row.
 
 **b. Absence has two arms, and they are not in conflict.**
 
+> **There is a third arm since 2026-09-20 — see decision d below.** Everything in b is about
+> **sparse collection files** and dangling references, and its "never null" does not reach an
+> optional property on a record that did load. Reading b as a rule about record properties is the
+> mis-citation d was written to stop ([#162](https://github.com/jpjerkins/task-guide/issues/162)).
+
 - **Sparse-collection absence reads as empty.** `CompletionsFor` / `FiresOn` — per-task and per-date
   files where *having no file* is the normal state of a healthy store. Never null, never a throw.
 - **A dangling reference throws, naming what dangled.** `PatternBook.Active` (an active-Pattern id
@@ -57,7 +62,7 @@ Wrapped at each codec boundary, not at the ~70 individual `GetProperty` sites.
 [#63](https://github.com/jpjerkins/task-guide/issues/63) specifies and implements this arm; the rule is
 stated here so it binds every codec written after it, not only the ones #63 touches.
 
-### Amendment — a third arm: an optional property on a stored record, where *absent* and *empty* are different facts
+### Amendment — **d.** a third arm: an optional property on a stored record, where *absent* and *empty* are different facts
 
 Decision b was written against **sparse collection files**, and its examples are all of that shape:
 `CompletionsFor` and `FiresOn` read a per-task or per-date *file* whose non-existence is the normal
@@ -116,13 +121,16 @@ reason this arm is additive-only: it must stay a change an old binary can ignore
 - **Do not move a uniqueness check to the write side.** The write path is handed an array; the read
   path is the boundary the whole store crosses on every load, including files edited by hand or
   restored from a snapshot.
-- **Do not unify the two arms of absence.** Neither "make dangling references empty" nor "make sparse
+- **Do not unify the arms of absence.** Neither "make dangling references empty" nor "make sparse
   absence throw" is a simplification; each breaks a behaviour the other arm exists to provide.
 - **Do not throw a bare `Single`/`SingleOrDefault` failure across a dangling reference.** If you write
   `.Single(...)` over a store collection, either it cannot dangle or you owe it a named throw.
 - **Do not introduce a new exception type for a read failure.** It goes inside `BadStoreFileException`.
-- **Do not write an explicit `null` for an absent optional property, and do not read one with
-  `GetProperty`.** Omission is the encoding; `TryGetProperty` is the read.
+- **Do not write an explicit `null` for a property in arm d, and do not read one with `GetProperty`.**
+  Omission is the encoding; `TryGetProperty` is the read. **This binds arm d only** — a plain
+  two-state optional, where `null` just means "no value" and no third state exists, keeps the
+  explicit-`null` encoding the store already uses (`overrides.json`'s `used`, `tasks.json`'s `notes`,
+  `defer` and `recurrence`). Those are correct as written; do not convert them.
 - **Do not make an optional property's absence and emptiness compare equal.** They are different
   records, and a round trip that conflates them silently rewrites history.
 
