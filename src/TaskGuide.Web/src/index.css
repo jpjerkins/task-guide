@@ -192,6 +192,8 @@ input.field, textarea.field, select.field {
 
 input.field.time { max-width:112px; font-variant-numeric:tabular-nums; }
 
+input.field.date { max-width:190px; font-variant-numeric:tabular-nums; }
+
 input.field.bad { border-color:var(--danger); background:var(--danger-soft); color:var(--danger); }
 
 .chipset { display:flex; flex-wrap:wrap; gap:7px; }

@@ -15,7 +15,7 @@ export function DateEntry({ value, onChange, label, id, disabled }: DateEntryPro
     <label className="stack">
       <span className="lbl">{label}</span>
       <input
-        className="field"
+        className="field date"
         type="date"
         id={id}
         value={value ?? ''}

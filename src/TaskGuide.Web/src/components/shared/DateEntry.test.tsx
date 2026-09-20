@@ -33,6 +33,14 @@ describe('DateEntry', () => {
     expect(onChange).toHaveBeenCalledWith(null)
   })
 
+  it('renders the prototype\'s structure — a .stack label wrapping a .lbl caption and an input.field.date', () => {
+    const { container } = render(<DateEntry label="Deadline" value={null} onChange={() => {}} />)
+
+    const label = container.querySelector('label.stack')
+    expect(label?.querySelector('.lbl')?.textContent).toBe('Deadline')
+    expect(label?.querySelector('input.field.date')).toHaveAttribute('type', 'date')
+  })
+
   // ADR-0006: a system-presented control must survive its own input events. The remount is what
   // dismisses a native picker mid-interaction on iOS Safari — so the input node identity must be
   // stable across its own change handler firing.
