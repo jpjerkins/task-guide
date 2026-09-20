@@ -1777,9 +1777,11 @@ specified under **Shared controls** above and are not restated here.
   piles as if there's nothing to triage
 - a refused duration write states that it failed rather than silently re-reading, mirroring the
   reminder footer's inline repair
-- a refused duration write renders the server's own reason when it gave one, falling back to the
-  generic sentence for a failure with no parsable body — the same shape as the reminder page's
-  inline repair
+- a refused duration write renders the server's own reason when it gave one, appended to the
+  sentence naming the Task rather than replacing it (Phil, 2026-09-20 — #167 read as replacing it,
+  but this note renders at the top of a *multi-row* pile, unlike the reminder page's one-Task
+  repair, so dropping the title leaves the alert tied to no row); a failure with no parsable body
+  falls back to that sentence alone
 - `.nav` and `.scroll` render as siblings with no wrapping element, since `.scroll`'s flex sizing
   only takes effect as a direct child of `.device`
 - the screen renders a loading state before the first read resolves, rather than presenting both

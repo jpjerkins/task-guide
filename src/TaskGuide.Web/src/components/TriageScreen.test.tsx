@@ -282,7 +282,11 @@ describe('TriageScreen', () => {
 
     await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
-    expect(await screen.findByText('A derived Task cannot have its Duration edited')).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'Couldn\'t set the duration for "File the receipt" — A derived Task cannot have its Duration edited.',
+      ),
+    ).toBeInTheDocument()
     expect(screen.getByText('File the receipt')).toBeInTheDocument()
   })
 

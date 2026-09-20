@@ -64,10 +64,13 @@ export function TriageScreen() {
       // body, rows included, so the row-scoped note would vanish along with it. The task's title
       // goes into the text instead, so the note still says which Task failed from the top of the
       // scroll area.
-      // The server's own reason when it gave one (#138 put it on the wire); the generic sentence
-      // stays as the fallback, since a network failure has no reason and it names the Task.
+      // The server's own reason when it gave one (#138 put it on the wire), *appended to* the
+      // sentence rather than replacing it: this note renders at the top of the scroll, so the
+      // title is the only thing tying it to a row, and the reason names no Task. A failure with
+      // no parsable body (offline, a bodyless 500) falls back to the sentence alone.
       const reason = err instanceof ApiError ? err.reason : null
-      setTaskActionNote({ taskId, text: reason ?? `Couldn't set the duration for "${title}".` })
+      const failed = `Couldn't set the duration for "${title}"`
+      setTaskActionNote({ taskId, text: reason ? `${failed} — ${reason}.` : `${failed}.` })
       await load()
       setBusyIds((prev) => {
         const next = new Set(prev)
