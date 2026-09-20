@@ -1112,12 +1112,19 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
 - the rail's date control survives its own input event — same DOM node before and after
 - the date-range override is a **scope on the stamp picker** (#140 §1 surface B2), not a second
   sheet or a second verb: `OverrideStampSheet` carries a `This date` / `A range…` `.modebar`, and
-  `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, swaps
-  the sheet's title and opening note to name the span. Range scope also offers two non-template
+  `OverrideRangeSheet` no longer exists. Range scope reveals `From`/`To` `DateEntry` fields, and
+  swaps the sheet's title and its stamp note to name the span. Range scope also offers two
+  non-template
   rows: **"Keep each date's own shape"** under a `Detach the span` heading (`onStamp(null, span,
   'freeze')`, no destructive marker), and **"Blank every date in the span"** under a `Clear the
   span` heading (`onStamp(null, span, 'blank')`, `.pill.due` destructive) — see the finding-1
   paragraph below for why the wording on both is load-bearing
+- the stamp note ("Stamp a shape onto {this date | every date in the span}. It copies the windows
+  in — **not** a link…") sits **below** the freeze and blank rows, captioning the shape list it
+  describes, not at the top of the sheet. At the top it reads as the sheet's own instruction and is
+  then false for the two rows beneath it — only one of range scope's three arms stamps anything.
+  Date scope renders neither non-template row, so the note is the first thing under the `.modebar`
+  there regardless, and its position is asserted by document order rather than by text alone
 - every write states its arm explicitly on the wire — `mode: 'stamp' | 'freeze' | 'blank'` on
   `OverrideSpanApiRequest`, never a null-`templateId` default standing in for "blank" (#145). The
   `templateId` alone cannot tell `freeze` and `blank` apart — both send `null` — so `mode` is what

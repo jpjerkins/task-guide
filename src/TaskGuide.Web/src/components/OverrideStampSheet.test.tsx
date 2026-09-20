@@ -206,6 +206,24 @@ it('defaults_to_This_date_scope_with_the_single-date_title_and_note_and_switchin
   expect(screen.getByRole('dialog')).toHaveTextContent('Stamp a shape onto every date in the span.')
 })
 
+// In range scope the sheet offers three arms and only one of them stamps, so the stamp note cannot
+// sit at the top as the sheet's own instruction — there it claims "Stamp a shape onto every date in
+// the span" directly above two rows that do no such thing. It belongs below them, captioning the
+// shape list it actually describes. Date scope renders neither non-template row, so nothing moves.
+it('the_stamp_note_follows_the_freeze_and_blank_rows_rather_than_heading_the_whole_sheet', async () => {
+  stub(patterns([christmas.id]))
+  render(<OverrideStampSheet date="2026-11-01" onCancel={() => {}} onStamp={async () => {}} busy={false} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'A range…' }))
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-12-24' } })
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-12-28' } })
+  const note = await screen.findByText(/Stamp a shape onto every date in the span/)
+  const blankRow = screen.getByRole('button', { name: /Blank every date in the span/ })
+  const shapeRow = await screen.findByRole('button', { name: /Christmas/ })
+  // DOCUMENT_POSITION_FOLLOWING === 4: the note comes after the blank row and before the shapes.
+  expect(blankRow.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(note.compareDocumentPosition(shapeRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
 // #140 review finding 1, closed by #145: the range scope used to offer a "Keep each date's own
 // shape" row that called onStamp(null, span) — server-side that stamped a zero-window Override,
 // blanking every date in the span, not the "detaches without changing what is on it" the copy

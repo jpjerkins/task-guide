@@ -120,7 +120,6 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
       <DateEntry label="From" value={from} onChange={setFrom} disabled={busy} />
       <DateEntry label="To" value={to} onChange={setTo} disabled={busy} />
     </>}
-    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
     {invalidRange && <div className="note" role="alert">Choose a start and end date; the end must not precede the start.</div>}
     {error && <div className="note" role="alert">{error}</div>}
     {inRange && <>
@@ -147,6 +146,11 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
           <span className="sub2">every window on those dates is removed and nothing will fire on them</span>
         </span></button></div>
     </>}
+    {/* Captions the shape list, and must stay below the freeze and blank rows. In range scope the
+        sheet offers three arms and only this one stamps — at the top of the sheet the sentence
+        reads as the sheet's own instruction and is then false for the two rows above. Date scope
+        renders neither of those rows, so it is the first thing under the modebar there either way. */}
+    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
     {groups.map(group => {
       const withTog = !toggleShown
       toggleShown = true
