@@ -248,7 +248,9 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
 
   return (
     <div>
-      <ScreenNav title={title} sub={sub} />
+      {/* A cold notification link has no origin screen to name, unlike every other ScreenNav's
+          back label — hence the generic "Done" rather than a destination name. */}
+      <ScreenNav title={title} sub={sub} back={{ label: 'Done', onBack: () => window.location.assign('/') }} />
       <div className="scroll">
         {page.isLive ? (
           <div className="adjust">
@@ -346,16 +348,19 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
             ))
           )}
         </div>
-        {snooze &&
-          (snooze.suppression ? (
-            <div className="note">{snooze.suppression}</div>
-          ) : (
-            <div className="btn-row">
-              <button className="btn" onClick={() => handleSnooze(Number(snooze.intervalMinutes))}>
-                Snooze {Number(snooze.intervalMinutes)} min
-              </button>
-            </div>
-          ))}
+        {snooze?.suppression && <div className="note">{snooze.suppression}</div>}
+        <div className="btn-row">
+          {snooze && !snooze.suppression && (
+            <button className="btn" onClick={() => handleSnooze(Number(snooze.intervalMinutes))}>
+              Snooze {Number(snooze.intervalMinutes)} min
+            </button>
+          )}
+          {/* The page's other exit, alongside the nav's "Done" back button — unconditional because
+              a cold notification link has no origin screen, so it can't disappear with Snooze. */}
+          <button className="btn ghost" onClick={() => window.location.assign('/')}>
+            Done for now
+          </button>
+        </div>
         {snoozeNote && <div className="note">{snoozeNote}</div>}
         {(footerText || page.failedFetches.length > 0) && (
           <div className="footer-count">

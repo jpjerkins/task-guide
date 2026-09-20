@@ -436,10 +436,32 @@ it('the_Matching_on_chips_are_disabled_while_an_adjustment_is_in_flight', async 
 
 it('a_fallback_pushs_landing_page_has_no_Snooze_control_at_all_rather_than_a_disabled_one', async () => {
   currentPage = page({ windowName: null, fallbackEventName: 'Grocery run', firedAs: 'fallback', snooze: null })
-  const { container } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('Grocery run')
   expect(screen.queryByRole('button', { name: /Snooze/ })).not.toBeInTheDocument()
-  expect(container.querySelector('.btn-row')).not.toBeInTheDocument()
+  // .btn-row still exists here, holding just the always-present "Done for now" exit.
+  expect(screen.getByRole('button', { name: 'Done for now' })).toBeInTheDocument()
+})
+
+it('the_landing_page_carries_both_of_the_prototypes_exits_and_each_leaves_for_the_app_root', async () => {
+  const assign = vi.fn()
+  vi.stubGlobal('location', { ...window.location, assign })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Evening wind-down')
+
+  await userEvent.click(screen.getByRole('button', { name: /Back$|Done$/ }))
+  expect(assign).toHaveBeenCalledWith('/')
+
+  assign.mockClear()
+  await userEvent.click(screen.getByRole('button', { name: 'Done for now' }))
+  expect(assign).toHaveBeenCalledWith('/')
+})
+
+it('Done_for_now_renders_even_when_Snooze_is_suppressed_its_the_pages_exit_not_part_of_the_Snooze_control', async () => {
+  currentPage = page({ snooze: { intervalMinutes: 17, suppression: 'Snooze ends at midnight' } })
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('Snooze ends at midnight')
+  expect(screen.getByRole('button', { name: 'Done for now' })).toBeInTheDocument()
 })
 
 it('an_adjustment_reports_back_that_the_date_is_now_an_Override', async () => {
