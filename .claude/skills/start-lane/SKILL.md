@@ -154,6 +154,23 @@ green from the repo root. Web lanes additionally:
 cd src/TaskGuide.Web && npm test
 ```
 
+**If the diff touches API surface** — any `Api/Endpoints/` file, or a response/request type one
+serializes — also run:
+
+```sh
+./scripts/check-schema-drift.sh
+```
+
+It needs port 8007 free — a web lane following `src/TaskGuide.Web/README.md` has the API running
+there for the Vite proxy, so stop it first — and `npm install` in `src/TaskGuide.Web`.
+
+It boots the API, regenerates the TypeScript types from the live `/openapi/v1.json`, and diffs them
+against the checked-in `src/TaskGuide.Web/src/api/schema.d.ts`. Non-zero means the checked-in copy is
+stale: the SPA is typed off a contract the server stopped honouring, with no compile error and no
+test failure to say so. `schema.d.ts` is the integration lane's file, so a non-zero exit on your
+branch is a **report**, not an edit — name the drift and the integration lane regenerates it (#135;
+#98, #99 and #133 are the same drift caught late three times).
+
 **Write down what Phil settled in-session, before review runs.** A decision that lives only in the
 conversation — an `AskUserQuestion` answer, an accepted consequence, a "yes, do it that way" — is
 invisible to every reviewer, and comes back as a finding. Put it in a ticket comment, or in the body
