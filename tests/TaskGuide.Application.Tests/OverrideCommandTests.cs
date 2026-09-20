@@ -66,6 +66,112 @@ public sealed class OverrideCommandTests
     }
 
     [Fact]
+    public async Task Freezing_an_Override_span_captures_each_dates_computed_recurring_events_alongside_its_windows_so_a_later_Pattern_switch_reaches_neither_half()
+    {
+        var prototype = Prototype("ep_standup", "Standup");
+        var template = new DayTemplate(new DayTemplateId("dt_thursday"), "Thursday", [Window("w_thursday")], [prototype]);
+        var patternId = new PatternId("p_week");
+        var days = Enumerable.Repeat(template.Id, 7).ToArray();
+        var date = new DateOnly(2026, 12, 24);
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithDayTemplates([template])
+            .WithPatterns(new PatternBook(patternId, [new Pattern(patternId, "Week", days)]))
+            .Build());
+
+        var result = await new CreateOverrideSpan(store).ExecuteAsync(
+            new OverrideSpanCommandRequest(date, date, (OverrideSpanMode)new FreezeOverrideSpan()),
+            CancellationToken.None);
+
+        Assert.True(result.IsT0);
+        var frozen = Assert.Single(store.Read().Overrides);
+        var frozenEvent = Assert.Single(frozen.Events!);
+        Assert.Equal("evt_rec_20261224_ep_standup", frozenEvent.Id.Value);
+        Assert.Equal("Standup", frozenEvent.Name);
+    }
+
+    [Fact]
+    public async Task Freezing_a_date_whose_recurring_instance_was_deleted_by_an_Event_exception_does_not_resurrect_it()
+    {
+        var prototype = Prototype("ep_standup", "Standup");
+        var template = new DayTemplate(new DayTemplateId("dt_thursday"), "Thursday", [Window("w_thursday")], [prototype]);
+        var patternId = new PatternId("p_week");
+        var days = Enumerable.Repeat(template.Id, 7).ToArray();
+        var date = new DateOnly(2026, 12, 24);
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithDayTemplates([template])
+            .WithPatterns(new PatternBook(patternId, [new Pattern(patternId, "Week", days)]))
+            .WithEventExceptions([new EventException(date, prototype.Id, Deleted: true, null, null, null)])
+            .Build());
+
+        var result = await new CreateOverrideSpan(store).ExecuteAsync(
+            new OverrideSpanCommandRequest(date, date, (OverrideSpanMode)new FreezeOverrideSpan()),
+            CancellationToken.None);
+
+        Assert.True(result.IsT0);
+        var frozen = Assert.Single(store.Read().Overrides);
+        Assert.Empty(frozen.Events!);
+    }
+
+    [Fact]
+    public async Task Freezing_leaves_the_dates_dated_Events_in_events_json_uncopied_so_deleting_the_Override_restores_the_Patterns_events_with_nothing_lost_and_nothing_left_over()
+    {
+        var prototype = Prototype("ep_standup", "Standup");
+        var template = new DayTemplate(new DayTemplateId("dt_thursday"), "Thursday", [Window("w_thursday")], [prototype]);
+        var patternId = new PatternId("p_week");
+        var days = Enumerable.Repeat(template.Id, 7).ToArray();
+        var date = new DateOnly(2026, 12, 24);
+        var datedEvent = new Event(new EventId("evt_band"), date, "Band", new TimeOnly(19, 0), new TimeOnly(21, 0), TagSet.Empty, null);
+        var store = new FakeStore(new FakeStoreViewBuilder()
+            .WithDayTemplates([template])
+            .WithPatterns(new PatternBook(patternId, [new Pattern(patternId, "Week", days)]))
+            .WithEvents([datedEvent])
+            .Build());
+
+        var result = await new CreateOverrideSpan(store).ExecuteAsync(
+            new OverrideSpanCommandRequest(date, date, (OverrideSpanMode)new FreezeOverrideSpan()),
+            CancellationToken.None);
+
+        Assert.True(result.IsT0);
+        Assert.Equal([datedEvent], store.Read().Events);
+        var frozen = Assert.Single(store.Read().Overrides);
+        Assert.DoesNotContain(frozen.Events!, e => e.Id == datedEvent.Id);
+
+        var deleted = await new DeleteOverride(store).ExecuteAsync(date, CancellationToken.None);
+        Assert.True(deleted.IsT0);
+        Assert.Equal([datedEvent], store.Read().Events);
+    }
+
+    [Fact]
+    public async Task Stamping_a_Day_template_lays_its_Event_prototypes_down_as_the_dates_own_Events()
+    {
+        var prototype = Prototype("ep_standup", "Standup");
+        var template = new DayTemplate(new DayTemplateId("dt_span"), "Weekend", [Window("w_weekend")], [prototype]);
+        var date = new DateOnly(2026, 12, 24);
+
+        var stamped = DayTemplateLifecycle.Stamp(date, template);
+
+        var frozenEvent = Assert.Single(stamped.Events!);
+        Assert.Equal("evt_rec_20261224_ep_standup", frozenEvent.Id.Value);
+        Assert.Equal("Standup", frozenEvent.Name);
+    }
+
+    [Fact]
+    public async Task Blanking_a_date_writes_an_empty_Events_list_not_an_absent_one()
+    {
+        var date = new DateOnly(2026, 12, 25);
+        var store = new FakeStore();
+
+        var result = await new CreateOverrideSpan(store).ExecuteAsync(
+            new OverrideSpanCommandRequest(date, date, (OverrideSpanMode)new BlankOverrideSpan()),
+            CancellationToken.None);
+
+        Assert.True(result.IsT0);
+        var blanked = Assert.Single(store.Read().Overrides);
+        Assert.NotNull(blanked.Events);
+        Assert.Empty(blanked.Events!);
+    }
+
+    [Fact]
     public async Task An_Override_span_ending_at_DateOnly_MaxValue_is_written()
     {
         var date = DateOnly.MaxValue;
@@ -151,4 +257,7 @@ public sealed class OverrideCommandTests
 
     private static AvailabilityWindow Window(string id) => new(
         new WindowId(id), "Family time", new TimeOnly(10, 0), new TimeOnly(20, 0), TagSet.Empty);
+
+    private static EventPrototype Prototype(string id, string name) => new(
+        new EventPrototypeId(id), name, new TimeOnly(9, 0), new TimeOnly(9, 15), TagSet.Empty, null);
 }

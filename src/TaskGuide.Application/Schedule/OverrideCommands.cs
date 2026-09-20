@@ -30,7 +30,7 @@ public sealed class CreateOverrideSpan(IStore store)
                 freeze => OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>.FromT0(
                     request.Dates().Select(date => Freeze(date, view)).ToArray()),
                 blank => OneOf<IReadOnlyList<DateOverride>, OverrideSpanRefused>.FromT0(
-                    request.Dates().Select(date => new DateOverride(date, [], null)).ToArray()));
+                    request.Dates().Select(date => new DateOverride(date, [], null) { Events = [] }).ToArray()));
 
             if (replacements.TryPickT1(out var refusal, out var datedOverrides))
             {
@@ -46,20 +46,28 @@ public sealed class CreateOverrideSpan(IStore store)
         return outcome.Match<OverrideSpanOutcome>(_ => new OverrideSpanApplied(), refusal => refusal);
     }
 
+    /// <summary>
+    /// Captures each date's <b>computed</b> shape — both halves. Because the recurring events are
+    /// the already-materialised instances (deletions folded in by <see cref="RecurringEvents.On"/>),
+    /// freezing can never resurrect an instance an Event exception deleted; that is by
+    /// construction, not a separate check (#153).
+    /// </summary>
     private static DateOverride Freeze(DateOnly date, IStoreView view)
     {
         var existing = view.Overrides.SingleOrDefault(overrideDay => overrideDay.Date == date);
         var windows = existing?.Windows;
-        if (windows is null)
+        var events = existing?.Events;
+        if (windows is null || events is null)
         {
             var templateId = view.Patterns.Active[date.DayOfWeek];
             var template = view.DayTemplates.SingleOrDefault(candidate => candidate.Id.Equals(templateId))
                 ?? throw new InvalidOperationException(
                     $"Day template {templateId.Value} does not match the active Pattern for {date:yyyy-MM-dd}.");
-            windows = template.Windows;
+            windows ??= template.Windows;
+            events ??= RecurringEvents.On(date, template.EventPrototypes, view.EventExceptions);
         }
 
-        return new DateOverride(date, [.. windows], existing?.Used);
+        return new DateOverride(date, [.. windows], existing?.Used) { Events = events };
     }
 }
 

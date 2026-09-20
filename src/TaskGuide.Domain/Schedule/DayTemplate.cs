@@ -100,10 +100,16 @@ public static class DayTemplateLifecycle
 
     /// <summary>
     /// Lays a template's Windows onto a date. This is a value copy of the collection, while each
-    /// Window retains its id so a Fire row already recorded for the date still matches.
+    /// Window retains its id so a Fire row already recorded for the date still matches. Also
+    /// materialises the template's Event prototypes as the date's own Events (#153) — exceptions
+    /// are ignored, since a stamp lays down that named template's shape and the connection to
+    /// whatever exception was recorded for a different weekday template ends there.
     /// </summary>
     public static DateOverride Stamp(DateOnly date, DayTemplate template) =>
-        new(date, [.. template.Windows], new DayTemplateUse(template.Id, template.Name));
+        new(date, [.. template.Windows], new DayTemplateUse(template.Id, template.Name))
+        {
+            Events = RecurringEvents.On(date, template.EventPrototypes, []),
+        };
 
     /// <summary>Drops an `Unused` template; Overrides need no repair because they hold copies.</summary>
     public static IReadOnlyList<DayTemplate> Delete(
