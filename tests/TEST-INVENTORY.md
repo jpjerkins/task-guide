@@ -1040,6 +1040,8 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - a non-OK response throws an error naming the method, path, and status
 - a 204 response is treated as absence, not a parse error
 - a 200 response parses as JSON
+- a refused write carries the server's typed reason alongside the status, so a caller can render it
+- a refusal with no parsable body still surfaces as the same error shape, with no reason
 - `DateEntry` renders a null value as blank and a given ISO value verbatim
 - `DateEntry` reports the new ISO value on change, and `null` when cleared
 - `DateEntry`'s date input survives its own input event — same DOM node before and after

@@ -4,7 +4,22 @@ import type { components } from './schema'
 // policy every resource shares — non-OK throws, a 204 reads as "nothing to parse", JSON parses
 // otherwise — so a later ticket adding a resource writes a thin normaliser on top of these
 // instead of re-deriving fetch policy. Nothing about a wire *type* is hand-written anywhere:
-// those come from `components['schemas'][...]` in the generated schema.d.ts.
+// those come from `components['schemas'][...]` in the generated schema.d.ts. A refused write's
+// typed reason (`{ error: string }`, #138) is part of that policy too — it's carried on
+// `ApiError` rather than dropped, so a caller can render it.
+
+// Thrown by `sendJson` on a non-OK response. `reason` is the server's `error` string when the
+// body parsed as one, null otherwise (no body, or a body that isn't `{ error: string }`).
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly reason: string | null,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
 
 export async function getJson<T>(path: string): Promise<T | null> {
   const res = await fetch(path)
@@ -26,7 +41,16 @@ export async function sendJson<T>(method: string, path: string, body: unknown): 
     body: JSON.stringify(body),
   })
   if (!res.ok) {
-    throw new Error(`${method} ${path} failed: ${res.status}`)
+    let reason: string | null = null
+    try {
+      const parsed: unknown = JSON.parse(await res.text())
+      if (parsed !== null && typeof parsed === 'object' && typeof (parsed as { error?: unknown }).error === 'string') {
+        reason = (parsed as { error: string }).error
+      }
+    } catch {
+      // No body, or not JSON — reason stays null.
+    }
+    throw new ApiError(`${method} ${path} failed: ${res.status}`, res.status, reason)
   }
   if (res.status === 204) {
     return null

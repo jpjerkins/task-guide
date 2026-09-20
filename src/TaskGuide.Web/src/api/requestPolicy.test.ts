@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getJson, sendJson } from './client'
+import { ApiError, getJson, sendJson } from './client'
 
 // The shared request policy client.ts is built on: non-OK throws naming method/path/status, a
 // 204 reads as "nothing to parse" (the API answers every endpoint 204 while the store is being
@@ -49,5 +49,24 @@ describe('sendJson', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
 
     await expect(sendJson('POST', '/api/widgets', { title: 'x' })).resolves.toBeNull()
+  })
+
+  it('carries the server\'s typed reason on a refusal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ error: 'A derived Task cannot have its Duration edited' }, 409)),
+    )
+
+    const rejection = expect(sendJson('PUT', '/api/tasks/1/duration', { duration: '30' })).rejects
+    await rejection.toBeInstanceOf(ApiError)
+    await rejection.toMatchObject({ status: 409, reason: 'A derived Task cannot have its Duration edited' })
+  })
+
+  it('reports a null reason when a refusal carries no parsable body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 409 })))
+
+    const rejection = expect(sendJson('PUT', '/api/tasks/1/duration', { duration: '30' })).rejects
+    await rejection.toBeInstanceOf(ApiError)
+    await rejection.toMatchObject({ status: 409, reason: null })
   })
 })
