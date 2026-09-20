@@ -252,6 +252,25 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_tasks_keeps_an_Unprocessed_Task_with_an_unanchored_offset_Defer_readable()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Tags = TagSet.Empty,
+            Defer = new OffsetDefer(new BeforeOffset(1, OffsetUnit.Days)),
+        };
+        await SeedTasksAsync(task);
+
+        var response = await _client.GetAsync("/api/tasks");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var body = Assert.Single(list.EnumerateArray());
+        Assert.Equal("unprocessed", body.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("defer").ValueKind);
+    }
+
+    [Fact]
     public async Task GET_api_tasks_status_orphan_returns_only_orphan_Tasks()
     {
         await _client.PostAsJsonAsync("/api/tasks", new { title = "Orphan task", duration = 30 });

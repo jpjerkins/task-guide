@@ -893,6 +893,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET_api_tasks_reports_unknown_opportunities_for_an_unavailable_fetched_dimension`
 - `GET_api_tasks_reports_done_without_fit_inputs_when_completion_precedes_unprocessed`
 - `GET /api/tasks carries the list's defer, postpone, deadline, eligibility, recurring, and derived operands`
+- `GET /api/tasks keeps an Unprocessed Task with an unanchored offset Defer readable`
 - `GET /api/tasks?status=orphan returns only orphan Tasks`
 - `GET /api/tasks/{id} returns notes, Deadline, Dimension values, loose Tags, and fit inputs`
 - `PUT /api/tasks/{id}/postpone` rejects a malformed Task id

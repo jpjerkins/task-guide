@@ -283,7 +283,7 @@ public static class TaskEndpoints
             ToWireName(status),
             eligible,
             DeadlineOf(task, log, now, boundary),
-            DeferRules.ResolvedFor(task, log, now, boundary),
+            DeferOf(task, log, now, boundary),
             task.Postpone,
             task.Recurrence is not null,
             task.Provenance is not null,
@@ -319,6 +319,29 @@ public static class TaskEndpoints
         task.Recurrence is { } recurrence
             ? RecurrenceRules.LiveInstanceDeadline(recurrence, task.CreatedAt, log, now, boundary)
             : task.Deadline;
+
+    private static DateOnly? DeferOf(
+        TaskItem task,
+        CompletionLog log,
+        DateTimeOffset now,
+        DayBoundary boundary)
+    {
+        if (task.Defer is not { } defer)
+        {
+            return null;
+        }
+
+        var deadline = DeadlineOf(task, log, now, boundary);
+        return defer.Match<DateOnly?>(
+            absolute => task.Recurrence is null
+                ? absolute.Date
+                : throw new InvalidOperationException(
+                    "A recurring Task must express its Defer as an Offset: an absolute date would "
+                    + "apply to one instance and be wrong forever after."),
+            offset => deadline is { } anchor
+                ? OffsetRules.ResolveAgainst(offset.Offset, anchor)
+                : null);
+    }
 
     private static bool IsTaskId(string id) =>
         IsMintedTaskId(id) || IsDerivedTaskId(id);
