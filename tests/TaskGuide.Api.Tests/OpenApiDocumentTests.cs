@@ -7,10 +7,10 @@ namespace TaskGuide.Api.Tests;
 
 /// <summary>
 /// The OpenAPI document at <c>/openapi/v1.json</c> is what the React SPA generates its
-/// <c>Task</c> type from (openapi-typescript). Scoped to the two real Task endpoints (#51):
-/// <c>GET /api/tasks</c> and <c>POST /api/tasks</c> must describe their response bodies with a
-/// <c>TaskResponse</c> schema, not the bare "200: OK" a raw <see cref="Microsoft.AspNetCore.Http.IResult"/>
-/// return type produces.
+/// <c>Task</c> type from (openapi-typescript). Every endpoint asserted here must describe its
+/// response bodies with a named schema, not the bare "200: OK" a raw
+/// <see cref="Microsoft.AspNetCore.Http.IResult"/> return type produces. It started at the two
+/// real Task endpoints (#51) and has grown with each handler whose document shape matters.
 /// </summary>
 /// <remarks>
 /// <c>Program.cs</c> reads <c>Storage:DataDir</c> from configuration on the line before
