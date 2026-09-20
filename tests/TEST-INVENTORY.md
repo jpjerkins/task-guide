@@ -600,9 +600,10 @@ directly.
   matching `JsonStore` (#116)
 - an unrecognised payload as the very first write leaves `LastWriteSucceeded` untouched,
   matching `JsonStore` (#116)
-- `MutateAsync` faults its returned `Task` instead of throwing synchronously, for an
-  already-cancelled token, for a `FailNextWrite` failure, and for an unrecognised write —
-  matching `JsonStore`, whose `MutateAsync` is `async` (#117)
+- `MutateAsync`'s returned `Task` carries the outcome instead of throwing synchronously: an
+  already-cancelled token yields a **cancelled** Task, while a `FailNextWrite` failure and an
+  unrecognised write each yield a **faulted** one — matching `JsonStore`, whose `MutateAsync` is
+  `async` (#117)
 - **the 32-thread concurrency test collects each thread's exception into a bag and asserts it
   empty before checking the write count** — a regression that throws now fails this test with a
   diagnosable message instead of crashing the whole test host on a foreground thread (#117

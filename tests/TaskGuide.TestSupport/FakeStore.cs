@@ -42,19 +42,18 @@ public sealed class FakeStore : IStore
     /// write lock (<see cref="IStore"/>'s doc), and two concurrent callers racing this fake
     /// unlocked would let the second silently discard the first's writes (#77 review finding 3).
     /// </summary>
-    // JsonStore.MutateAsync is async, so every throw inside it reaches the caller as a faulted
-    // Task, never a synchronous throw out of the call itself. A caller that starts two mutations
-    // before awaiting either must see the same shape here (#117 finding 2).
-    public Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)
+    // JsonStore.MutateAsync is async, so every throw inside it reaches the caller via the returned
+    // Task rather than a synchronous throw out of the call itself — and since it's async,
+    // AsyncTaskMethodBuilder routes an OperationCanceledException to a *cancelled* Task, not a
+    // faulted one. A caller that starts two mutations before awaiting either, or branches on
+    // Task.IsCanceled, must see the same shape here (#117 finding 2, shape corrected in review).
+    public async Task<OneOf<Applied, T>> MutateAsync<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)
     {
-        try
-        {
-            return Task.FromResult(Mutate(mutation, cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromException<OneOf<Applied, T>>(ex);
-        }
+        // Awaiting an already-completed Task runs Mutate inline on the caller's thread — the
+        // concurrency contract is unchanged — while giving the async state machine JsonStore's own
+        // throw semantics.
+        await Task.CompletedTask;
+        return Mutate(mutation, cancellationToken);
     }
 
     private OneOf<Applied, T> Mutate<T>(Func<IStoreView, OneOf<StoreMutation, T>> mutation, CancellationToken cancellationToken)

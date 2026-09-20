@@ -181,8 +181,8 @@ public sealed class FakeStoreTests
 
         // Each thread body is wrapped so a regression that throws (e.g. the NotImplementedException
         // path, or a future Apply bug) fails this one test with a diagnosable message instead of
-        // taking down the whole test host as an unhandled exception on a foreground thread, leaving
-        // the other 31 threads stuck at the Barrier (#117 finding 3).
+        // taking down the whole test host as an unhandled exception on a foreground thread
+        // (#117 finding 3).
         var threads = Enumerable.Range(0, concurrentWriters).Select(i => new Thread(() =>
         {
             try
@@ -357,9 +357,12 @@ public sealed class FakeStoreTests
     }
 
     /// <summary>#117 finding 2: <c>JsonStore.MutateAsync</c> is an <c>async</c> method, so a throw
-    /// anywhere inside it reaches the caller as a faulted <see cref="Task"/>, never a synchronous
-    /// throw out of the call itself. A caller that starts two mutations before awaiting either
-    /// (e.g. <c>Task.WhenAll</c>) must see the same shape against this fake.</summary>
+    /// anywhere inside it reaches the caller via the returned <see cref="Task"/>, never a
+    /// synchronous throw out of the call itself — and an <see cref="OperationCanceledException"/>
+    /// specifically comes back as a <em>cancelled</em> Task, not merely a faulted one, because
+    /// that's how <c>AsyncTaskMethodBuilder</c> routes it. A caller that starts two mutations
+    /// before awaiting either (e.g. <c>Task.WhenAll</c>), or branches on <c>Task.IsCanceled</c>,
+    /// must see the same shape against this fake.</summary>
     [Fact]
     public async Task MutateAsync_faults_its_Task_instead_of_throwing_synchronously_for_an_already_cancelled_token()
     {
@@ -369,6 +372,7 @@ public sealed class FakeStoreTests
         var task = store.MutateAsync<Never>(_ => new StoreMutation([]), cts.Token);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => task);
+        Assert.True(task.IsCanceled);
     }
 
     /// <summary>#117 finding 2: same shape for the <see cref="FakeStore.FailNextWrite"/> path.</summary>
