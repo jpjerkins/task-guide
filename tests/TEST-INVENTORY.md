@@ -1724,7 +1724,9 @@ specified under **Shared controls** above and are not restated here.
 - pressing one moves the Task out of the unprocessed pile without the screen being re-entered
 - the stale pile renders ordinary Task rows and offers no "un-stale" control: the response is reword,
   slice smaller, or delete
-- an empty pile renders "Nothing to process." rather than being hidden — the heading is the nudge
+- an empty pile renders its own empty-state line rather than being hidden — the heading is the
+  nudge: "Nothing to process." for the unprocessed pile, "Nothing stale." for the stale pile
+  (Phil, 2026-09-20 — a stale Task is never *processed*, so the shared literal misdescribed it)
 - nothing on this screen subscribes to a notification; these two piles nudge only through the
   reminder footer
 - a failed read lands on the same connection-error state as Tasks, rather than presenting empty
@@ -1747,6 +1749,11 @@ specified under **Shared controls** above and are not restated here.
   controls — busy tracking is per-row, not a single shared slot
 - a slower reload triggered by an earlier duration write does not overwrite a newer write's
   fresher pile; only the most recently issued reload's result is applied
+- a duration-write failure note names the Task it describes, since it renders at the top of the
+  scroll rather than inside the offending row — the error arm that can follow a failed reload
+  replaces the whole ready-state body, rows included, so a row-scoped note can't survive it
+- the duration-write failure note is announced as an alert (`role="alert"`), matching
+  `OverrideScreen`'s note
 
 ## `TaskGuide.E2E`
 

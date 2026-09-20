@@ -51,7 +51,7 @@ export function TriageScreen() {
     load()
   }, [load])
 
-  async function handleDuration(taskId: string, bucket: string) {
+  async function handleDuration(taskId: string, bucket: string, title: string) {
     setTaskActionNote((prev) => (prev?.taskId === taskId ? null : prev))
     setBusyIds((prev) => new Set(prev).add(taskId))
     try {
@@ -59,8 +59,12 @@ export function TriageScreen() {
     } catch {
       // Set before the reload, and rendered independently of the error arm below: offline, the
       // reload this triggers can fail too, and the note must survive that rather than being
-      // dropped along with the ready-state body it would otherwise live inside.
-      setTaskActionNote({ taskId, text: "Couldn't set this task's duration." })
+      // dropped along with the ready-state body it would otherwise live inside. That's also why
+      // this can't render inside the offending row: the error arm replaces the whole ready-state
+      // body, rows included, so the row-scoped note would vanish along with it. The task's title
+      // goes into the text instead, so the note still says which Task failed from the top of the
+      // scroll area.
+      setTaskActionNote({ taskId, text: `Couldn't set the duration for "${title}".` })
       await load()
       setBusyIds((prev) => {
         const next = new Set(prev)
@@ -84,7 +88,11 @@ export function TriageScreen() {
     <>
       <ScreenNav title="Process" sub={sub} />
       <div className="scroll">
-        {taskActionNote && <div className="note">{taskActionNote.text}</div>}
+        {taskActionNote && (
+          <div className="note" role="alert">
+            {taskActionNote.text}
+          </div>
+        )}
         {state.status === 'loading' && <div className="empty">Loading…</div>}
         {state.status === 'error' && (
           <div className="empty">Couldn't load tasks. Check your connection and try again.</div>
@@ -107,7 +115,7 @@ export function TriageScreen() {
                             className="pill dur"
                             aria-label={`${durLabel(b)} — ${t.title}`}
                             disabled={busyIds.has(t.id)}
-                            onClick={() => handleDuration(t.id, b)}
+                            onClick={() => handleDuration(t.id, b, t.title)}
                           >
                             {durLabel(b)}
                           </button>
@@ -121,10 +129,12 @@ export function TriageScreen() {
             <div className="sec-h">Stale — reword, slice smaller, or delete</div>
             <div className="list">
               {state.stale.length === 0 ? (
-                // The inventory names exactly one empty-pile string ("Nothing to process.") and is
-                // silent on whether an empty stale pile gets a different one — this is a reading of
-                // the spec, reusing the same literal, not a copy-paste.
-                <div className="empty">Nothing to process.</div>
+                // Phil settled this in-session on 2026-09-20: its own literal, not the shared one.
+                // The inventory's rule ("the heading is the nudge") still holds — the empty pile
+                // stays visible under its heading — but "Nothing to process." misdescribes a pile
+                // whose responses are reword, slice smaller, or delete. Stale items are never
+                // processed.
+                <div className="empty">Nothing stale.</div>
               ) : (
                 state.stale.map((t) => (
                   <div className="row" key={t.id}>

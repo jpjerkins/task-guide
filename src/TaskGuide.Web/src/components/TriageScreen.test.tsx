@@ -98,15 +98,14 @@ describe('TriageScreen', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 
-  it('an empty pile renders "Nothing to process." rather than being hidden', async () => {
+  it('an empty pile renders its own empty-state line rather than being hidden', async () => {
     vi.stubGlobal('fetch', vi.fn(routedFetch))
 
     render(<TriageScreen />)
     await screen.findByText('Missing a duration')
 
-    // The inventory names exactly one empty-pile string and is silent on whether an empty stale
-    // pile gets a different one — this reads it as the same literal for both piles.
-    expect(await screen.findAllByText('Nothing to process.')).toHaveLength(2)
+    expect(screen.getByText('Nothing to process.')).toBeInTheDocument()
+    expect(screen.getByText('Nothing stale.')).toBeInTheDocument()
     expect(screen.getByText('Stale — reword, slice smaller, or delete')).toBeInTheDocument()
   })
 
@@ -155,7 +154,7 @@ describe('TriageScreen', () => {
 
     await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
-    expect(await screen.findByText("Couldn't set this task's duration.")).toBeInTheDocument()
+    expect(await screen.findByText('Couldn\'t set the duration for "File the receipt".')).toBeInTheDocument()
     // Untouched by the refused write — still in the unprocessed pile, buttons re-enabled.
     expect(screen.getByText('File the receipt')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '2m — File the receipt' })).not.toBeDisabled()
@@ -200,7 +199,8 @@ describe('TriageScreen', () => {
 
     resolveUnprocessed(jsonResponse([]))
     resolveStale(jsonResponse([]))
-    await waitFor(() => expect(screen.getAllByText('Nothing to process.')).toHaveLength(2))
+    await screen.findByText('Nothing to process.')
+    expect(screen.getByText('Nothing stale.')).toBeInTheDocument()
   })
 
   it('does not show pile counts in the subtitle when the read failed', async () => {
@@ -233,7 +233,7 @@ describe('TriageScreen', () => {
 
     // Offline: the write fails AND the reload it triggers fails too, landing on the connection
     // error — the note must still say the write failed rather than being dropped by that arm.
-    expect(await screen.findByText("Couldn't set this task's duration.")).toBeInTheDocument()
+    expect(await screen.findByText('Couldn\'t set the duration for "File the receipt".')).toBeInTheDocument()
     expect(await screen.findByText(/couldn.t load tasks/i)).toBeInTheDocument()
   })
 
@@ -259,11 +259,30 @@ describe('TriageScreen', () => {
     await screen.findByText('File the receipt')
 
     await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
-    await screen.findByText("Couldn't set this task's duration.")
+    await screen.findByText('Couldn\'t set the duration for "File the receipt".')
 
     await user.click(screen.getByRole('button', { name: '2m — Water plants' }))
     await waitFor(() => expect(screen.queryByText('Water plants')).not.toBeInTheDocument())
-    expect(screen.getByText("Couldn't set this task's duration.")).toBeInTheDocument()
+    expect(screen.getByText('Couldn\'t set the duration for "File the receipt".')).toBeInTheDocument()
+  })
+
+  it('the duration-write failure note is announced as an alert', async () => {
+    unprocessed = [{ id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT' && url === '/api/tasks/u1/duration') {
+        return new Response(null, { status: 500 })
+      }
+      return routedFetch(url)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<TriageScreen />)
+    await screen.findByText('File the receipt')
+
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn\'t set the duration for "File the receipt".')
   })
 
   it("each unprocessed row's Duration buttons are labelled with the task they size, not just the bucket", async () => {
