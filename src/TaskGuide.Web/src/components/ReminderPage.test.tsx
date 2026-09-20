@@ -449,7 +449,7 @@ it('the_landing_page_carries_both_of_the_prototypes_exits_and_each_leaves_for_th
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('Evening wind-down')
 
-  await userEvent.click(screen.getByRole('button', { name: /Back$|Done$/ }))
+  await userEvent.click(screen.getByRole('button', { name: '‹ Done' }))
   expect(assign).toHaveBeenCalledWith('/')
 
   assign.mockClear()
