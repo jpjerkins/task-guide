@@ -1754,6 +1754,10 @@ specified under **Shared controls** above and are not restated here.
   replaces the whole ready-state body, rows included, so a row-scoped note can't survive it
 - the duration-write failure note is announced as an alert (`role="alert"`), matching
   `OverrideScreen`'s note
+- the `triage` screen module registers "Process & stale" on the `more` tab, rendering
+  `TriageScreen` — asserted directly against the module's own import, guarding the id
+  `registerScreen` rejects on collision, which blanks the whole app's eager glob rather than one
+  screen
 
 ## `TaskGuide.E2E`
 
