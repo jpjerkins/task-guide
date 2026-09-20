@@ -10,6 +10,12 @@ namespace TaskGuide.Infrastructure.Storage;
 /// a copy, never a reference (`CONTEXT.md`, "Override") — the copy preserves each Window's id,
 /// and the optional <see cref="DayTemplateUse"/> use record carries the template name exactly as
 /// it was captured, not resolved by looking the id up in `day-templates.json`.
+/// <para>
+/// The optional <c>events</c> property is #153's two-armed absence (ADR-0010b): missing means
+/// <see cref="DateOverride.Events"/> is <c>null</c> — the date's Events still come from the
+/// Pattern — and present, including <c>[]</c>, means the date's own Events. Never written as an
+/// explicit JSON <c>null</c>, which would be a third encoding of the same absence.
+/// </para>
 /// </summary>
 public static class OverrideCodec
 {
@@ -39,7 +45,15 @@ public static class OverrideCodec
                 .Select(CodecPrimitives.ReadWindow)
                 .ToList();
 
-            overrides.Add(new DateOverride(date, windows, ReadUsedOrNull(element.GetProperty("used"))));
+            // Absence has two arms (ADR-0010b): the property missing means the date's Events
+            // still come from the Pattern (an Override written before #153); present — including
+            // an empty array — means the date's own Events. TryGetProperty, not GetProperty,
+            // precisely because absence is meaningful here.
+            IReadOnlyList<Event>? events = element.TryGetProperty("events", out var eventsElement)
+                ? eventsElement.EnumerateArray().Select(CodecPrimitives.ReadEvent).ToList()
+                : null;
+
+            overrides.Add(new DateOverride(date, windows, ReadUsedOrNull(element.GetProperty("used"))) { Events = events });
         }
 
         return overrides;
@@ -67,6 +81,17 @@ public static class OverrideCodec
             writer.WriteStartArray();
             foreach (var window in dateOverride.Windows) CodecPrimitives.WriteWindow(writer, window);
             writer.WriteEndArray();
+
+            // Omitted, not `null`, when absent — a written `null` would be a third on-disk
+            // encoding of the same thing `TryGetProperty`'s absence already means, and omitting
+            // keeps every pre-#153 fixture row byte-identical (ADR-0010b).
+            if (dateOverride.Events is { } events)
+            {
+                writer.WritePropertyName("events");
+                writer.WriteStartArray();
+                foreach (var @event in events) CodecPrimitives.WriteEvent(writer, @event);
+                writer.WriteEndArray();
+            }
 
             writer.WriteEndObject();
         }

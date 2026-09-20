@@ -36,17 +36,9 @@ public static class EventCodec
         foreach (var element in document.RootElement.EnumerateArray())
         {
             identify(null);
-            var id = new EventId(element.GetProperty("id").GetString()!);
-            identify(id.Value);
+            identify(element.GetProperty("id").GetString());
 
-            events.Add(new Event(
-                id,
-                CodecPrimitives.ReadDate(element.GetProperty("date")),
-                element.GetProperty("name").GetString()!,
-                CodecPrimitives.ReadClockTime(element.GetProperty("start")),
-                CodecPrimitives.ReadClockTime(element.GetProperty("end")),
-                CodecPrimitives.ReadTagSet(element),
-                CodecPrimitives.ReadOffsetOrNull(element, "absenceNotice")));
+            events.Add(CodecPrimitives.ReadEvent(element));
         }
 
         return events;
@@ -56,20 +48,7 @@ public static class EventCodec
     {
         writer.WriteStartArray();
 
-        foreach (var @event in events)
-        {
-            writer.WriteStartObject();
-
-            writer.WriteString("id", @event.Id.Value);
-            CodecPrimitives.WriteDateOrNull(writer, "date", @event.Date);
-            writer.WriteString("name", @event.Name);
-            CodecPrimitives.WriteClockTime(writer, "start", @event.Start);
-            CodecPrimitives.WriteClockTime(writer, "end", @event.End);
-            CodecPrimitives.WriteTagSet(writer, @event.Tags);
-            CodecPrimitives.WriteOffsetOrNull(writer, "absenceNotice", @event.AbsenceNotice);
-
-            writer.WriteEndObject();
-        }
+        foreach (var @event in events) CodecPrimitives.WriteEvent(writer, @event);
 
         writer.WriteEndArray();
     }

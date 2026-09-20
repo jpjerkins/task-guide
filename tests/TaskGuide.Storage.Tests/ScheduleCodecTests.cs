@@ -164,4 +164,46 @@ public sealed class ScheduleCodecTests
         }
     }
 
+    private static Event Event(string id, DateOnly date, string name) =>
+        new(new EventId(id), date, name, new TimeOnly(18, 0), new TimeOnly(19, 0), TagSet.Empty, null);
+
+    [Fact]
+    public void An_overrides_own_events_round_trip_preserving_each_events_id()
+    {
+        var date = new DateOnly(2026, 8, 15);
+        var overrides = new[] { new DateOverride(date, [], null) { Events = [Event("evt_frozen_a", date, "Karate")] } };
+
+        var written = RoundTripOverrides(overrides);
+        var roundTripped = OverrideCodec.Read(written);
+
+        var actual = Assert.Single(Assert.Single(roundTripped).Events!);
+        Assert.Equal("evt_frozen_a", actual.Id.Value);
+    }
+
+    [Fact]
+    public void An_override_with_no_events_property_reads_as_absent_and_writes_none_back()
+    {
+        var original = FixtureJson("overrides.json");
+
+        var overrides = OverrideCodec.Read(original);
+        Assert.All(overrides, o => Assert.Null(o.Events));
+
+        var written = RoundTripOverrides(overrides);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original), JsonNode.Parse(written)));
+    }
+
+    [Fact]
+    public void An_override_with_an_empty_events_array_round_trips_as_present_and_empty_never_as_absent()
+    {
+        var date = new DateOnly(2026, 8, 15);
+        var overrides = new[] { new DateOverride(date, [], null) { Events = [] } };
+
+        var written = RoundTripOverrides(overrides);
+        var roundTripped = OverrideCodec.Read(written);
+
+        var actual = Assert.Single(roundTripped);
+        Assert.NotNull(actual.Events);
+        Assert.Empty(actual.Events!);
+    }
+
 }
