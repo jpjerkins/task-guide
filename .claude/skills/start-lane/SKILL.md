@@ -71,8 +71,8 @@ Rules that follow from this:
   session may hold it: report that rather than reusing or removing it. Never `worktree remove`
   or `git worktree prune` a directory with uncommitted work in it.
 - The worktree needs its own `npm install` for web lanes (`node_modules` is not shared).
-- Leave the worktree in place when the ticket is done. Removing it is Phil's call, same as
-  pushing and merging (step 9).
+- The worktree is yours for the ticket's lifetime and you remove it yourself in step 8, once the
+  work is merged and pushed. Until then it stays.
 
 ## 4. Read only what the ticket names
 
@@ -103,8 +103,9 @@ Two properties keep the brief cheap to recover:
   turn — and a self-contained brief costs one re-dispatch to retry. A brief assembled across
   several conversational messages costs re-deriving the whole spec. Write the whole thing before
   you send any of it.
-- **Tell it to commit each section as it lands.** Step 9's standing permission is addressed to
-  *you*, and the subagent never sees this skill — so restate it in the brief, as crash-resilience
+- **Tell it to commit each section as it lands.** Committing as work is verified is standing
+  permission, addressed to *you*, and the subagent never sees this skill — so restate it in the
+  brief, as crash-resilience
   rather than as permission. An interruption should then cost one section, not the run.
 
 Scope each task so it can finish without asking questions, and dispatch genuinely independent
@@ -142,7 +143,7 @@ constructor dependency on a port makes API startup fail with *Unable to resolve 
 integration lane wires it, usually the same day. Your lane's own tests still have to be green; API
 tests red on that one DI error alone are not a blocker.
 
-## 7. Before opening a PR
+## 7. Before merging
 
 ```sh
 dotnet test
@@ -251,15 +252,67 @@ wrong in the spec's terms ("counted as if Active" where § Scarcity says _undefi
 this skill, and step 4a applies here too: hand it the decisions you already hold as findings, not as
 a reading list.
 
-## 8. PR into `main`
+## 8. Merge into `main` and close out
 
-Rebase onto `main` first — from inside the worktree, `git fetch origin && git rebase
-origin/main` (the local `main` ref belongs to the main clone and may be stale). If the diff
-touches `Application/Ports/`, `Api/Program.cs`, or
-`TaskGuide.TestSupport`, say so plainly in the PR body — those additionally need a Claude
-integration-lane review before merge.
+**Do not open a PR, and do not stop here to wait for Phil.** Once step 7's verification is green
+and step 7a's review is settled, finishing the ticket is your job, start to finish. The commands
+below are one sequence; run them in order.
 
-## 9. Never push or merge without Phil asking
+Rebase first — from inside the worktree, because the local `main` ref belongs to the main clone
+and may be stale:
 
-Commit as work is verified, step by step — that's standing permission. It does not extend to
-pushing or merging.
+```sh
+git fetch origin && git rebase origin/main
+```
+
+Then fast-forward `main` in the main clone and push it. The main clone stays on `main` (step 3),
+so it is already the right checkout, and `--ff-only` is what makes this safe with several lanes
+finishing at once:
+
+```sh
+git -C /Users/phil/dev/task-guide merge --ff-only <lane>/<short-slug>
+git -C /Users/phil/dev/task-guide push origin main
+```
+
+If the merge is **rejected as not a fast-forward**, another lane pushed between your rebase and
+your merge. Rebase again and retry — never `--no-ff`, never `merge -s ours`, never force-push.
+
+Close the ticket, with the verification in the comment so the close is auditable:
+
+```sh
+gh issue close <n> --comment "<what you ran, and its green output>"
+```
+
+Then remove your worktree and delete the branch — the work is in `main`, so the branch is spent:
+
+```sh
+git -C /Users/phil/dev/task-guide worktree remove /Users/phil/dev/task-guide-<short-slug>
+git -C /Users/phil/dev/task-guide branch -d <lane>/<short-slug>
+```
+
+`worktree remove` refuses a dirty worktree and `branch -d` refuses an unmerged branch. Both
+refusals mean something is not actually finished: read what they say, don't reach for `-f` or
+`-D`.
+
+Finally, leave the main clone current:
+
+```sh
+git -C /Users/phil/dev/task-guide pull --ff-only
+```
+
+## 9. What still needs Phil
+
+Committing, merging, pushing `main`, closing the ticket and cleaning up are all standing
+permission — that is step 8, and finishing it is not something to ask about.
+
+Three things are still his:
+
+- **A file another lane owns** (step 6), including any `.csproj`, `task-guide.slnx`, or
+  `src/TaskGuide.Web/src/api/schema.d.ts`. Report it; don't edit it.
+- **A ticket that looks wrong** — scope, ownership, a blocker the plan didn't anticipate. Report
+  it; don't redesign it.
+- **Anything outside the ticket's scope**, however small and however obviously right.
+
+If the diff touches `Application/Ports/`, `Api/Program.cs`, or `TaskGuide.TestSupport`, say so
+plainly in your final report — those are the changes most likely to break another lane, and Phil
+wants to know they landed even though you merged them yourself.
