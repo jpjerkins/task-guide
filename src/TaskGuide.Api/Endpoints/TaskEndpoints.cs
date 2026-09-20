@@ -254,13 +254,13 @@ public static class TaskEndpoints
         DayBoundary boundary,
         OpportunityCounter opportunities)
     {
-        var status = StatusRules.Of(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary);
         var log = view.CompletionsFor(task.Id);
+        var status = StatusRules.Of(task, log, registry, staleThresholds, now, boundary);
         var patternWeekCount = status is not Status.Active
             ? (int?)null
             : opportunities.CountInPatternWeek(task, view.Patterns.Active, view.DayTemplates, boundary.DateOf(now));
         var eligible = status is Status.Active
-            && StatusRules.IsEligible(task, view.CompletionsFor(task.Id), registry, staleThresholds, now, boundary);
+            && StatusRules.IsEligible(task, log, registry, staleThresholds, now, boundary);
         var opportunityCount = eligible
             ? opportunities.CountAhead(task, now, EmptyFetchedValues, FailedFetchedDimensions(task, registry))
             : null;
@@ -336,8 +336,10 @@ public static class TaskEndpoints
             absolute => task.Recurrence is null
                 ? absolute.Date
                 : throw new InvalidOperationException(
-                    "A recurring Task must express its Defer as an Offset: an absolute date would "
-                    + "apply to one instance and be wrong forever after."),
+                    $"Task '{task.Id.Value}' is recurring but holds an absolute Defer of "
+                    + $"{absolute.Date:yyyy-MM-dd}. A recurring Task must express its Defer as an "
+                    + "Offset: an absolute date would apply to one instance and be wrong forever "
+                    + "after. The write paths refuse this, so the stored record is corrupt."),
             offset => deadline is { } anchor
                 ? OffsetRules.ResolveAgainst(offset.Offset, anchor)
                 : null);
