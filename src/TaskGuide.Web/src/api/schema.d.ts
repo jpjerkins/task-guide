@@ -138,6 +138,15 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
+                    content: {
+                        "application/json": components["schemas"]["TaskResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
                     content?: never;
                 };
             };
@@ -2709,10 +2718,24 @@ export interface components {
         TaskResponse: {
             id: string;
             title: string;
+            notes: null | string;
             duration: null | string;
+            dimensions: {
+                [key: string]: string[];
+            };
+            looseTags: string[];
             /** Format: date-time */
             createdAt: string;
             status: string;
+            eligible: boolean;
+            /** Format: date */
+            deadline: null | string;
+            /** Format: date */
+            defer: null | string;
+            /** Format: date */
+            postpone: null | string;
+            recurring: boolean;
+            derived: boolean;
             /** Format: int32 */
             opportunities: null | number | string;
             /** Format: int32 */

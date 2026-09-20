@@ -888,10 +888,15 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `PATCH /api/tasks/{id}` rejects a malformed Task id
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
 - `PUT /api/tasks/{id}/postpone` postpones a plain Task
-- `TaskResponse_schema_is_present_with_its_eight_members`
+- `TaskResponse_schema_is_present_with_its_seventeen_members`
 - `GET_api_tasks_carries_derived_status_and_fit_inputs_with_absence_distinct_from_zero`
 - `GET_api_tasks_reports_unknown_opportunities_for_an_unavailable_fetched_dimension`
 - `GET_api_tasks_reports_done_without_fit_inputs_when_completion_precedes_unprocessed`
+- `GET /api/tasks carries the list's defer, postpone, deadline, eligibility, recurring, and derived operands`
+- `GET /api/tasks keeps an Unprocessed Task with an unanchored offset Defer readable`
+- `GET /api/tasks?status=orphan returns only orphan Tasks`
+- `GET /api/tasks/{id} returns notes, Deadline, Dimension values, loose Tags, and fit inputs`
+- `GET /api/tasks/{id} returns 404 for a well-formed Task id that does not exist`
 - `PUT /api/tasks/{id}/postpone` rejects a malformed Task id
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
