@@ -58,17 +58,46 @@ it('a_range_whose_end_precedes_its_start_is_refused_and_nothing_is_written', asy
 })
 
 it('a_single_date_span_uses_the_same_check_and_span_POST_and_needs_no_confirmation_when_nothing_is_clobbered', async () => {
+  // #152: no-confirmation-when-nothing-clobbered is stamp's rule, not blank's — stamp only warns
+  // about the Overrides it would replace, and there are none.
   const day = { date: '2026-12-25', windows: [], used: null }
   const fetch = vi.fn().mockResolvedValueOnce(json([])).mockResolvedValueOnce(json([day]))
   vi.stubGlobal('fetch', fetch)
   const confirm = vi.fn()
-  const span = { from: '2026-12-25', to: '2026-12-25', templateId: null, mode: 'blank' as const }
+  const span = { from: '2026-12-25', to: '2026-12-25', templateId: 'dt_christmas', mode: 'stamp' as const }
   await expect(authorOverrideSpan(span, confirm)).resolves.toEqual([day])
   expect(fetch.mock.calls).toEqual([
     ['/api/overrides/clobber-check?from=2026-12-25&to=2026-12-25'],
     ['/api/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(span) }],
   ])
   expect(confirm).not.toHaveBeenCalled()
+})
+
+// #152: blank confirms on blast radius (the span it will clear), not on the clobber count — a
+// pattern-following date is exactly what blanking destroys, so an empty clobber list is no reason
+// to skip the prompt the way it is for stamp.
+it('a_blank_span_with_nothing_clobbered_still_confirms_before_writing', async () => {
+  const day = { date: '2026-12-25', windows: [], used: null }
+  const fetch = vi.fn().mockResolvedValueOnce(json([])).mockResolvedValueOnce(json([day]))
+  vi.stubGlobal('fetch', fetch)
+  const confirm = vi.fn(async (dates: readonly string[]) => {
+    expect(dates).toEqual([])
+    return true
+  })
+  const span = { from: '2026-12-25', to: '2026-12-25', templateId: null, mode: 'blank' as const }
+  await expect(authorOverrideSpan(span, confirm)).resolves.toEqual([day])
+  expect(confirm).toHaveBeenCalledOnce()
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+it('a_blank_span_with_nothing_clobbered_writes_nothing_when_confirmation_is_declined', async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(json([]))
+  vi.stubGlobal('fetch', fetch)
+  const confirm = vi.fn().mockResolvedValue(false)
+  const span = { from: '2026-12-25', to: '2026-12-25', templateId: null, mode: 'blank' as const }
+  await expect(authorOverrideSpan(span, confirm)).resolves.toBeNull()
+  expect(confirm).toHaveBeenCalledOnce()
+  expect(fetch).toHaveBeenCalledTimes(1)
 })
 
 it.each(['', '2026-02-30', '2026-13-01', '2026-1-01', '0000-01-01'])('an_incomplete_or_invalid_calendar_date_is_refused_before_checking_or_writing_%s', async (date) => {
@@ -112,7 +141,8 @@ it.each([400, 500])('a_failed_clobber_check_surfaces_the_error_without_confirmat
 it('a_failed_span_POST_surfaces_the_error_without_retrying_individual_dates', async () => {
   const fetch = vi.fn().mockResolvedValueOnce(json([])).mockResolvedValueOnce(new Response(null, { status: 409 }))
   vi.stubGlobal('fetch', fetch)
-  await expect(authorOverrideSpan({ from: '2026-12-24', to: '2026-12-25', templateId: null, mode: 'blank' }, vi.fn())).rejects.toThrow('POST /api/overrides failed: 409')
+  // blank always confirms (#152), so this needs an accepting confirm to reach the POST it's testing.
+  await expect(authorOverrideSpan({ from: '2026-12-24', to: '2026-12-25', templateId: null, mode: 'blank' }, vi.fn(async () => true))).rejects.toThrow('POST /api/overrides failed: 409')
   expect(fetch).toHaveBeenCalledTimes(2)
 })
 

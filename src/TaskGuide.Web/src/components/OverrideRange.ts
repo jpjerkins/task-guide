@@ -23,7 +23,11 @@ export async function authorOverrideSpan(
   if (span.mode === 'freeze') return sendJson<CreatedDays>('POST', '/api/overrides', span)
   const dates = await getJson<AffectedDates>(`/api/overrides/clobber-check?from=${span.from}&to=${span.to}`)
   if (dates === null) throw new Error('Clobber check returned no dates response')
-  if (dates.length && !await confirm(dates, spanSize(span.from, span.to), span.mode)) return null
+  // Stamp warns about the Overrides it would replace, so an empty clobber list means nothing to
+  // confirm. Blank has no such proxy — a pattern-following date is exactly what it destroys — so
+  // it always confirms on the span it is about to clear (#152).
+  const needsConfirm = span.mode === 'blank' || dates.length > 0
+  if (needsConfirm && !await confirm(dates, spanSize(span.from, span.to), span.mode)) return null
   return sendJson<CreatedDays>('POST', '/api/overrides', span)
 }
 

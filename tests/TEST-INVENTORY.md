@@ -1244,6 +1244,18 @@ dimensions viewer. Three rules cut across every line below, so they are not repe
   it/them" (not "Stamping replaces"), the untouched sentence says those dates "will be cleared
   too" (not "copied off it"), and the button reads `Blank it` / `Blank all {span}` — never
   "stamp". The stamp-mode wording is asserted verbatim elsewhere as a regression guard
+- blank confirms on the span it is about to clear, not on the clobber-check count (#152):
+  `authorOverrideSpan` calls `confirm` whenever `mode === 'blank'`, even with an empty `dates`
+  array, because a pattern-following date is exactly what blanking destroys and the clobber count
+  is the wrong proxy for that. `stamp` keeps its original `dates.length` gate — it only warns
+  about the Overrides it would replace, so nothing clobbered means nothing to confirm.
+  `useOverrideConfirmation` renders a count-only sheet for `n === 0` (only reachable in blank
+  mode): title `Blank all {span} dates?`, a plain sentence ("Every window on these dates is
+  removed and nothing will fire on them") with **no `.damage` block** — no dates depart from the
+  pattern yet, so there is nothing true to list — no untouched-dates sentence (it would restate
+  the same dates twice), the undo note verbatim, and button `Blank all {span}`. At `span === 1`
+  (a from===to range, since date scope never offers the blank row) it reads `Blank this date?` /
+  `Blank it` with the body sentence singularised. The `n > 0` shapes are unchanged
 
 **#140 review finding 4**: the untouched-dates sentence pluralized `n` but not `untouched` —
 `untouched === 1` still rendered "The other 1 dates are following the pattern". Now singular at

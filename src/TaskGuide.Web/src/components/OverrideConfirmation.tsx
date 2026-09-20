@@ -32,6 +32,21 @@ export function useOverrideConfirmation() {
     // Blanking clears the clobbered dates rather than stamping over them, so the same structure
     // needs different verbs — never "stamp" or "copied off" outside the stamp arm.
     const action = blank ? 'Blanking clears' : 'Stamping replaces'
+    // n === 0 is only reachable in blank mode (#152: blank confirms on span size, not clobber
+    // count — stamp still skips this hook entirely when nothing is clobbered). No date departs
+    // from the pattern yet, so there is nothing true to list — no .damage block at all.
+    if (n === 0) {
+      const soloSpan = span === 1
+      return <OverrideSheet title={soloSpan ? 'Blank this date?' : `Blank all ${span} dates?`} onCancel={() => finish(false)}>
+        <div className="damage-h">{soloSpan
+          ? 'Every window on this date is removed and nothing will fire on it.'
+          : 'Every window on these dates is removed and nothing will fire on them.'}</div>
+        <div className="note">Nothing here can be undone in one step — reverting is per date.</div>
+        <div className="btn-row"><button className="btn danger wide" onClick={() => finish(true)}>
+          {soloSpan ? 'Blank it' : `Blank all ${span}`}
+        </button></div>
+      </OverrideSheet>
+    }
     // Dates render through fmtShort, never ISO. No per-date shape detail: clobber-check returns
     // bare dates and DayShape carries no template name, so the .pill.due is what is actually true.
     return <OverrideSheet title={`${verb} ${n} Override${n === 1 ? '' : 's'}?`} onCancel={() => finish(false)}>

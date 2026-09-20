@@ -114,3 +114,28 @@ it('blank_mode_for_a_single_date_that_is_its_own_whole_span_reads_Blank_it', asy
   expect(document.querySelector('.damage-h')).toHaveTextContent(
     'This date already departs from the pattern. Blanking clears what is on it.')
 })
+
+// #152: blank confirms on blast radius, not clobber count — authorOverrideSpan now calls confirm
+// with an empty dates array whenever mode is 'blank', so this sheet needs a shape with nothing
+// true to list: no dates depart from the pattern yet, so no .damage block at all.
+it('blank_mode_with_nothing_clobbered_renders_a_count_only_sheet_with_no_damage_block', async () => {
+  render(<Host />)
+  const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number, mode: 'stamp' | 'blank') => Promise<boolean> }).confirm
+  act(() => { void confirm([], 30, 'blank') })
+  expect(await screen.findByRole('heading', { name: 'Blank all 30 dates?' })).toBeInTheDocument()
+  expect(document.querySelector('.damage')).toBeNull()
+  expect(document.body.textContent).toContain('Every window on these dates is removed and nothing will fire on them.')
+  expect(document.body.textContent).not.toMatch(/The other \d+ dates?/)
+  expect(document.querySelector('.note')).toHaveTextContent('Nothing here can be undone in one step — reverting is per date.')
+  expect(screen.getByRole('button', { name: 'Blank all 30' })).toBeInTheDocument()
+})
+
+it('blank_mode_with_nothing_clobbered_for_a_single_date_span_reads_Blank_this_date', async () => {
+  render(<Host />)
+  const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number, mode: 'stamp' | 'blank') => Promise<boolean> }).confirm
+  act(() => { void confirm([], 1, 'blank') })
+  expect(await screen.findByRole('heading', { name: 'Blank this date?' })).toBeInTheDocument()
+  expect(document.querySelector('.damage')).toBeNull()
+  expect(document.body.textContent).toContain('Every window on this date is removed and nothing will fire on it.')
+  expect(screen.getByRole('button', { name: 'Blank it' })).toBeInTheDocument()
+})
