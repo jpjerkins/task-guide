@@ -182,6 +182,8 @@ flowchart TD
 before any lane branches. After that there are no wave gates — dependency edges say what needs what,
 and hard gates would make every lane wait on the slowest. The two exceptions are single edges, not
 gates: each Web lane starts after a `schema.d.ts` regeneration, and the final wave waits on all lanes.
+**The first of those is retired by [#171][171]** — the lane that changes the API shape regenerates in
+its own commit, so no Web lane waits on an Integration regen ticket. `I1`/`I2` above are history.
 
 **Wave 0 was settled as three stages** (docs → contracts → composition root). Sizing splits the
 middle stage into three tickets; the wall structure is unchanged. Stages 0a and the 0b tickets are
@@ -374,7 +376,8 @@ from the endpoint — no application-layer type in between.
 **I2 · Regenerate `schema.d.ts` after Schedule lands.** Unblocks Web-Authoring.
 
 Both existed because `schema.d.ts` is generated, checked in, needs a live server, and every endpoint
-ticket would otherwise edit it — seemingly the shared-file conflict merge safety exists to prevent.
+ticket would otherwise edit it — which looked like the exact shared-file conflict merge safety exists
+to prevent.
 **Retired by [#171][171]:** merge safety protects *authorship*, and this file carries no intent — it
 is a deterministic function of the OpenAPI document. So the lane that changes the API shape
 regenerates it in the same commit, and every lane re-runs `./scripts/check-schema-drift.sh` after

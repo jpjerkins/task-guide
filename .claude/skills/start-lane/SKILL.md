@@ -158,16 +158,23 @@ cd src/TaskGuide.Web && npm test
 **If the diff touches API surface** — any `Api/Endpoints/` file, or a response/request type one
 serializes — you own regenerating `src/TaskGuide.Web/src/api/schema.d.ts`, **whatever lane you are
 on** (#171). It is generated, not authored: merge safety protects intent, and this file has none.
-Regenerate it in the same commit that changes the shape, then verify:
+Regenerate it in the same commit that changes the shape — **never hand-edit it**; a hand-patched
+`schema.d.ts` is what produced #156. Then verify:
 
 ```sh
-cd src/TaskGuide.Web && npm run gen:api   # API running on 8007
-./scripts/check-schema-drift.sh           # from the repo root, API stopped
+# one shell, from the worktree root — /data isn't writable on a dev machine
+Storage__DataDir=$(mktemp -d) dotnet run --project src/TaskGuide.Api
+
+# another shell
+cd src/TaskGuide.Web && npm install && npm run gen:api
+cd ../.. && ./scripts/check-schema-drift.sh   # after stopping the API above
 ```
 
-Both need `npm install` in `src/TaskGuide.Web` — including lanes that otherwise need no Node — and
-the check needs port 8007 free, so stop the API you just generated against (a web lane following
-`src/TaskGuide.Web/README.md` has one running there for the Vite proxy).
+`npm install` is needed even on lanes that otherwise touch no Node. **Check whose API is on 8007
+before generating:** the port is hard-coded in `gen:api`, several worktrees share it, and a stray
+listener from another branch will silently generate `schema.d.ts` from someone else's OpenAPI
+document. `lsof -ti:8007` — if it isn't the `dotnet run` you just started, stop and sort that out
+rather than killing it. The drift check needs the port free, so stop yours before running it.
 
 The check boots the API, regenerates the types from the live `/openapi/v1.json`, and diffs them
 against the checked-in copy. Non-zero means the checked-in copy is stale: the SPA is typed off a
@@ -274,8 +281,10 @@ git fetch origin && git rebase origin/main
 **Then, if your diff touches API surface, re-run `./scripts/check-schema-drift.sh` — even when the
 rebase applied cleanly.** Two lanes editing distant parts of the OpenAPI document both apply without
 a textual conflict and still leave the combined output wrong; the check is seconds and settles it.
-Non-zero means `npm run gen:api` and amend. A `schema.d.ts` *conflict* during the rebase is resolved
-the same way: regenerate, never merge the hunks. This is what keeps `main` matching its own code by
+Non-zero means regenerate and amend the tip commit — on a multi-commit branch that puts the regen on
+the tip rather than on the shape-changing commit, which is fine: what matters is that the tree that
+becomes `main` is self-consistent. A `schema.d.ts` *conflict* during the rebase is resolved the same
+way: regenerate, never merge the hunks. This is what keeps `main` matching its own code by
 construction — after the rebase the worktree is the tree that is about to become `main`, and
 `--ff-only` makes `main` bit-identical to it.
 
@@ -289,7 +298,9 @@ git -C /Users/phil/dev/task-guide push origin main
 ```
 
 If the merge is **rejected as not a fast-forward**, another lane pushed between your rebase and
-your merge. Rebase again and retry — never `--no-ff`, never `merge -s ours`, never force-push.
+your merge. Rebase again, **re-run the drift check if your diff touches API surface** — the lane that
+beat you may have changed the document — and retry. Never `--no-ff`, never `merge -s ours`, never
+force-push.
 
 Close the ticket, with the verification in the comment so the close is auditable:
 
