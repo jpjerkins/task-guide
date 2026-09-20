@@ -11,13 +11,14 @@ import type { components } from './schema'
 // Thrown by `sendJson` on a non-OK response. `reason` is the server's `error` string when the
 // body parsed as one, null otherwise (no body, or a body that isn't `{ error: string }`).
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly reason: string | null,
-  ) {
+  readonly status: number
+  readonly reason: string | null
+
+  constructor(message: string, status: number, reason: string | null) {
     super(message)
     this.name = 'ApiError'
+    this.status = status
+    this.reason = reason
   }
 }
 
