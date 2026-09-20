@@ -882,6 +882,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/day-templates/{id}/windows/{windowId}/preview` gates eligibility **at the instant the
   Window would start on the previewed date, not the wall clock** — a Task deferred until the
   previewed date is present in the preview, and absent when previewing an earlier date
+- `GET /api/day-templates/{id}/windows/{windowId}/preview` evaluates derived obligations **at the
+  previewed date, not the wall clock** — an Event-derived Task appears before its trigger date and
+  is absent after it
 - `GET /api/day-templates/{id}/affected-dates` reports **every one of the next fortnight's dates**
   the template governs, ascending, each flagged with whether it holds an Override — an Override
   shields its date's Windows from a template edit but not its Event prototypes, so overridden

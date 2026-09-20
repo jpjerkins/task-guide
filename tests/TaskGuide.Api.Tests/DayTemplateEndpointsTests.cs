@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -233,6 +234,50 @@ public sealed class DayTemplateEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task GET_api_day_templates_id_windows_windowId_preview_evaluates_derived_obligations_at_the_previewed_date_not_the_wall_clock()
+    {
+        var dataDir = Directory.CreateTempSubdirectory("taskguide-api-tests-").FullName;
+        try
+        {
+            var wallClock = new DateTimeOffset(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
+            var (factory, client) = BuildFactory(dataDir, wallClock);
+            using (factory)
+            using (client)
+            {
+                var window = Window("w_01ARZ3NDEKTSV4RRFFQ69G5FAV", "Practice", new TimeOnly(10, 0), new TimeOnly(11, 0));
+                var template = new DayTemplate(Volleyball, "Volleyball", [window], []);
+                var @event = new Event(
+                    new EventId("evt_01ARZ3NDEKTSV4RRFFQ69G5FAX"),
+                    new DateOnly(2026, 9, 8),
+                    "Family trip",
+                    new TimeOnly(9, 0),
+                    new TimeOnly(10, 0),
+                    new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>(), [new LooseTag("timeoff")]),
+                    AbsenceNotice: null);
+                var store = factory.Services.GetRequiredService<IStore>();
+                await store.MutateAsync<Never>(
+                    _ => OneOf<StoreMutation, Never>.FromT0(new StoreMutation([
+                        new DayTemplatesWrite([template]),
+                        new EventsWrite([@event]),
+                    ])),
+                    CancellationToken.None);
+
+                var beforeEvent = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/day-templates/{Volleyball.Value}/windows/{window.Id.Value}/preview?date=2026-09-07");
+                var afterEvent = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/day-templates/{Volleyball.Value}/windows/{window.Id.Value}/preview?date=2026-09-09");
+
+                Assert.Contains("Ask off work", beforeEvent.GetProperty("titles").EnumerateArray().Select(v => v.GetString()));
+                Assert.DoesNotContain("Ask off work", afterEvent.GetProperty("titles").EnumerateArray().Select(v => v.GetString()));
+            }
+        }
+        finally
+        {
+            Directory.Delete(dataDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task GET_api_day_templates_id_affected_dates_reports_every_governed_date_and_flags_the_Overridden_ones()
     {
         var boundary = new DayBoundary(TimeZoneInfo.FindSystemTimeZoneById(DayBoundary.ZoneId));
@@ -265,6 +310,26 @@ public sealed class DayTemplateEndpointsTests : IDisposable
         await store.MutateAsync<Never>(_ => OneOf<StoreMutation, Never>.FromT0(new StoreMutation(writes)), CancellationToken.None);
     }
 
+    private static (WebApplicationFactory<Program> Factory, HttpClient Client) BuildFactory(
+        string dataDir, DateTimeOffset now)
+    {
+        Environment.SetEnvironmentVariable(DataDirEnvVar, dataDir);
+        try
+        {
+            var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton<TimeProvider>(new FixedTimeProvider(now));
+                }));
+            return (factory, factory.CreateClient());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DataDirEnvVar, null);
+        }
+    }
+
     private static AvailabilityWindow Window(string id, string name) => new(
         new WindowId(id), name, new TimeOnly(10, 0), new TimeOnly(20, 0), TagSet.Empty);
 
@@ -295,4 +360,9 @@ public sealed class DayTemplateEndpointsTests : IDisposable
 
     private static TaskItem TaskWithoutDuration(string id, string title) => new(
         new TaskId(id), title, null, TagSet.Empty, null, null, null, null, DateTimeOffset.UtcNow);
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 }

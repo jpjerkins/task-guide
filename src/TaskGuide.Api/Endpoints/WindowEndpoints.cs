@@ -138,9 +138,6 @@ public static class WindowEndpoints
     /// remaining-time rule (<c>window.End - now</c>, <c>TickPlanner.cs</c>): this asks what the
     /// Window admits as authored, not what a fire at some instant would still have room for.
     /// </para>
-    /// <b>Known residual limitation:</b> derived obligations from <see cref="DerivedTaskComposer"/>
-    /// still anchor to its own injected clock, not the previewed date — re-anchoring that lives
-    /// in Application/Rules/, outside this endpoint's ownership.
     /// </summary>
     private static Results<Ok<WindowMatchPreviewResponse>, BadRequest<object>> Preview(
         string id,
@@ -173,7 +170,7 @@ public static class WindowEndpoints
         var ceiling = buckets.Count > 0 ? window.DurationCeiling(onDate, resolution, buckets) : default;
         var context = new MatchContext(window, ceiling, EveryFetchedValueOf(registry), FailedFetches: []);
 
-        var matched = derivedTasks.Compose(view)
+        var matched = derivedTasks.Compose(view, previewInstant)
             .Where(task => StatusRules.IsEligible(task, view.CompletionsFor(task.Id), registry, staleThresholds, previewInstant, boundary))
             .Where(task => Matcher.Fits(task, context, registry))
             .ToArray();

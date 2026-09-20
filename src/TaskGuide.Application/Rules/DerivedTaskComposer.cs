@@ -21,10 +21,10 @@ public sealed class DerivedTaskComposer(
     /// <summary>
     /// Produces the runtime Task set without changing the persisted-task view used by write paths.
     /// </summary>
-    public IReadOnlyList<TaskItem> Compose(IStoreView view)
+    public IReadOnlyList<TaskItem> Compose(IStoreView view, DateTimeOffset? asOf = null)
     {
         var context = new DerivedObligationContext(
-            _timeProvider.GetUtcNow(),
+            asOf ?? _timeProvider.GetUtcNow(),
             view.Events,
             view.Overrides,
             _shapes,
