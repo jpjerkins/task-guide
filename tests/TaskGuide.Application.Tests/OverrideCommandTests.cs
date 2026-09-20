@@ -142,7 +142,7 @@ public sealed class OverrideCommandTests
     }
 
     [Fact]
-    public async Task Stamping_a_Day_template_lays_its_Event_prototypes_down_as_the_dates_own_Events()
+    public void Stamping_a_Day_template_lays_its_Event_prototypes_down_as_the_dates_own_Events()
     {
         var prototype = Prototype("ep_standup", "Standup");
         var template = new DayTemplate(new DayTemplateId("dt_span"), "Weekend", [Window("w_weekend")], [prototype]);

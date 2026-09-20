@@ -325,6 +325,18 @@ duplicate-count-sensitive, following `TagSet`): everything else.
 - every other Dimension value stays frozen at the original Window's
 - an empty re-fire pushes once and ends the chain
 
+### Recurring-event materialisation (#153)
+
+`RecurringEvents.On` — the prototype-to-Event materialisation `DayShapeReader` owned privately
+until `Freeze` and `Stamp` needed it too, so it moved to `Domain/Schedule/`. The DayShapeReader
+section below pins the same rules *through the reader*; these pin them at the shared home, which is
+what keeps the three callers from drifting.
+
+- a recurring instance's Event id is `evt_rec_{yyyyMMdd}_{prototypeId}` — #24 makes Fire rows keyed
+  on that id load-bearing, so the format is the contract, not an implementation detail
+- a deleted instance's Event exception drops it
+- an edited instance's Event exception replaces its name and span, leaving the prototype untouched
+
 ### Derived-obligation rules
 
 - a rule reads a dated record and produces a read-only Task carrying provenance
