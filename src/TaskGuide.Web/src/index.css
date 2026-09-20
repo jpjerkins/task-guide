@@ -1,5 +1,7 @@
 /* Union of docs/prototypes/ui-screens.prototype.html and schedule-editing.prototype.html.
-   schedule-editing is later and supplies every shared-selector cosmetic value. */
+   schedule-editing is later and supplies every shared-selector cosmetic value.
+   `.icon` intentionally widens the prototypes' `.nav button.icon` (a sheet-header Cancel has no
+   `.nav` ancestor); see #125 and selectorAliases in scripts/check-css-union.mjs. */
 
 :root, :root[data-theme="light"] {
     --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EAEEF2; --surface-3:#DFE4EA;

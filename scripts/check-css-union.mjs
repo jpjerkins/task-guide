@@ -37,14 +37,26 @@ function normalizedHeader(block) {
     .trim();
 }
 
-function selectorKeys(css, prefix = '') {
-  return blocks(css).flatMap((block) => {
+function normalizedBody(body) {
+  return body
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/"/g, "'")
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([:;,])\s*/g, '$1')
+    .replace(/(^|[^\d.])\.(\d)/g, '$10.$2')
+    .replace(/;$/, '')
+    .trim();
+}
+
+// header (media-query-aware) -> normalized declarations; a later duplicate header wins
+function rules(css, prefix = '', into = new Map()) {
+  for (const block of blocks(css)) {
     const header = normalizedHeader(block);
     const body = block.slice(block.indexOf('{') + 1, -1);
-    return header.startsWith('@media')
-      ? selectorKeys(body, `${prefix}${header}|`)
-      : [`${prefix}${header}`];
-  });
+    if (header.startsWith('@media')) rules(body, `${prefix}${header}|`, into);
+    else into.set(`${prefix}${header}`, normalizedBody(body));
+  }
+  return into;
 }
 
 const selectorAliases = new Map([
@@ -59,25 +71,24 @@ const retainedSelectors = new Set([
   '.ticks',
   '.hint',
 ]);
-const sourceSelectors = new Set([
-  ...selectorKeys(styleFrom('docs/prototypes/ui-screens.prototype.html')),
-  ...selectorKeys(styleFrom('docs/prototypes/schedule-editing.prototype.html')),
-]);
-const actualSelectors = new Set(selectorKeys(readFileSync('src/TaskGuide.Web/src/index.css', 'utf8')));
-const missing = [...sourceSelectors].filter((selector) =>
-  !actualSelectors.has(selectorAliases.get(selector) ?? selector),
-);
-const allowedSelectors = new Set([
-  ...[...sourceSelectors].map((selector) => selectorAliases.get(selector) ?? selector),
-  ...retainedSelectors,
-]);
-const unexpected = [...actualSelectors].filter((selector) => !allowedSelectors.has(selector));
+// schedule-editing is later and supplies every shared-selector value, so it overrides ui-screens
+const source = rules(styleFrom('docs/prototypes/ui-screens.prototype.html'));
+rules(styleFrom('docs/prototypes/schedule-editing.prototype.html'), '', source);
+const actual = rules(readFileSync('src/TaskGuide.Web/src/index.css', 'utf8'));
+const alias = (selector) => selectorAliases.get(selector) ?? selector;
+const missing = [...source.keys()].filter((selector) => !actual.has(alias(selector)));
+const drifted = [...source].filter(([selector, body]) =>
+  actual.has(alias(selector)) && actual.get(alias(selector)) !== body,
+).map(([selector, body]) => `${alias(selector)}\n  prototype: ${body}\n  index.css: ${actual.get(alias(selector))}`);
+const allowedSelectors = new Set([...[...source.keys()].map(alias), ...retainedSelectors]);
+const unexpected = [...actual.keys()].filter((selector) => !allowedSelectors.has(selector));
 
-if (missing.length > 0 || unexpected.length > 0) {
+if (missing.length > 0 || unexpected.length > 0 || drifted.length > 0) {
   const errors = [];
   if (missing.length > 0) errors.push(`missing prototype selectors:\n${missing.join('\n')}`);
+  if (drifted.length > 0) errors.push(`declarations differ from prototype:\n${drifted.join('\n')}`);
   if (unexpected.length > 0) errors.push(`unexpected selectors:\n${unexpected.join('\n')}`);
   throw new Error(`index.css ${errors.join('\n\n')}`);
 }
 
-console.log('index.css covers the ui-screens and schedule-editing prototype union.');
+console.log('index.css covers the ui-screens and schedule-editing prototype union, declarations included.');
