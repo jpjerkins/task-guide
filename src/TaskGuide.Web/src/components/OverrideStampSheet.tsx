@@ -138,14 +138,14 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
           <span className="nm">Keep each date's own shape</span>
           <span className="sub2">each date keeps the shape it has now, and later Pattern edits will not reach them</span>
         </span></button></div>
-      {/* Blank (mode: 'blank') writes a zero-window Override for every date in the span — the
-          server's genuinely destructive arm, so it keeps the .pill.due marker the freeze row
-          above does not get. */}
+      {/* Blank (mode: 'blank') writes a zero-window Override for every date in the span. That
+          removes recurring windows, but dated one-off Events remain, so the caption deliberately
+          makes no claim that nothing will fire. */}
       <div className="sec-h">Clear the span</div>
       <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span, 'blank')}>
         <span className="who">
           <span className="nm">Blank every date in the span<span className="pill due">destructive</span></span>
-          <span className="sub2">the whole shape on those dates is removed and nothing will fire on them</span>
+          <span className="sub2">every window on those dates is removed</span>
         </span></button></div>
     </>}
     {/* Captions the shape list, and must stay below the freeze and blank rows. In range scope the

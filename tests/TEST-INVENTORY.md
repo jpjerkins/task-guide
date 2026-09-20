@@ -1415,15 +1415,15 @@ date's own shape / detaches every date from the pattern without changing what is
 the **opposite** of what it did. `DayShape` is `Override[date] ?? Pattern[weekday]` — the coalesce
 is on whether an Override *exists*, not on whether it has content — and `onStamp(null, span)`
 reaches `CreateOverrideSpan`'s null arm, `new DateOverride(date, [], null)`. A zero-window Override
-wins over the Pattern, so the row blanked every date in the span and nothing fired on them
-afterwards; recovery is per date.
+wins over the Pattern, so the row removes every recurring window in the span; dated one-off Events
+are concatenated separately and can still fire. Recovery is per date.
 
 The row is **kept, with wording that matches the write**: "Blank every date in the span /
-every window on those dates is removed and nothing will fire on them", a `.pill.due` destructive
-marker, and a `Clear the span` heading separating it from the shapes. Blanking a span is a real
-thing to want (a week away), so the feature stays; only the lie goes. A test asserts the row's text
-contains the removal wording **and matches none of** `keep|preserv|without changing|own shape`, so
-the promise cannot creep back.
+every window on those dates is removed", a `.pill.due` destructive marker, and a `Clear the span`
+heading separating it from the shapes. Blanking a span is a real thing to want (a week away), so
+the feature stays; only the lie goes. A test asserts the row's text contains the removal wording,
+does not claim that nothing will fire, and **matches none of** `keep|preserv|without changing|own
+shape`, so either false promise cannot creep back.
 
 There is still no way to *preserve* each date's shape across a span: the endpoint takes one
 template, not per-date windows, and fanning out per date would break this ticket's
