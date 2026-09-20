@@ -206,6 +206,77 @@ public sealed class DayShapeReaderTests
     }
 
     [Fact]
+    public void An_Override_carrying_its_own_Events_supplies_them_and_the_weekday_templates_prototypes_do_not_leak_through()
+    {
+        var date = new DateOnly(2026, 8, 31);
+        var templatePrototype = Prototype("ep_standup", "Standup");
+        var template = Template("dt_monday", "Monday template", prototypes: [templatePrototype]);
+        var overrideEvent = Event("evt_frozen_karate", date, "Karate");
+        var store = Store(
+            dayTemplates: [template],
+            patterns: PatternBook("p_active", sunday: template.Id, monday: template.Id),
+            overrides: [new DateOverride(date, [], null) { Events = [overrideEvent] }]);
+
+        var shape = new DayShapeReader(store).For(date);
+
+        var actual = Assert.Single(shape.Events);
+        Assert.Equal(overrideEvent, actual);
+    }
+
+    [Fact]
+    public void An_Override_with_an_empty_Events_list_is_a_shape_not_an_absence_no_recurring_instance_leaks_through()
+    {
+        var date = new DateOnly(2026, 8, 31);
+        var prototype = Prototype("ep_karate", "Karate");
+        var template = Template("dt_monday", "Monday template", prototypes: [prototype]);
+        var store = Store(
+            dayTemplates: [template],
+            patterns: PatternBook("p_active", sunday: template.Id, monday: template.Id),
+            overrides: [new DateOverride(date, [], null) { Events = [] }]);
+
+        var shape = new DayShapeReader(store).For(date);
+
+        Assert.Empty(shape.Events);
+    }
+
+    [Fact]
+    public void An_Override_whose_Events_is_absent_still_takes_its_recurring_instances_from_the_weekday_template()
+    {
+        var date = new DateOnly(2026, 8, 31);
+        var prototype = Prototype("ep_karate", "Karate");
+        var template = Template("dt_monday", "Monday template", prototypes: [prototype]);
+        var store = Store(
+            dayTemplates: [template],
+            patterns: PatternBook("p_active", sunday: template.Id, monday: template.Id),
+            overrides: [new DateOverride(date, [Window("w_override", "Override")], null)]);
+
+        var shape = new DayShapeReader(store).For(date);
+
+        var actual = Assert.Single(shape.Events);
+        Assert.Equal("Karate", actual.Name);
+    }
+
+    [Fact]
+    public void A_dated_Event_on_the_date_appears_in_the_shape_even_when_the_Override_carries_its_own_Events()
+    {
+        var date = new DateOnly(2026, 8, 31);
+        var datedEvent = Event("evt_band", date, "Band");
+        var overrideEvent = Event("evt_frozen_karate", date, "Karate");
+        var template = Template("dt_monday", "Monday template");
+        var store = Store(
+            dayTemplates: [template],
+            patterns: PatternBook("p_active", sunday: template.Id, monday: template.Id),
+            events: [datedEvent],
+            overrides: [new DateOverride(date, [], null) { Events = [overrideEvent] }]);
+
+        var shape = new DayShapeReader(store).For(date);
+
+        Assert.Contains(shape.Events, e => e.Id == datedEvent.Id);
+        Assert.Contains(shape.Events, e => e.Id == overrideEvent.Id);
+        Assert.Equal(2, shape.Events.Count);
+    }
+
+    [Fact]
     public void A_recurring_instances_Event_id_is_the_same_on_two_reads_of_the_same_date()
     {
         var date = new DateOnly(2026, 8, 31);

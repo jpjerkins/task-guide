@@ -55,3 +55,45 @@ public enum OverlapResolution
     TruncateEnd,
     Split,
 }
+
+/// <summary>
+/// Materialises a Day template's dateless <see cref="EventPrototype"/>s into dated <see
+/// cref="Event"/>s for one date, folding in any <see cref="EventException"/> for that date.
+/// Shared by <c>DayShapeReader</c>, <c>CreateOverrideSpan.Freeze</c> and
+/// <c>DayTemplateLifecycle.Stamp</c> (#153) — moved here verbatim from <c>DayShapeReader</c>,
+/// which owned it privately before Freeze and Stamp needed it too.
+/// </summary>
+public static class RecurringEvents
+{
+    /// <summary>
+    /// <b>Preserves the id format exactly</b> — <c>evt_rec_{date:yyyyMMdd}_{prototypeId}</c> — so a
+    /// recurring instance's id is the same on two reads of the same date; #24 makes Fire rows keyed
+    /// on that id load-bearing.
+    /// </summary>
+    public static IReadOnlyList<Event> On(
+        DateOnly date,
+        IReadOnlyList<EventPrototype> prototypes,
+        IReadOnlyList<EventException> exceptions) =>
+        prototypes.SelectMany(prototype => Instance(date, prototype, exceptions)).ToArray();
+
+    private static IEnumerable<Event> Instance(DateOnly date, EventPrototype prototype, IReadOnlyList<EventException> exceptions)
+    {
+        var exception = exceptions.SingleOrDefault(e => e.Date == date && e.PrototypeId == prototype.Id);
+        if (exception?.Deleted == true)
+        {
+            yield break;
+        }
+
+        yield return new Event(
+            RecurringEventId(date, prototype.Id),
+            date,
+            exception?.Name ?? prototype.Name,
+            exception?.Start ?? prototype.Start,
+            exception?.End ?? prototype.End,
+            prototype.Tags,
+            prototype.AbsenceNotice);
+    }
+
+    private static EventId RecurringEventId(DateOnly date, EventPrototypeId prototype) =>
+        new($"evt_rec_{date:yyyyMMdd}_{prototype.Value}");
+}
