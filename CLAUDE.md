@@ -26,3 +26,12 @@ grep -v '^disable-model-invocation: true$' .claude/skills/start-lane/SKILL.md \
 ## Coding
 * Always use Sonnet subagents for coding, Opus subagents for review to keep the main session's context clear.
 * Always create a worktree for new work.
+
+### Verifying web changes
+
+`npm test` and `npx tsc --noEmit` both passing does **not** mean the SPA builds. Vitest goes through
+esbuild, which silently strips syntax `tsconfig.app.json`'s `erasableSyntaxOnly: true` forbids
+(constructor parameter properties, enums), and `--noEmit` doesn't use the project references that
+enforce it. **The build gate is `npm run build`** (`tsc -b && vite build`), from
+`src/TaskGuide.Web`. Run it before reporting a web change verified — #150 shipped a green suite, a
+clean `--noEmit` and a `TS1294` build failure in the same commit.
