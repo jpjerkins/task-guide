@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchTasks, setTaskDuration, type Task } from '../api/client'
+import { ApiError, fetchTasks, setTaskDuration, type Task } from '../api/client'
 import { ScreenNav } from './shared/ScreenNav'
 
 const UNPROCESSED_BUCKETS = ['2', '10', '30', '60', 'longer']
@@ -56,7 +56,7 @@ export function TriageScreen() {
     setBusyIds((prev) => new Set(prev).add(taskId))
     try {
       await setTaskDuration(taskId, bucket)
-    } catch {
+    } catch (err) {
       // Set before the reload, and rendered independently of the error arm below: offline, the
       // reload this triggers can fail too, and the note must survive that rather than being
       // dropped along with the ready-state body it would otherwise live inside. That's also why
@@ -64,7 +64,10 @@ export function TriageScreen() {
       // body, rows included, so the row-scoped note would vanish along with it. The task's title
       // goes into the text instead, so the note still says which Task failed from the top of the
       // scroll area.
-      setTaskActionNote({ taskId, text: `Couldn't set the duration for "${title}".` })
+      // The server's own reason when it gave one (#138 put it on the wire); the generic sentence
+      // stays as the fallback, since a network failure has no reason and it names the Task.
+      const reason = err instanceof ApiError ? err.reason : null
+      setTaskActionNote({ taskId, text: reason ?? `Couldn't set the duration for "${title}".` })
       await load()
       setBusyIds((prev) => {
         const next = new Set(prev)

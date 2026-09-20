@@ -266,6 +266,26 @@ describe('TriageScreen', () => {
     expect(screen.getByText('Couldn\'t set the duration for "File the receipt".')).toBeInTheDocument()
   })
 
+  it('a_refused_Duration_write_renders_the_servers_reason', async () => {
+    unprocessed = [{ id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT' && url === '/api/tasks/u1/duration') {
+        return jsonResponse({ error: 'A derived Task cannot have its Duration edited' }, { status: 409 })
+      }
+      return routedFetch(url)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<TriageScreen />)
+    await screen.findByText('File the receipt')
+
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
+
+    expect(await screen.findByText('A derived Task cannot have its Duration edited')).toBeInTheDocument()
+    expect(screen.getByText('File the receipt')).toBeInTheDocument()
+  })
+
   it('the duration-write failure note is announced as an alert', async () => {
     unprocessed = [{ id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
