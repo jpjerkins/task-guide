@@ -773,6 +773,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   restores the Pattern's events with nothing lost and nothing left over
 - stamping a Day template lays its Event prototypes down as the date's own Events
 - blanking a date writes an empty Events list, not an absent one
+- creating an overlapping Event on a blanked date leaves its empty Events empty — the one-off day it
+  generates preserves the Override's Events arm rather than resetting it to absent
+- creating an overlapping Event on a frozen date leaves the frozen Events intact
 - `Unused` is false for a template referenced only by a **dormant** Pattern
 - `Unused` is false for a template stamped within ±13 months, in **either** direction
 - deleting an `Unused` template corrupts no record

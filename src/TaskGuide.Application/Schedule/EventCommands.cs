@@ -41,7 +41,9 @@ public sealed class CreateEvent(IStore store, IIdMinter minter)
                     : [window])
                 .ToArray();
             var existing = view.Overrides.SingleOrDefault(day => day.Date == @event.Date);
-            var overrideDay = new DateOverride(@event.Date, replacement, existing?.Used);
+            var overrideDay = existing is null
+                ? new DateOverride(@event.Date, replacement, null)
+                : existing with { Windows = replacement };
 
             // The Event is deliberately first: a crash leaves the detectable half of the
             // interaction, so overlap-check can re-offer the missing one-off day.
