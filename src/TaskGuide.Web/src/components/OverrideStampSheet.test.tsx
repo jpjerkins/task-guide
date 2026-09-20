@@ -240,7 +240,7 @@ it('the_range_scope_offers_a_blank_every_date_row_whose_wording_matches_what_the
   await screen.findByRole('button', { name: /Christmas/ })
 
   const row = screen.getByRole('button', { name: /Blank every date in the span/ })
-  expect(row).toHaveTextContent('every window on those dates is removed and nothing will fire on them')
+  expect(row).toHaveTextContent('the whole shape on those dates is removed and nothing will fire on them')
   expect(row.querySelector('.pill.due')).toHaveTextContent('destructive')
   expect(screen.getByText('Clear the span')).toBeInTheDocument()
 

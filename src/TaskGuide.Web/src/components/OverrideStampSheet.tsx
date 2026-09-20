@@ -145,14 +145,14 @@ export function OverrideStampSheet({ date, onCancel, onStamp, busy, mutationErro
       <div className="list"><button className="pickrow" disabled={rowsDisabled} onClick={() => void onStamp(null, span, 'blank')}>
         <span className="who">
           <span className="nm">Blank every date in the span<span className="pill due">destructive</span></span>
-          <span className="sub2">every window on those dates is removed and nothing will fire on them</span>
+          <span className="sub2">the whole shape on those dates is removed and nothing will fire on them</span>
         </span></button></div>
     </>}
     {/* Captions the shape list, and must stay below the freeze and blank rows. In range scope the
         sheet offers three arms and only this one stamps — at the top of the sheet the sentence
         reads as the sheet's own instruction and is then false for the two rows above. Date scope
         renders neither of those rows, so it is the first thing under the modebar there either way. */}
-    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the windows in — <b>not</b> a link, so editing the shape later will not follow.</div>
+    <div className="note">Stamp a shape onto {inRange ? 'every date in the span' : 'this date'}. It copies the shape in — <b>not</b> a link, so editing the shape later will not follow.</div>
     {groups.map(group => {
       const withTog = !toggleShown
       toggleShown = true

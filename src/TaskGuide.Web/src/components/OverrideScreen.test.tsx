@@ -79,7 +79,7 @@ it('selecting_a_rail_date_changes_the_shown_date_without_adding_a_rail_entry_the
   expect(screen.getByRole('button', { name: '2026-11-03' })).toHaveAttribute('aria-current', 'date')
 })
 
-it('stamping_a_Day_template_onto_a_date_renders_the_copies_the_windows_in_note_and_sends_the_stamp_for_that_date_alone', async () => {
+it('stamping_a_Day_template_onto_a_date_renders_the_copies_the_shape_in_note_and_sends_the_stamp_for_that_date_alone', async () => {
   fetch.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url === '/api/overrides' && init?.method === 'POST') {
       days.set('2026-11-01', { date: '2026-11-01', windows: [window], events: [], isOverridden: true })
@@ -91,7 +91,7 @@ it('stamping_a_Day_template_onto_a_date_renders_the_copies_the_windows_in_note_a
   await screen.findByText('Family time')
   fireEvent.click(screen.getByRole('button', { name: 'Stamp a whole shape onto this date…' }))
   const picker = await screen.findByRole('dialog', { name: 'Sun 1 Nov' })
-  expect(picker).toHaveTextContent('It copies the windows in')
+  expect(picker).toHaveTextContent('It copies the shape in')
   expect(picker.querySelector('.sheet > .grabber')).not.toBeNull()
   const shape = await within(picker).findByRole('button', { name: /Christmas/ })
   expect(shape).toHaveClass('pickrow')
