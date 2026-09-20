@@ -2631,7 +2631,7 @@ export interface components {
         };
         PatternRequest: {
             name: string;
-            days: string[];
+            days: null | string[];
         };
         PatternResponse: {
             id: string;
@@ -2712,6 +2712,12 @@ export interface components {
             duration: null | string;
             /** Format: date-time */
             createdAt: string;
+            status: string;
+            /** Format: int32 */
+            opportunities: null | number | string;
+            /** Format: int32 */
+            patternWeekCount: null | number | string;
+            zeroKind: null | string;
         };
         WindowId: {
             value?: string;
