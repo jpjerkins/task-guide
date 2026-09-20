@@ -603,6 +603,10 @@ directly.
 - `MutateAsync` faults its returned `Task` instead of throwing synchronously, for an
   already-cancelled token, for a `FailNextWrite` failure, and for an unrecognised write —
   matching `JsonStore`, whose `MutateAsync` is `async` (#117)
+- **the 32-thread concurrency test collects each thread's exception into a bag and asserts it
+  empty before checking the write count** — a regression that throws now fails this test with a
+  diagnosable message instead of crashing the whole test host on a foreground thread (#117
+  finding 3)
 
 ### The Reminder landing page read (#129)
 

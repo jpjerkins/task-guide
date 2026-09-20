@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
@@ -176,18 +177,31 @@ public sealed class FakeStoreTests
         const int concurrentWriters = 32;
         var store = new FakeStore();
         using var ready = new Barrier(concurrentWriters);
+        var exceptions = new ConcurrentBag<Exception>();
 
+        // Each thread body is wrapped so a regression that throws (e.g. the NotImplementedException
+        // path, or a future Apply bug) fails this one test with a diagnosable message instead of
+        // taking down the whole test host as an unhandled exception on a foreground thread, leaving
+        // the other 31 threads stuck at the Barrier (#117 finding 3).
         var threads = Enumerable.Range(0, concurrentWriters).Select(i => new Thread(() =>
         {
-            ready.SignalAndWait();
-            store.MutateAsync<Never>(
-                view => new StoreMutation([new TasksWrite([.. view.Tasks, NewTask($"t_writer_{i:D3}", $"Writer {i}")])]),
-                CancellationToken.None).GetAwaiter().GetResult();
+            try
+            {
+                ready.SignalAndWait();
+                store.MutateAsync<Never>(
+                    view => new StoreMutation([new TasksWrite([.. view.Tasks, NewTask($"t_writer_{i:D3}", $"Writer {i}")])]),
+                    CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
         })).ToArray();
 
         foreach (var thread in threads) thread.Start();
         foreach (var thread in threads) thread.Join();
 
+        Assert.Empty(exceptions);
         Assert.Equal(concurrentWriters, store.Read().Tasks.Count);
     }
 
