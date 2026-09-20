@@ -1629,6 +1629,12 @@ specified under **Shared controls** above and are not restated here.
 - a Task's mark-off control is disabled while its completion is in flight, so a double tap cannot complete two instances of a recurring Task
 - a refused mark off or Postpone states that it failed rather than silently re-reading
 - a Snooze whose POST and re-read both fail still says it did not snooze
+- the landing page carries both of the prototype's exits — a nav back control and a `Done for now`
+  ghost button — and each leaves for the app root, because a cold notification link has no origin
+  screen to return to
+- `Done for now` renders even when Snooze is suppressed; it is the page's exit, not part of the
+  Snooze control
+- the reminder route renders no tab bar
 
 #### Task list and status filters
 
