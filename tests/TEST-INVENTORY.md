@@ -336,6 +336,11 @@ what keeps the three callers from drifting.
   on that id load-bearing, so the format is the contract, not an implementation detail
 - a deleted instance's Event exception drops it
 - an edited instance's Event exception replaces its name and span, leaving the prototype untouched
+- an Event exception is applied over an Override's own Events, not only over the template's — a
+  deleted instance stays deleted on a frozen or stamped date, so the shape and `AbsenceRule` can
+  never disagree (`CONTEXT.md` § Event exception: deleting an instance does not stamp an Override)
+- an exception matches an Override's Event by its `evt_rec_{yyyyMMdd}_{prototypeId}` id, so a
+  promoted or hand-authored one-off Event on the same date is left untouched
 
 ### Derived-obligation rules
 
@@ -761,7 +766,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
   existing stamped Override's use record
 - freezing an Override span captures each date's computed recurring events alongside its windows, so
   a later Pattern switch reaches neither half
-- freezing a date whose recurring instance was deleted by an Event exception does not resurrect it
+- freezing a date whose recurring instance was deleted by an Event exception captures it raw,
+  leaving the exception to apply at read, so the resurrection is prevented on the shape, not in the
+  stored Override
 - freezing leaves the date's dated Events in `events.json` uncopied, so deleting the Override
   restores the Pattern's events with nothing lost and nothing left over
 - stamping a Day template lays its Event prototypes down as the date's own Events
@@ -827,6 +834,9 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - an Override whose Events is absent still takes its recurring instances from the weekday template,
   so a pre-#153 Override reads exactly as it did
 - a dated Event on the date appears in the shape even when the Override carries its own Events
+- a deleted instance's Event exception drops it from a date whose Override carries its own Events
+- a moved instance's Event exception renames and re-spans it on a date whose Override carries its
+  own Events, so the absence rule still sees a move rather than an absence
 
 ---
 

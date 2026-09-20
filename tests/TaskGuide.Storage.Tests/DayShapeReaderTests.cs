@@ -293,6 +293,45 @@ public sealed class DayShapeReaderTests
         Assert.Equal(first.Id, second.Id);
     }
 
+    [Fact]
+    public void A_deleted_instances_Event_exception_drops_it_from_a_date_whose_Override_carries_its_own_Events()
+    {
+        var date = new DateOnly(2026, 8, 31);
+        var prototypeId = new EventPrototypeId("ep_karate");
+        var overrideEvent = Event($"evt_rec_{date:yyyyMMdd}_{prototypeId.Value}", date, "Karate");
+        var template = Template("dt_monday", "Monday template");
+        var store = Store(
+            dayTemplates: [template],
+            patterns: PatternBook("p_active", sunday: template.Id, monday: template.Id),
+            overrides: [new DateOverride(date, [], null) { Events = [overrideEvent] }],
+            eventExceptions: [new EventException(date, prototypeId, Deleted: true, null, null, null)]);
+
+        var shape = new DayShapeReader(store).For(date);
+
+        Assert.Empty(shape.Events);
+    }
+
+    [Fact]
+    public void A_moved_instances_Event_exception_renames_and_re_spans_it_on_a_date_whose_Override_carries_its_own_Events_so_the_absence_rule_still_sees_a_move_rather_than_an_absence()
+    {
+        var date = new DateOnly(2026, 8, 31);
+        var prototypeId = new EventPrototypeId("ep_karate");
+        var overrideEvent = Event($"evt_rec_{date:yyyyMMdd}_{prototypeId.Value}", date, "Karate");
+        var template = Template("dt_monday", "Monday template");
+        var store = Store(
+            dayTemplates: [template],
+            patterns: PatternBook("p_active", sunday: template.Id, monday: template.Id),
+            overrides: [new DateOverride(date, [], null) { Events = [overrideEvent] }],
+            eventExceptions: [new EventException(date, prototypeId, Deleted: false, "Karate late", new TimeOnly(19, 0), new TimeOnly(20, 0))]);
+
+        var shape = new DayShapeReader(store).For(date);
+
+        var actual = Assert.Single(shape.Events);
+        Assert.Equal("Karate late", actual.Name);
+        Assert.Equal(new TimeOnly(19, 0), actual.Start);
+        Assert.Equal(new TimeOnly(20, 0), actual.End);
+    }
+
     private static AvailabilityWindow Window(string id, string name, int startHour = 9, int endHour = 10) =>
         new(new WindowId(id), name, new TimeOnly(startHour, 0), new TimeOnly(endHour, 0), TagSet.Empty);
 
