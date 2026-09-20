@@ -1602,6 +1602,9 @@ specified under **Shared controls** above and are not restated here.
   Duration buttons capture offers — because this page, not the notification, is where triage lives
 - repairing one of several unprocessed Tasks re-reads the list once, not twice — the count-keyed
   effect that watches `footer.toProcess` is the only thing that re-reads it
+- the repair buttons stay disabled until the refreshed list arrives — the write owns its own
+  refresh and it lands before the buttons re-enable, so a second tap cannot re-size a Task that
+  was already sized
 - a refused repair renders the server's own reason, not a generic note — #138 put the reason on the
   wire for exactly this
 - the repair buttons are a `chipset` of `pill dur` buttons, the same control TriageScreen renders,

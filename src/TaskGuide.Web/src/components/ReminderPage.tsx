@@ -118,15 +118,19 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
       .catch(() => setDimensions([]))
   }, [])
 
+  const hasUnprocessed = state.status === 'ready' && Number(state.page.footer.toProcess) > 0
+
   useEffect(() => {
-    if (state.status !== 'ready' || Number(state.page.footer.toProcess) <= 0) {
+    if (!hasUnprocessed) {
       setUnprocessedTask(null)
       return
     }
     loadUnprocessedTask()
-    // Only the ready-ness and the count gate this fetch; re-running it on every unrelated
-    // re-read (e.g. after a Snooze) would be wasted traffic for a list that didn't change.
-  }, [state.status === 'ready' ? state.page.footer.toProcess : 0, loadUnprocessedTask])
+    // Gated on whether the pile is non-empty, not the count: nothing but this page's own
+    // duration write ever changes the count, and that write owns its own refresh (see
+    // finishDuration) — this effect only needs to fire on the loading→ready transition and
+    // when the pile empties or refills.
+  }, [hasUnprocessed, loadUnprocessedTask])
 
   // Every branch below is reachable from a cold notification link, so every branch carries the
   // exit — the error branch most of all, since a deleted or rescheduled Window 404s here. A cold
@@ -196,9 +200,15 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     setTaskActionNote(null)
     setDurationBusyId(taskId)
     const finishDuration = async () => {
-      await reload()
-      // No explicit re-read here: the count-keyed effect above already re-reads the
-      // unprocessed list whenever `reload()` changes `footer.toProcess`.
+      const fresh = await reload()
+      // The write owns its own refresh: one list read, and it lands before the buttons
+      // re-enable. A `fresh` page saying the pile is empty needs no read at all; a failed
+      // re-read (null) still re-reads, so a repaired Task never lingers with live buttons.
+      if (fresh && Number(fresh.footer.toProcess) === 0) {
+        setUnprocessedTask(null)
+      } else {
+        await loadUnprocessedTask()
+      }
       setDurationBusyId(null)
     }
     try {

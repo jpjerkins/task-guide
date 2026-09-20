@@ -119,7 +119,7 @@ it('an_Unprocessed_Task_in_the_footer_count_is_repairable_inline', async () => {
     return read(url)
   })
   const user = userEvent.setup()
-  const { container } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('File the receipt')
   await screen.findByText('1 to process')
 
@@ -166,6 +166,59 @@ it('repairing_one_of_two_unprocessed_Tasks_re_reads_the_list_exactly_once', asyn
   await screen.findByText('Water the plants')
   const taskReads = fetch.mock.calls.filter(([url, init]) => !init?.method && url === '/api/tasks?status=unprocessed')
   expect(taskReads).toHaveLength(2)
+})
+
+it('the_repair_buttons_stay_disabled_until_the_refreshed_list_arrives', async () => {
+  currentPage = page({ footer: { toProcess: 2, stale: 0, orphans: 0 } })
+  unprocessed = [
+    { id: 'tu1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+    { id: 'tu2', title: 'Water the plants', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+  ]
+  let release: () => void
+  const gate = new Promise<void>((r) => {
+    release = r
+  })
+  let unprocessedReads = 0
+  let putSent = false
+  let reminderReReadDone = false
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/tasks/tu1/duration') {
+      putSent = true
+      currentPage = page({ footer: { toProcess: 1, stale: 0, orphans: 0 } })
+      unprocessed = [{ id: 'tu2', title: 'Water the plants', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+      return json(null, 204)
+    }
+    if (url === '/api/tasks?status=unprocessed') {
+      unprocessedReads += 1
+      // Let the initial-mount read through un-gated (or the page never renders); gate only the
+      // one that follows the write, so we can observe the window while it's in flight.
+      if (unprocessedReads > 1) {
+        await gate
+      }
+      return read(url)
+    }
+    const res = await read(url)
+    if (url === `/api/reminders/${DATE}/${WINDOW_ID}` && putSent) {
+      reminderReReadDone = true
+    }
+    return res
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('File the receipt')
+
+  await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
+
+  await waitFor(() => expect(reminderReReadDone).toBe(true))
+  // The write has landed and the page re-read has resolved, but the unprocessed-list re-read
+  // is still gated — the repaired Task must not re-enable its buttons during this window.
+  for (const label of ['2m', '10m', '30m', '60m', 'Longer']) {
+    expect(screen.getByRole('button', { name: `${label} — File the receipt` })).toBeDisabled()
+  }
+  expect(screen.getByText('File the receipt')).toBeInTheDocument()
+
+  release!()
+  await screen.findByText('Water the plants')
 })
 
 it('a_refused_Duration_repair_renders_the_servers_reason', async () => {
