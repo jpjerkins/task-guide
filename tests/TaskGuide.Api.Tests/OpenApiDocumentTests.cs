@@ -197,4 +197,26 @@ public sealed class OpenApiDocumentTests : IDisposable
         Assert.True(responses.TryGetProperty("409", out _));
         Assert.False(responses.TryGetProperty("200", out _));
     }
+
+    // #170: these two reads return Results<Ok<T>, BadRequest<object>, NotFound<object>>. A revert
+    // to a bare `IResult` would silently degrade the document's 200 to a bodiless one (and drop
+    // 400/404 along with it, same as the refusal handlers above) — so the $ref assertion on 200 is
+    // what pins the body to a real schema rather than just checking the status codes exist.
+    [Theory]
+    [InlineData("/api/tasks/{id}", "#/components/schemas/TaskResponse")]
+    [InlineData("/api/day-templates/{id}", "#/components/schemas/DayTemplateResponse")]
+    public async Task Read_handler_declares_200_400_and_404_with_a_typed_200_body(string path, string schemaRef)
+    {
+        var doc = await GetDocumentAsync();
+
+        var responses = doc.GetProperty("paths").GetProperty(path).GetProperty("get").GetProperty("responses");
+
+        Assert.True(responses.TryGetProperty("200", out var okResponse));
+        Assert.True(responses.TryGetProperty("400", out _));
+        Assert.True(responses.TryGetProperty("404", out _));
+
+        var okRef = okResponse.GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("$ref").GetString();
+        Assert.Equal(schemaRef, okRef);
+    }
 }

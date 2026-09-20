@@ -989,6 +989,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/reminders/{date}/{windowId}` offers no Snooze on a Window that never fired
 - `PUT /api/right-now/matching-on`, `PATCH /api/tasks/{id}`, `POST /api/tasks/{id}/completions`, and
   `PUT /api/tasks/{id}/postpone` each declare 204, 400, and 409 in OpenAPI, and no bare 200
+- `GET /api/tasks/{id}` and `GET /api/day-templates/{id}` each declare 200, 400 and 404 in OpenAPI,
+  with the 200 carrying a typed body `$ref` rather than a bare `200: OK`
 
 ## `TaskGuide.Web` (vitest)
 
