@@ -728,6 +728,8 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - the registry sweep makes no `MutateAsync` call when nothing moved
 - the registry sweep promotes a loose Tag the registry now claims, and writes the change
 - the registry sweep promotes a loose Tag on a Day template Window
+- the registry sweep demotes a retired Dimension value inside a frozen Override's own Events (#153)
+- the registry sweep leaves an Override's absent Events absent (#153)
 - an empty `/data` starts and the active Pattern resolves without throwing
 - a fresh `/data` seeds one vanilla weekly Pattern of a single plain Day template
 - the default Pattern seed takes no snapshot
