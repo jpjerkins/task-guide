@@ -119,10 +119,19 @@ it('an_Unprocessed_Task_in_the_footer_count_is_repairable_inline', async () => {
     return read(url)
   })
   const user = userEvent.setup()
-  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  const { container } = render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('File the receipt')
   await screen.findByText('1 to process')
-  await user.click(screen.getByRole('button', { name: '2m' }))
+
+  const row = container.querySelector('.row')
+  expect(row?.querySelector('.body')).not.toBeNull()
+  expect(row?.querySelector('.body > .title')).toHaveTextContent('File the receipt')
+  const chipset = row?.querySelector('.body > .meta.chipset')
+  expect(chipset).not.toBeNull()
+  const durationButtons = chipset?.querySelectorAll('button.pill.dur')
+  expect(durationButtons).toHaveLength(5)
+
+  await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
   await waitFor(() => expect(screen.queryByText('1 to process')).not.toBeInTheDocument())
   expect(durationWrites).toHaveLength(1)
@@ -150,11 +159,29 @@ it('repairing_one_of_two_unprocessed_Tasks_re_reads_the_list_exactly_once', asyn
   const user = userEvent.setup()
   render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
   await screen.findByText('File the receipt')
-  await user.click(screen.getByRole('button', { name: '2m' }))
+  await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
   await screen.findByText('Water the plants')
   const taskReads = fetch.mock.calls.filter(([url, init]) => !init?.method && url === '/api/tasks?status=unprocessed')
   expect(taskReads).toHaveLength(2)
+})
+
+it('a_refused_Duration_repair_renders_the_servers_reason', async () => {
+  currentPage = page({ footer: { toProcess: 1, stale: 0, orphans: 0 } })
+  unprocessed = [{ id: 'tu1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' }]
+  fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT' && url === '/api/tasks/tu1/duration') {
+      return json({ error: 'A derived Task cannot have its Duration edited' }, 409)
+    }
+    return read(url)
+  })
+  const user = userEvent.setup()
+  render(<ReminderPage date={DATE} windowId={WINDOW_ID} />)
+  await screen.findByText('File the receipt')
+  await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
+
+  await screen.findByText('A derived Task cannot have its Duration edited')
+  expect(screen.getByText('File the receipt')).toBeInTheDocument()
 })
 
 it('the_Snooze_control_names_the_interval_the_server_gave_it', async () => {

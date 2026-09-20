@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getJson, sendJson } from '../api/client'
+import { ApiError, getJson, sendJson } from '../api/client'
 import type { components } from '../api/schema'
 import { DateEntry } from './shared/DateEntry'
 import { ScreenNav } from './shared/ScreenNav'
@@ -203,9 +203,10 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
     }
     try {
       await sendJson('PUT', `/api/tasks/${taskId}/duration`, { duration })
-    } catch {
+    } catch (err) {
       await finishDuration()
-      setTaskActionNote("Couldn't set this task's duration.")
+      const reason = err instanceof ApiError ? err.reason : null
+      setTaskActionNote(reason ?? "Couldn't set this task's duration.")
       return
     }
     await finishDuration()
@@ -380,11 +381,12 @@ export function ReminderPage({ date, windowId }: { date: string; windowId: strin
           <div className="row">
             <div className="body">
               <div className="title">{unprocessedTask.title}</div>
-              <div className="meta">
+              <div className="meta chipset">
                 {UNPROCESSED_BUCKETS.map((b) => (
                   <button
                     key={b}
                     className="pill dur"
+                    aria-label={`${durLabel(b)} — ${unprocessedTask.title}`}
                     disabled={durationBusyId === unprocessedTask.id}
                     onClick={() => handleDuration(unprocessedTask.id, b)}
                   >

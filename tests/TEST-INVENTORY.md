@@ -1602,6 +1602,10 @@ specified under **Shared controls** above and are not restated here.
   Duration buttons capture offers — because this page, not the notification, is where triage lives
 - repairing one of several unprocessed Tasks re-reads the list once, not twice — the count-keyed
   effect that watches `footer.toProcess` is the only thing that re-reads it
+- a refused repair renders the server's own reason, not a generic note — #138 put the reason on the
+  wire for exactly this
+- the repair buttons are a `chipset` of `pill dur` buttons, the same control TriageScreen renders,
+  each named for its Task
 - the Snooze control names the interval the server gave it; the `clamp(25%, 5, 30)` arithmetic is
   never recomputed client-side
 - when the server reports Snooze unavailable the control is **suppressed, not hidden** — replaced by
