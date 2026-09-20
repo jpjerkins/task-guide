@@ -32,7 +32,9 @@ public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBound
             }
 
             var existing = view.Overrides.SingleOrDefault(candidate => candidate.Date == request.Date);
-            var source = existing is null ? SourceFromActivePattern(view, request.Date) : new OverrideSource(existing.Windows, existing.Used);
+            var source = existing is null
+                ? SourceFromActivePattern(view, request.Date)
+                : new OverrideSource(existing.Windows, existing.Used, existing.Events);
             var target = source.Windows.SingleOrDefault(window => window.Id.Equals(request.WindowId));
             if (target is null)
             {
@@ -40,10 +42,12 @@ public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBound
             }
 
             var adjusted = target with { Tags = new TagSet(request.Dimensions, target.Tags.LooseTags) };
-            var replacement = new DateOverride(
-                request.Date,
-                source.Windows.Select(window => window.Id.Equals(request.WindowId) ? adjusted : window).ToArray(),
-                source.Used);
+            var windows = source.Windows
+                .Select(window => window.Id.Equals(request.WindowId) ? adjusted : window)
+                .ToArray();
+            var replacement = existing is not null
+                ? existing with { Windows = windows }
+                : new DateOverride(request.Date, windows, source.Used) { Events = source.Events };
             var overrides = existing is null
                 ? (IReadOnlyList<DateOverride>)[.. view.Overrides, replacement]
                 : [.. view.Overrides.Select(candidate => candidate.Date == request.Date ? replacement : candidate)];
@@ -62,7 +66,7 @@ public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBound
         var template = view.DayTemplates.SingleOrDefault(candidate => candidate.Id.Equals(templateId))
             ?? throw new InvalidOperationException($"Active Pattern names missing Day template {templateId.Value}");
 
-        return new OverrideSource(template.Windows, new DayTemplateUse(template.Id, template.Name));
+        return new OverrideSource(template.Windows, new DayTemplateUse(template.Id, template.Name), Events: null);
     }
 
     private MatchingOnRefused? Validate(IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> dimensions)
@@ -92,7 +96,10 @@ public sealed class MatchingOn(IStore store, TimeProvider timeProvider, DayBound
         return null;
     }
 
-    private sealed record OverrideSource(IReadOnlyList<AvailabilityWindow> Windows, DayTemplateUse? Used);
+    private sealed record OverrideSource(
+        IReadOnlyList<AvailabilityWindow> Windows,
+        DayTemplateUse? Used,
+        IReadOnlyList<Event>? Events);
 }
 
 public sealed record MatchingOnRequest(
