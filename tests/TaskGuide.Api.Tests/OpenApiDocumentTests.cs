@@ -221,8 +221,13 @@ public sealed class OpenApiDocumentTests : IDisposable
         var responses = doc.GetProperty("paths").GetProperty(path).GetProperty("get").GetProperty("responses");
 
         Assert.True(responses.TryGetProperty("200", out var okResponse));
-        Assert.True(responses.TryGetProperty("400", out _));
-        Assert.True(responses.TryGetProperty("404", out _));
+        Assert.True(responses.TryGetProperty("400", out var badRequest));
+        Assert.True(responses.TryGetProperty("404", out var notFound));
+
+        // #172: the { error } payload is an untyped object, so there is no $ref to pin — the content
+        // entry's presence is the assertion. A bodiless arm keeps the status and drops this.
+        Assert.True(HasJsonBody(badRequest), "400 carries no application/json body");
+        Assert.True(HasJsonBody(notFound), "404 carries no application/json body");
 
         var okRef = okResponse.GetProperty("content").GetProperty("application/json")
             .GetProperty("schema").GetProperty("$ref").GetString();
