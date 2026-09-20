@@ -161,6 +161,9 @@ serializes — also run:
 ./scripts/check-schema-drift.sh
 ```
 
+It needs port 8007 free — a web lane following `src/TaskGuide.Web/README.md` has the API running
+there for the Vite proxy, so stop it first — and `npm install` in `src/TaskGuide.Web`.
+
 It boots the API, regenerates the TypeScript types from the live `/openapi/v1.json`, and diffs them
 against the checked-in `src/TaskGuide.Web/src/api/schema.d.ts`. Non-zero means the checked-in copy is
 stale: the SPA is typed off a contract the server stopped honouring, with no compile error and no
