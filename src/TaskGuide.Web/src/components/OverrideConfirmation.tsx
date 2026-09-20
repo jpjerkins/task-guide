@@ -34,13 +34,15 @@ export function useOverrideConfirmation() {
     const action = blank ? 'Blanking clears' : 'Stamping replaces'
     // n === 0 is only reachable in blank mode (#152: blank confirms on span size, not clobber
     // count — stamp still skips this hook entirely when nothing is clobbered). No date departs
-    // from the pattern yet, so there is nothing true to list — no .damage block at all.
+    // from the pattern yet, so the .damage block carries no per-date rows.
     if (n === 0) {
       const soloSpan = span === 1
       return <OverrideSheet title={soloSpan ? 'Blank this date?' : `Blank all ${span} dates?`} onCancel={() => finish(false)}>
-        <div className="damage-h">{soloSpan
-          ? 'Every window on this date is removed and nothing will fire on it.'
-          : 'Every window on these dates is removed and nothing will fire on them.'}</div>
+        <div className="damage">
+          <div className="damage-h">{soloSpan
+            ? 'Every window on this date is removed and nothing will fire on it.'
+            : 'Every window on these dates is removed and nothing will fire on them.'}</div>
+        </div>
         <div className="note">Nothing here can be undone in one step — reverting is per date.</div>
         <div className="btn-row"><button className="btn danger wide" onClick={() => finish(true)}>
           {soloSpan ? 'Blank it' : `Blank all ${span}`}

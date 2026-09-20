@@ -117,13 +117,13 @@ it('blank_mode_for_a_single_date_that_is_its_own_whole_span_reads_Blank_it', asy
 
 // #152: blank confirms on blast radius, not clobber count — authorOverrideSpan now calls confirm
 // with an empty dates array whenever mode is 'blank', so this sheet needs a shape with nothing
-// true to list: no dates depart from the pattern yet, so no .damage block at all.
-it('blank_mode_with_nothing_clobbered_renders_a_count_only_sheet_with_no_damage_block', async () => {
+// true to list: no dates depart from the pattern yet, so the .damage block carries no rows.
+it('blank_mode_with_nothing_clobbered_renders_a_count_only_sheet_whose_damage_block_carries_no_rows', async () => {
   render(<Host />)
   const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number, mode: 'stamp' | 'blank') => Promise<boolean> }).confirm
   act(() => { void confirm([], 30, 'blank') })
   expect(await screen.findByRole('heading', { name: 'Blank all 30 dates?' })).toBeInTheDocument()
-  expect(document.querySelector('.damage')).toBeNull()
+  expect(document.querySelectorAll('.damage .row')).toHaveLength(0)
   expect(document.body.textContent).toContain('Every window on these dates is removed and nothing will fire on them.')
   expect(document.body.textContent).not.toMatch(/The other \d+ dates?/)
   expect(document.querySelector('.note')).toHaveTextContent('Nothing here can be undone in one step — reverting is per date.')
@@ -135,7 +135,7 @@ it('blank_mode_with_nothing_clobbered_for_a_single_date_span_reads_Blank_this_da
   const confirm = (window as unknown as { confirm: (affected: readonly string[], span: number, mode: 'stamp' | 'blank') => Promise<boolean> }).confirm
   act(() => { void confirm([], 1, 'blank') })
   expect(await screen.findByRole('heading', { name: 'Blank this date?' })).toBeInTheDocument()
-  expect(document.querySelector('.damage')).toBeNull()
+  expect(document.querySelectorAll('.damage .row')).toHaveLength(0)
   expect(document.body.textContent).toContain('Every window on this date is removed and nothing will fire on it.')
   expect(screen.getByRole('button', { name: 'Blank it' })).toBeInTheDocument()
 })
