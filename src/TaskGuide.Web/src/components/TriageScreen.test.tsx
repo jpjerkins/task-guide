@@ -53,7 +53,7 @@ describe('TriageScreen', () => {
     await screen.findByText('File the receipt')
 
     for (const label of ['2m', '10m', '30m', '60m', 'Longer']) {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: `${label} — File the receipt` })).toBeInTheDocument()
     }
   })
 
@@ -77,7 +77,7 @@ describe('TriageScreen', () => {
     // re-reading its two lists, React would rebuild this node and the reference would change.
     const navBeforeClick = document.querySelector('.nav')
 
-    await user.click(screen.getByRole('button', { name: '2m' }))
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
     await waitFor(() => expect(screen.queryByText('File the receipt')).not.toBeInTheDocument())
     expect(durationWrites).toHaveLength(1)
@@ -153,12 +153,12 @@ describe('TriageScreen', () => {
     render(<TriageScreen />)
     await screen.findByText('File the receipt')
 
-    await user.click(screen.getByRole('button', { name: '2m' }))
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
     expect(await screen.findByText("Couldn't set this task's duration.")).toBeInTheDocument()
     // Untouched by the refused write — still in the unprocessed pile, buttons re-enabled.
     expect(screen.getByText('File the receipt')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '2m' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '2m — File the receipt' })).not.toBeDisabled()
   })
 
   it('renders `.nav` and `.scroll` as siblings with no wrapping element, so `.scroll`\'s flex sizing applies', async () => {
@@ -229,7 +229,7 @@ describe('TriageScreen', () => {
     render(<TriageScreen />)
     await screen.findByText('File the receipt')
 
-    await user.click(screen.getByRole('button', { name: '2m' }))
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
 
     // Offline: the write fails AND the reload it triggers fails too, landing on the connection
     // error — the note must still say the write failed rather than being dropped by that arm.
@@ -258,11 +258,109 @@ describe('TriageScreen', () => {
     render(<TriageScreen />)
     await screen.findByText('File the receipt')
 
-    await user.click(screen.getAllByRole('button', { name: '2m' })[0])
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
     await screen.findByText("Couldn't set this task's duration.")
 
-    await user.click(screen.getAllByRole('button', { name: '2m' })[1])
+    await user.click(screen.getByRole('button', { name: '2m — Water plants' }))
     await waitFor(() => expect(screen.queryByText('Water plants')).not.toBeInTheDocument())
     expect(screen.getByText("Couldn't set this task's duration.")).toBeInTheDocument()
+  })
+
+  it("each unprocessed row's Duration buttons are labelled with the task they size, not just the bucket", async () => {
+    unprocessed = [
+      { id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+      { id: 'u2', title: 'Water plants', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+    ]
+    vi.stubGlobal('fetch', vi.fn(routedFetch))
+
+    render(<TriageScreen />)
+    await screen.findByText('File the receipt')
+
+    // With two rows both offering "2m", a screen-reader user tabbing the pile can't tell them
+    // apart without the task in the accessible name.
+    expect(screen.getByRole('button', { name: '2m — File the receipt' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2m — Water plants' })).toBeInTheDocument()
+  })
+
+  it("a second row's in-flight write does not re-enable a first row's still-in-flight controls", async () => {
+    unprocessed = [
+      { id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+      { id: 'u2', title: 'Water plants', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+    ]
+    const pending: Record<string, (r: Response) => void> = {}
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return new Promise<Response>((res) => {
+          pending[url] = res
+        })
+      }
+      return routedFetch(url)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<TriageScreen />)
+    await screen.findByText('File the receipt')
+
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
+    expect(screen.getByRole('button', { name: '2m — File the receipt' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: '10m — Water plants' }))
+    // Row 1's write is still in flight — a single busy-id slot would have dropped its guard the
+    // moment row 2 became "the" busy row, re-enabling a control whose write hadn't settled yet.
+    expect(screen.getByRole('button', { name: '2m — File the receipt' })).toBeDisabled()
+
+    pending['/api/tasks/u1/duration'](new Response(null, { status: 204 }))
+    pending['/api/tasks/u2/duration'](new Response(null, { status: 204 }))
+  })
+
+  it("a slower reload from an earlier write does not overwrite a newer write's fresher pile", async () => {
+    unprocessed = [
+      { id: 'u1', title: 'File the receipt', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+      { id: 'u2', title: 'Water plants', duration: null, createdAt: '2026-09-01T00:00:00Z' },
+    ]
+    let unprocessedReads = 0
+    let releaseStaleReload: (() => void) | null = null
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT' && url === '/api/tasks/u1/duration') {
+        unprocessed = unprocessed.filter((t) => (t as { id: string }).id !== 'u1')
+        return new Response(null, { status: 204 })
+      }
+      if (init?.method === 'PUT' && url === '/api/tasks/u2/duration') {
+        unprocessed = unprocessed.filter((t) => (t as { id: string }).id !== 'u2')
+        return new Response(null, { status: 204 })
+      }
+      if (url === '/api/tasks?status=unprocessed') {
+        unprocessedReads += 1
+        // Read #1 is the initial mount load. Read #2 is u1's post-write reload — hold it open,
+        // capturing today's snapshot (u2 still present) now, so it resolves later with stale data
+        // once released below, arriving after u2's own fresher reload (#3).
+        if (unprocessedReads === 2) {
+          const snapshot = [...unprocessed]
+          return new Promise<Response>((resolve) => {
+            releaseStaleReload = () => resolve(jsonResponse(snapshot))
+          })
+        }
+        return jsonResponse(unprocessed)
+      }
+      return routedFetch(url)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(<TriageScreen />)
+    await screen.findByText('File the receipt')
+
+    await user.click(screen.getByRole('button', { name: '2m — File the receipt' }))
+    await waitFor(() => expect(unprocessedReads).toBe(2))
+
+    await user.click(screen.getByRole('button', { name: '10m — Water plants' }))
+    await waitFor(() => expect(screen.queryByText('Water plants')).not.toBeInTheDocument())
+
+    // Release the held, now-stale reload from u1's write. The sequence guard must drop it rather
+    // than resurrect u2, which it still lists.
+    releaseStaleReload?.()
+    await waitFor(() => expect(unprocessedReads).toBe(3))
+    expect(screen.queryByText('Water plants')).not.toBeInTheDocument()
   })
 })

@@ -1741,6 +1741,12 @@ specified under **Shared controls** above and are not restated here.
   reload also lands on the connection error
 - a row's duration-write failure note is not cleared by a different row's duration button; it
   persists until replaced by that row's own outcome
+- each unprocessed row's Duration buttons carry the task in their accessible name, not just the
+  bucket, so identically-labelled buttons across rows stay distinguishable
+- a second row's in-flight duration write does not re-enable a first row's still-in-flight
+  controls — busy tracking is per-row, not a single shared slot
+- a slower reload triggered by an earlier duration write does not overwrite a newer write's
+  fresher pile; only the most recently issued reload's result is applied
 
 ## `TaskGuide.E2E`
 

@@ -27,7 +27,9 @@ interface TaskActionNote {
 
 export function TriageScreen() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
-  const [busyId, setBusyId] = useState<string | null>(null)
+  // A Set, not a single slot: two rows' writes can be in flight at once, and a single slot would
+  // drop row A's disabled guard the moment row B became "the" busy row.
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set())
   const [taskActionNote, setTaskActionNote] = useState<TaskActionNote | null>(null)
   // Guards against an earlier `load()` call's response arriving after a later one's: only the
   // most recently issued call's result is applied.
@@ -51,7 +53,7 @@ export function TriageScreen() {
 
   async function handleDuration(taskId: string, bucket: string) {
     setTaskActionNote((prev) => (prev?.taskId === taskId ? null : prev))
-    setBusyId(taskId)
+    setBusyIds((prev) => new Set(prev).add(taskId))
     try {
       await setTaskDuration(taskId, bucket)
     } catch {
@@ -60,11 +62,19 @@ export function TriageScreen() {
       // dropped along with the ready-state body it would otherwise live inside.
       setTaskActionNote({ taskId, text: "Couldn't set this task's duration." })
       await load()
-      setBusyId(null)
+      setBusyIds((prev) => {
+        const next = new Set(prev)
+        next.delete(taskId)
+        return next
+      })
       return
     }
     await load()
-    setBusyId(null)
+    setBusyIds((prev) => {
+      const next = new Set(prev)
+      next.delete(taskId)
+      return next
+    })
   }
 
   const sub =
@@ -95,7 +105,8 @@ export function TriageScreen() {
                           <button
                             key={b}
                             className="pill dur"
-                            disabled={busyId === t.id}
+                            aria-label={`${durLabel(b)} — ${t.title}`}
+                            disabled={busyIds.has(t.id)}
                             onClick={() => handleDuration(t.id, b)}
                           >
                             {durLabel(b)}
