@@ -26,10 +26,14 @@ public sealed class FakeStore : IStore
     /// <summary>
     /// Makes the next <see cref="MutateAsync{T}"/> call whose <see
     /// cref="StoreMutation.OrderedWrites"/> is non-empty throw instead of applying — <see
-    /// cref="LastWriteSucceeded"/> goes <c>false</c> and nothing is recorded or applied, matching
-    /// how <c>JsonStore</c> would surface a mid-write disk failure (#77 review finding 5).
-    /// A refusal or an empty write list does not consume the flag, the same way neither moves
-    /// <see cref="LastWriteSucceeded"/> on a real write.
+    /// cref="LastWriteSucceeded"/> goes <c>false</c> and nothing is recorded or applied
+    /// (#77 review finding 5). A refusal or an empty write list does not consume the flag, the
+    /// same way neither moves <see cref="LastWriteSucceeded"/> on a real write.
+    /// This is all-or-nothing, unlike <c>JsonStore</c>, which applies writes one at a time and can
+    /// throw part-way through, leaving the earlier ones' <b>files</b> on disk (<see
+    /// cref="IStore.MutateAsync{T}"/>'s doc). This fake has no disk, so that partial-write state
+    /// is not representable here; a test that needs it seeds an inconsistent view directly via
+    /// <see cref="FakeStoreViewBuilder"/> (#117 finding 1).
     /// </summary>
     public void FailNextWrite() => _failNextWrite = true;
 
