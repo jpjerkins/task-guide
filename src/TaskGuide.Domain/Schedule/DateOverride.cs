@@ -9,7 +9,8 @@ namespace TaskGuide.Domain.Schedule;
 /// </summary>
 /// <remarks>
 /// <b>The date is the unit.</b> There is no multi-day Override object — a weekend away is two
-/// dated Overrides written by one authoring gesture (see <see cref="OverrideSpanRequest"/>).
+/// dated Overrides written by one authoring gesture through the application-layer override-span
+/// command request.
 /// A date has exactly one shape, so conflicts are unrepresentable rather than resolved.
 /// <para>
 /// <b>Always copied Windows, never a reference.</b> Applying a named Day template is a stamp,
@@ -55,26 +56,3 @@ public sealed record DateOverride(
 /// </para>
 /// </remarks>
 public sealed record DayTemplateUse(DayTemplateId TemplateId, string TemplateName);
-
-/// <summary>
-/// One authoring gesture over a span of dates, writing <b>one Override per date</b> — each
-/// independently editable afterwards. Per-day variation therefore falls out free; nothing has
-/// to express "different on day 3".
-/// </summary>
-/// <remarks>
-/// Settled in <b>Spec assembly</b> (#41): the from-scratch gesture takes a start–end range, so
-/// `CONTEXT.md`'s "two dated Overrides created in one authoring gesture" is honoured literally.
-/// Dates in the range that already carry an Override are <b>replacements</b>, confirmed in one
-/// batch before the write — the standing rule that blast radius is made visible, not prevented.
-/// </remarks>
-public sealed record OverrideSpanRequest(DateOnly From, DateOnly To, DayTemplateId? Stamp)
-{
-    public IEnumerable<DateOnly> Dates()
-    {
-        for (var date = From; ; date = date.AddDays(1))
-        {
-            yield return date;
-            if (date == To) yield break;
-        }
-    }
-}

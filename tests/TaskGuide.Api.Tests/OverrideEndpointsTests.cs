@@ -42,7 +42,7 @@ public sealed class OverrideEndpointsTests : IDisposable
         var template = new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Weekend", [Window("w_weekend")], []);
         await WriteAsync(new DayTemplatesWrite([template]));
 
-        var response = await _client.PostAsJsonAsync("/api/overrides", new { from = "2026-12-24", to = "2026-12-26", templateId = template.Id.Value });
+        var response = await _client.PostAsJsonAsync("/api/overrides", new { from = "2026-12-24", to = "2026-12-26", templateId = template.Id.Value, mode = "stamp" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(3, _factory.Services.GetRequiredService<IStore>().Read().Overrides.Count);
@@ -76,6 +76,71 @@ public sealed class OverrideEndpointsTests : IDisposable
             .SelectMany(overrideDay => overrideDay.Windows)
             .Select(window => window.Id.Value)
             .ToArray());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("dt_01ARZ3NDEKTSV4RRFFQ69G5FAV")]
+    public async Task A_span_POST_with_no_mode_is_refused_with_400_and_writes_nothing_whatever_templateId_carries(string? templateId)
+    {
+        object absentModeRequest = templateId is null
+            ? new { from = "2026-12-24", to = "2026-12-26" }
+            : new { from = "2026-12-24", to = "2026-12-26", templateId };
+        var absentModeResponse = await _client.PostAsJsonAsync("/api/overrides", absentModeRequest);
+        var nullModeResponse = await _client.PostAsJsonAsync("/api/overrides", new
+        {
+            from = "2026-12-24",
+            to = "2026-12-26",
+            templateId,
+            mode = (string?)null,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, absentModeResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, nullModeResponse.StatusCode);
+        var error = await absentModeResponse.Content.ReadAsStringAsync();
+        Assert.Contains("stamp", error);
+        Assert.Contains("freeze", error);
+        Assert.Contains("blank", error);
+        Assert.Empty(_factory.Services.GetRequiredService<IStore>().Read().Overrides);
+    }
+
+    [Theory]
+    [InlineData("stamp", null)]
+    [InlineData("freeze", "dt_01ARZ3NDEKTSV4RRFFQ69G5FAV")]
+    [InlineData("blank", "dt_01ARZ3NDEKTSV4RRFFQ69G5FAV")]
+    [InlineData("unrecognised", null)]
+    public async Task Each_existing_400_still_refuses_stamp_with_no_templateId_a_templateId_on_freeze_or_blank_and_an_unrecognised_mode(
+        string mode,
+        string? templateId)
+    {
+        var response = await _client.PostAsJsonAsync("/api/overrides", new
+        {
+            from = "2026-12-24",
+            to = "2026-12-26",
+            templateId,
+            mode,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task All_three_arms_still_succeed_when_mode_is_stated()
+    {
+        var template = new DayTemplate(new DayTemplateId("dt_01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Every day", [Window("w_every_day")], []);
+        var patternId = new PatternId("p_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        await WriteAsync(
+            new DayTemplatesWrite([template]),
+            new PatternsWrite(new PatternBook(patternId, [new Pattern(patternId, "Every day", [.. Enumerable.Repeat(template.Id, 7)])])));
+
+        var stamp = await _client.PostAsJsonAsync("/api/overrides", new { from = "2026-12-24", to = "2026-12-24", templateId = template.Id.Value, mode = "stamp" });
+        var freeze = await _client.PostAsJsonAsync("/api/overrides", new { from = "2026-12-25", to = "2026-12-25", mode = "freeze" });
+        var blank = await _client.PostAsJsonAsync("/api/overrides", new { from = "2026-12-26", to = "2026-12-26", mode = "blank" });
+
+        Assert.Equal(HttpStatusCode.Created, stamp.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, freeze.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, blank.StatusCode);
+        Assert.Equal(3, _factory.Services.GetRequiredService<IStore>().Read().Overrides.Count);
     }
 
     [Fact]
