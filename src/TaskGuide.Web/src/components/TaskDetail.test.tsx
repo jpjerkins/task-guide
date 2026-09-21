@@ -349,6 +349,28 @@ describe('TaskDetail — form', () => {
     })
   })
 
+  it("rejects a Defer offset the API can't accept — zero, negative or fractional — without writing", async () => {
+    // ToDefer matches only { Date: null, Offset: > 0, Unit: {} }: 0 and -3 come back 400 "supply
+    // either date or offset and unit" (reads as a client bug, since offset+unit both being
+    // present should satisfy it), and 1.5 fails int? binding into a non-JSON body, showing a
+    // generic note. All three are catchable client-side before the request goes out.
+    const fetchMock = makeFetchMock({ taskResponses: [rawTask({ recurring: true, defer: null })] })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    const offsetInput = await screen.findByLabelText(/offset/i)
+    const deferButton = screen.getByRole('button', { name: /defer/i })
+
+    for (const value of ['0', '-3', '1.5']) {
+      await user.clear(offsetInput)
+      await user.type(offsetInput, value)
+      await user.click(deferButton)
+    }
+
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false)
+  })
+
   it('Defer PATCHes {date: null, offset, unit} and re-reads', async () => {
     const fetchMock = makeFetchMock({
       taskResponses: [rawTask({ recurring: true, defer: null }), rawTask({ recurring: true, defer: '2026-09-28' })],

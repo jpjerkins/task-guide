@@ -210,7 +210,11 @@ function TaskForm({
 
   async function handleDefer() {
     const offset = Number(offsetValue)
-    if (!offsetValue || Number.isNaN(offset)) return
+    // ToDefer matches only { Date: null, Offset: > 0, Unit: {} } — 0 or a negative offset comes
+    // back 400 "supply either date or offset and unit" (reads as a client bug, since both are
+    // present), and a fractional offset fails int? binding into a non-JSON body, showing a
+    // generic note. Caught here instead.
+    if (!offsetValue || !Number.isInteger(offset) || offset <= 0) return
     onNote(null)
     setBusy(true)
     try {
@@ -315,6 +319,8 @@ function TaskForm({
             <input
               className="field"
               type="number"
+              min="1"
+              step="1"
               value={offsetValue}
               disabled={busy}
               onChange={(e) => setOffsetValue(e.target.value)}
