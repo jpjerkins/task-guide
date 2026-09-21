@@ -62,6 +62,14 @@ export async function sendJson<T>(method: string, path: string, body: unknown): 
 // Raw wire shapes, straight from the generated OpenAPI schema.
 type TaskResponse = components['schemas']['TaskResponse']
 type CreateTaskRequest = components['schemas']['CreateTaskRequest']
+type UpdateTaskDetailsRequest = components['schemas']['UpdateTaskDetailsRequest']
+type OffsetUnit = components['schemas']['OffsetUnit']
+
+// Same int32-as-string/number artifact as `duration` (see the comment on `Task` below) — normalise
+// to a real number, and keep `null` as `null` rather than coercing an absent count to 0.
+function toNumber(raw: number | string | null | undefined): number | null {
+  return raw === null || raw === undefined ? null : Number(raw)
+}
 
 // App-facing Task: `duration` normalised to `string | null`. A Duration is a *bucket*
 // (KnownDimensions.DurationBuckets: "2" | "10" | "30" | "60" | "longer"), not a minute count.
@@ -74,13 +82,13 @@ type CreateTaskRequest = components['schemas']['CreateTaskRequest']
 export interface Task {
   id: string
   title: string
+  notes: string | null
   duration: string | null
+  dimensions: Record<string, string[]>
+  looseTags: string[]
   createdAt: string
   // #163: status/eligible/deadline/defer/postpone/recurring/derived/zeroKind pass through as-is —
   // the wire already sends camelCase strings and booleans, so there's nothing to normalise.
-  // opportunities and patternWeekCount aren't here: nothing reads them yet (#175 will), and
-  // adding them ahead of a reader would mean adding `toNumber` untested against a real caller —
-  // YAGNI, add them when a screen needs them.
   status: string
   eligible: boolean
   deadline: string | null
@@ -88,7 +96,12 @@ export interface Task {
   postpone: string | null
   recurring: boolean
   derived: boolean
+  // #175: same int32-as-string/number wire artifact `duration` already carries — see `toNumber`.
+  // A null must never become 0: 0 is a real, meaningful Opportunities count.
+  opportunities: number | null
+  patternWeekCount: number | null
   zeroKind: string | null
+  orphanBlameDimensions: string[]
 }
 
 export type NewTask = Pick<CreateTaskRequest, 'title'> & { duration: number }
@@ -97,7 +110,10 @@ function toTask(raw: TaskResponse): Task {
   return {
     id: raw.id,
     title: raw.title,
+    notes: raw.notes,
     duration: raw.duration === null || raw.duration === undefined ? null : String(raw.duration),
+    dimensions: raw.dimensions,
+    looseTags: raw.looseTags,
     createdAt: raw.createdAt,
     status: raw.status,
     eligible: raw.eligible,
@@ -106,7 +122,10 @@ function toTask(raw: TaskResponse): Task {
     postpone: raw.postpone,
     recurring: raw.recurring,
     derived: raw.derived,
+    opportunities: toNumber(raw.opportunities),
+    patternWeekCount: toNumber(raw.patternWeekCount),
     zeroKind: raw.zeroKind,
+    orphanBlameDimensions: raw.orphanBlameDimensions,
   }
 }
 
@@ -118,6 +137,39 @@ export async function fetchTasks(status?: 'unprocessed' | 'stale'): Promise<Task
 
 export async function setTaskDuration(id: string, duration: string): Promise<void> {
   await sendJson('PUT', `/api/tasks/${id}/duration`, { duration })
+}
+
+// A 404 throws (getJson's `!res.ok` policy) rather than returning null — Task detail's error arm
+// catches it, same as any other failed load. A 204 (absence in today's stub API) reads as null,
+// same as `fetchTasks`.
+export async function fetchTask(id: string): Promise<Task | null> {
+  const raw = await getJson<TaskResponse>(`/api/tasks/${id}`)
+  return raw === null ? null : toTask(raw)
+}
+
+export interface TaskDetails {
+  title: string
+  notes: string | null
+  duration: string | null
+  deadline: string | null
+  dimensions: Record<string, string[]>
+}
+
+// #174: the whole form crosses the lock in one PUT — Detail is one form and one Save, Duration
+// included, so a later gesture can't race a stale, piecemeal update.
+export async function saveTaskDetails(id: string, details: TaskDetails): Promise<void> {
+  const body: UpdateTaskDetailsRequest = details
+  await sendJson('PUT', `/api/tasks/${id}`, body)
+}
+
+export async function clearPostpone(id: string): Promise<void> {
+  await sendJson('DELETE', `/api/tasks/${id}/postpone`, undefined)
+}
+
+// `unit` is an enum serialised as a number (OffsetUnit: 0 Days, 1 Weeks, 2 Months). `date: null`
+// selects the offset form of Defer, as opposed to an absolute date.
+export async function deferTaskByOffset(id: string, offset: number, unit: OffsetUnit): Promise<void> {
+  await sendJson('PATCH', `/api/tasks/${id}`, { date: null, offset, unit })
 }
 
 export async function createTask(task: NewTask): Promise<void> {
