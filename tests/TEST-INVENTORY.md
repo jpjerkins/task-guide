@@ -1690,6 +1690,10 @@ specified under **Shared controls** above and are not restated here.
 - Postpone's "pick a date…" escape survives its own input event — ADR-0006 § Scope names this
   surface explicitly, and it is the one system-presented picker this screen opens
 - an empty list renders "Nothing here.", never a blank region
+- a failed write's note (mark-off or postpone) renders outside the ready-state body, at the top
+  of the scroll, naming the Task — so it survives a reload that also fails, rather than vanishing
+  with the rows it would otherwise render inside (#102's rule, TriageScreen.tsx's taskActionNote)
+- a refused postpone's note carries the server's reason (`{ error }`, #138) appended to the sentence
 
 #### Task detail
 

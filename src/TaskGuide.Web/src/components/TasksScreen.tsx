@@ -171,6 +171,16 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
         ))}
       </div>
       <div className="scroll">
+        {/* Rendered outside the three-arm conditional below, same as TriageScreen.tsx's
+            taskActionNote: offline, the reload a write triggers can fail too, and the note must
+            survive that rather than being dropped along with the ready-state body it would
+            otherwise live inside — the error arm replaces that whole body, rows included. The
+            Task's title is what ties the note to a row once it's rendered at the top. */}
+        {actionNote && (
+          <div className="note" role="alert">
+            {actionNote.text}
+          </div>
+        )}
         {state.status === 'loading' && <div className="empty">Loading…</div>}
         {state.status === 'error' && (
           <div className="empty">Couldn't load tasks. Check your connection and try again.</div>
@@ -181,7 +191,6 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
               <div className="empty">Nothing here.</div>
             ) : (
               shown.map((t) => {
-                const note = actionNote?.taskId === t.id ? actionNote.text : null
                 const postponed = t.postpone !== null
                 return (
                   // Greyed the way the prototype greys a Done row (opacity:.45,
@@ -221,11 +230,6 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                           t.defer !== null && <span className="pill dim">surfaces {t.defer}</span>
                         )}
                       </div>
-                      {note && (
-                        <div className="note" role="alert">
-                          {note}
-                        </div>
-                      )}
                       {canPostpone(t) && (
                         <>
                           <button

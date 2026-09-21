@@ -437,6 +437,56 @@ describe('TasksScreen', () => {
     })
   })
 
+  describe('failed writes', () => {
+    it('a failed mark-off renders a note naming the Task, and the note survives a reload that also fails', async () => {
+      const fetchMock = vi
+        .fn()
+        // initial GET
+        .mockResolvedValueOnce(jsonResponse([rawTask({ id: '1', title: 'Water the plants', duration: '10' })]))
+        // POST completions rejects
+        .mockRejectedValueOnce(new Error('offline'))
+        // the reload it triggers fails too
+        .mockRejectedValueOnce(new Error('offline'))
+      vi.stubGlobal('fetch', fetchMock)
+      const user = userEvent.setup()
+      render(<TasksScreen />)
+
+      await user.click(await screen.findByRole('button', { name: /mark water the plants done/i }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/Water the plants/)
+      // The failed reload replaces the ready-state body with the error state — the note must
+      // still be showing, not have vanished along with the rows it used to render inside.
+      expect(await screen.findByText(/couldn.t load tasks/i)).toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent(/Water the plants/)
+    })
+
+    it("a refused postpone renders the server's reason appended to the sentence", async () => {
+      const fetchMock = vi
+        .fn()
+        // initial GET
+        .mockResolvedValueOnce(
+          jsonResponse([rawTask({ id: '1', title: 'Postponable', status: 'active', eligible: true })]),
+        )
+        // PUT postpone refused — #138's { error } body
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'already done' }), { status: 409 }))
+        // reload after the failure
+        .mockResolvedValueOnce(
+          jsonResponse([rawTask({ id: '1', title: 'Postponable', status: 'active', eligible: true })]),
+        )
+      vi.stubGlobal('fetch', fetchMock)
+      const user = userEvent.setup()
+      render(<TasksScreen />)
+
+      await user.click(await screen.findByRole('button', { name: /not now/i }))
+      await user.click(screen.getByRole('button', { name: /tomorrow/i }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/Postponable/)
+      expect(alert).toHaveTextContent(/already done/)
+    })
+  })
+
   it('renders "Nothing here." for an empty selected pile', async () => {
     const user = userEvent.setup()
     vi.stubGlobal(
