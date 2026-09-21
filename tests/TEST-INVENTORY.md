@@ -1093,9 +1093,11 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   decrementing key or a drag-to-0, so there is otherwise no way to commit the least value. The
   chipset renders whenever a default is declared **or** the slider is unset, so a Dimension with no
   declared default (Duration) still gets the button, with no "Leave at the default" button beside
-  it since none was declared. Once a value is set, the button is gone (it is an unset-only
-  affordance), and it renders disabled when read-only. This is a deliberate departure from the
-  tag-entry prototype, which has no such control.
+  it since none was declared, and its hint names the button too since it's the only path to a
+  commit there. Once a value is set, the button is gone (it is an unset-only affordance). Clicking
+  it moves focus to the range input before it unmounts, so a keyboard-only user doesn't lose their
+  place to `<body>`. This is a deliberate departure from the tag-entry prototype, which has no such
+  control.
 - there is deliberately **no keyboard commit path** for the slider (#147) — five review rounds each
   found another key or ordering that committed a value from the keyboard while unset (`Tab`,
   `Shift+Tab`, `Enter`/`Escape`, `Cmd`+arrow, and modifier-release-order, since `e.metaKey` is read
@@ -1104,7 +1106,12 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - `pointerUp` does not commit the least value when a `change` already fired during the same
   gesture, even if a deferring parent (an awaited write, a transition) hasn't applied it yet and
   `unset` still reads true — otherwise a click at index 2 would fire `change` -> `onChange('normal')`
-  and then `pointerUp` would downgrade it with a second `onChange('whisper')`
+  and then `pointerUp` would downgrade it with a second `onChange('whisper')`; a second `pointerdown`
+  mid-gesture (a stray pointer, a second finger) does not reset that guard either, only a fresh
+  gesture does
+- the "Use \<least value\>" button is an authoring affordance, absent (not disabled) in the
+  read-only presentation — `DimensionsScreen`'s catalog always passes `value={null}`, so a
+  permanently-unset, never-actionable button would otherwise sit on every ordinal dimension there
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
@@ -1909,8 +1916,8 @@ specified under **Shared controls** above and are not restated here.
   absolute form, Postpone's escape, Recurrence's first-due, an Event's date, and the Override
   rail's "Pick a date…"
 - a `<select>` and an ordinal slider survive the same way
-- an ordinal slider commits its least value from the keyboard alone, and a press of "leave at the
-  default" released over the slider does not commit one
+- an ordinal slider commits its least value via the "Use \<least value\>" button, and a press of
+  "leave at the default" released over the slider does not commit one
 - authoring an Override over a range from the rail's escape writes the whole span
 
 ## Duration repair command — #138
