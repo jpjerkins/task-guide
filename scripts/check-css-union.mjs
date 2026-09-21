@@ -140,6 +140,17 @@ const source = new Map([
 // scoped to `source`. The order check is likewise `source`-only: these
 // selectors have no agreed position relative to the union's, so a ported
 // tag-entry rule can sit anywhere. See #177 and #179.
+// #179 closed won't-fix: order-checking the ported selectors among
+// themselves, in tag-entry's order, was tried and is red on a correct
+// index.css - `.hint | input.field.date | .range | .ticks` in tag-entry
+// against `input.field.date | .range | .ticks | .hint` here, mismatch at 0.
+// `.hint` belongs where it is; it can't match the same element as .range or
+// .ticks, so their relative order is cascade-irrelevant. Narrowing to pairs
+// sharing a declared property is red too (.hint and .ticks both set
+// font-size and color, and still can't co-match). Anything green here has to
+// model which rules can collide - the cost of a full interleaving, which is
+// more than the four ported selectors are worth. Don't re-attempt the cheap
+// version.
 // The filter compares raw selectors but everything downstream compares
 // aliased ones, so it also excludes anything aliasing onto a source key -
 // otherwise one index.css selector would carry two expected bodies.
