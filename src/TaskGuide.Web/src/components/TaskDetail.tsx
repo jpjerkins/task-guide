@@ -168,7 +168,17 @@ function TaskForm({
     onNote(null)
     setBusy(true)
     try {
-      await saveTaskDetails(taskId, { title, notes, duration, deadline, dimensions: withoutDurationKey(dims) })
+      await saveTaskDetails(taskId, {
+        title,
+        notes,
+        duration,
+        // TaskEndpoints.DeadlineOf reports a recurring Task's live-instance Deadline as a
+        // non-nullable DateOnly, so `deadline` is read as non-null even though it's derived, not
+        // authored — UpdateTaskDetails.ExecuteAsync refuses any Save on a recurring Task that
+        // carries a non-null Deadline. Sending it back verbatim would 409 every Save.
+        deadline: task.recurring ? null : deadline,
+        dimensions: withoutDurationKey(dims),
+      })
     } catch (err) {
       onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't save.")
     }
@@ -231,7 +241,16 @@ function TaskForm({
             </button>
           ))}
         </div>
-        <DateEntry label="Deadline" value={deadline} onChange={setDeadline} disabled={busy} />
+        {task.recurring ? (
+          // Derived (the live instance's), not authored — see the comment on handleSave. A
+          // DateEntry here would let the user "edit" a value Save can never actually send.
+          <div className="stack">
+            <span className="lbl">Deadline</span>
+            <div className="field">{task.deadline}</div>
+          </div>
+        ) : (
+          <DateEntry label="Deadline" value={deadline} onChange={setDeadline} disabled={busy} />
+        )}
       </div>
       <div className="sec-h">Dimensions</div>
       <div className="stack">

@@ -294,10 +294,47 @@ describe('TaskDetail — form', () => {
     render(<TaskDetail taskId="1" />)
 
     await screen.findByRole('button', { name: /defer/i })
-    // The only date input on the whole screen is Deadline's — Defer's offset form has none.
-    expect(screen.getAllByDisplayValue(/^\d{4}-\d{2}-\d{2}$|^$/).filter((el) => el.getAttribute('type') === 'date')).toHaveLength(1)
+    // A recurring Task's Deadline is derived (the live instance's), not authored, so it renders
+    // read-only rather than as a date input — there is no date input anywhere on this screen.
+    expect(screen.queryByDisplayValue(/^\d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument()
     expect(screen.getByLabelText(/offset/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/unit/i)).toBeInTheDocument()
+  })
+
+  it("a recurring Task's Deadline renders read-only, and Save sends deadline: null", async () => {
+    // TaskEndpoints.DeadlineOf returns RecurrenceRules.LiveInstanceDeadline for a recurring Task —
+    // a non-nullable DateOnly — so `deadline` is always non-null on the wire for one. It is the
+    // live instance's derived deadline, not an authored fact, and
+    // UpdateTaskDetails.ExecuteAsync refuses any Save on a recurring Task that carries a non-null
+    // Deadline ("A recurring Task cannot have an authored Deadline"). Sending the read value back
+    // verbatim would 409 every Save on every recurring Task.
+    const fetchMock = makeFetchMock({
+      taskResponses: [
+        rawTask({ recurring: true, deadline: '2026-10-01' }),
+        rawTask({ recurring: true, deadline: '2026-10-01' }),
+      ],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1' && init?.method === 'PUT',
+          response: new Response(null, { status: 204 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByText('2026-10-01')
+    expect(screen.queryByLabelText('Deadline')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => {
+      const putCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/tasks/1' && init?.method === 'PUT')
+      expect(putCall).toBeDefined()
+      const body = JSON.parse((putCall as [string, RequestInit])[1].body as string)
+      expect(body.deadline).toBeNull()
+    })
   })
 
   it('Defer PATCHes {date: null, offset, unit} and re-reads', async () => {
