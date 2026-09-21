@@ -13,8 +13,6 @@ interface OrdinalSliderProps {
   id?: string
 }
 
-const RANGE_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']
-
 // A slider over an ordered value set (CONTEXT.md 339-482: Ordinal Dimensions), matching the
 // settled shape from tag-entry.prototype.html variant C's sheet (~850-862): "An ordinal slider
 // needs an explicit control for absence. A Dimension declaring a default makes unset and
@@ -27,8 +25,7 @@ const RANGE_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', '
 // style) and shows index 0. Duration declares no default, so that control is simply absent.
 export function OrdinalSlider({ label, values, value, onChange, defaultValue, readOnly, id }: OrdinalSliderProps) {
   const pointerStartedOnSlider = useRef(false)
-  const keyStartedOnSlider = useRef(false)
-  const changedDuringKeypress = useRef(false)
+  const changedDuringGesture = useRef(false)
   const hasDefault = defaultValue !== undefined && defaultValue !== null
   // A value not present in `values` (indexOf === -1) falls back to the unset presentation too —
   // otherwise React writes value="-1" on the input, the browser clamps the visible thumb to
@@ -41,7 +38,7 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
   let hint: string
   if (unset) {
     hint = hasDefault
-      ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Touch it to commit a value.`
+      ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Drag it or use the button below to commit a value.`
       : 'Not set.'
   } else {
     hint = `Set to ${value}.`
@@ -50,11 +47,24 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
   return (
     <div className="stack">
       <div className="lbl">{label}</div>
-      {hasDefault && (
+      {(hasDefault || unset) && (
+        // Five review rounds tried to make a keyboard keystroke commit an unset slider and each
+        // found another key/ordering that fired wrongly (Tab, Shift+Tab, Enter/Escape, Cmd+arrow,
+        // modifier-release-order) — #147's final call was to delete that path entirely. A button
+        // is keyboard-reachable by construction, so it replaces the keyboard commit path outright.
+        // The chipset must render even with no default (Duration) — that's the only way an unset,
+        // no-default slider can ever commit its least value at all.
         <div className="chipset">
-          <button type="button" aria-pressed={unset} disabled={readOnly} onClick={() => onChange(null)}>
-            Leave at the default ({defaultValue})
-          </button>
+          {hasDefault && (
+            <button type="button" aria-pressed={unset} disabled={readOnly} onClick={() => onChange(null)}>
+              Leave at the default ({defaultValue})
+            </button>
+          )}
+          {unset && (
+            <button type="button" disabled={readOnly} onClick={() => onChange(values[0])}>
+              Use {values[0]}
+            </button>
+          )}
         </div>
       )}
       <input
@@ -68,84 +78,32 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         value={index}
         disabled={readOnly}
         onChange={(e) => {
-          changedDuringKeypress.current = true
+          changedDuringGesture.current = true
           onChange(values[Number(e.target.value)])
-        }}
-        // While unset, the thumb sits at index 0 — a decrementing key (ArrowLeft, ArrowDown,
-        // Home, PageDown) is a no-op there and the browser fires no `change` for it, so it would
-        // commit nothing. The rule is: a keystroke that started on this control, moved the thumb
-        // nowhere, and is a key a range input actually responds to commits the value being shown.
-        // Provenance is deliberately not keyed off which key it was (#147, 2nd pass) — a key list
-        // can always be incomplete, and `keyup` fires on whatever element is focused AT keyup
-        // time, not keydown time, so `Tab` and `Shift+Tab` both land a keyup on a slider whose
-        // keydown happened on the control being left (Shift is released last, so it fires on
-        // essentially every backward Tab traversal). Naming those keys would just repeat the
-        // mistake; tracking where the keydown landed subsumes them without knowing their names,
-        // mirroring `pointerStartedOnSlider` below. But Tab also moves focus ON keydown, so a
-        // keydown here can be followed by the keyup landing on the NEXT control instead of this
-        // one — this slider's keyup never runs, and the ref would stay stale until a later,
-        // unrelated keyup found it still `true`. Clearing it on blur closes that gap, mirroring
-        // `onPointerCancel`'s guard on the pointer path — and only a RANGE_KEYS key's keyup clears
-        // it here, so a combo's other key releasing first (Shift+Home: Shift then Home) doesn't
-        // wipe provenance before the range key's own keyup runs (#147, 4th pass). The key itself
-        // must be one from RANGE_KEYS — a keystroke can start and end on this control without
-        // moving the thumb because it was never aimed at the slider at all (Enter to submit the
-        // form, Escape to dismiss, Ctrl+S), and provenance alone can't tell that apart from a real
-        // no-op arrow press. This is knowingly a key list again, the failure mode #147 opened
-        // with — an omitted key silently can't commit — but here the list is exhaustive over what
-        // a range input responds to at all, not a guess at which keys decrement. A range input
-        // also doesn't move for Ctrl/Alt/Meta+arrow even though the key name is in RANGE_KEYS, so
-        // the commit also requires none of those modifiers (#147, 4th pass) — Shift is excluded
-        // from that check because Shift+arrow DOES move a range input. `changedDuringKeypress`
-        // resets on keydown only when no key is already down on this control, i.e. at the start of
-        // a fresh keystroke — which covers both a held key's auto-repeat and a second, different
-        // key pressed before the first is released, either of which would otherwise erase the
-        // record of a `change` that already fired earlier in the same keystroke (#147, 4th pass).
-        // `onBlur` clears both refs, so neither a stale provenance flag nor a stale change record
-        // survives a focus change.
-        onKeyDown={() => {
-          if (!keyStartedOnSlider.current) {
-            changedDuringKeypress.current = false
-          }
-          keyStartedOnSlider.current = true
-        }}
-        onKeyUp={(e) => {
-          if (
-            unset &&
-            keyStartedOnSlider.current &&
-            !changedDuringKeypress.current &&
-            RANGE_KEYS.includes(e.key) &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey
-          ) {
-            onChange(values[index])
-          }
-          if (RANGE_KEYS.includes(e.key)) {
-            keyStartedOnSlider.current = false
-          }
-        }}
-        onBlur={() => {
-          keyStartedOnSlider.current = false
-          changedDuringKeypress.current = false
         }}
         // While unset, the thumb already sits at index 0 — dragging it TO 0 fires no `change`
         // event, so a user could never explicitly commit the least value. A pointerUp (covers a
         // click too, and a touch drag's release) commits whatever the slider is currently
         // showing. Once a value is set, this is a no-op: `change` already owns every further
         // commit, and firing again here would be redundant, not wrong, but the guard keeps the
-        // handler's job to exactly "commit from unset" and nothing else.
+        // handler's job to exactly "commit from unset" and nothing else. `changedDuringGesture`
+        // guards against a parent that defers applying `onChange` (an awaited write, a
+        // transition): a click at index 2 fires `change` -> onChange('normal'), but if the parent
+        // hasn't re-rendered with the new value yet, `unset` here is still true and pointerUp
+        // would fire a second, wrong onChange(values[0]) on top of it.
         onPointerDown={() => {
           pointerStartedOnSlider.current = true
+          changedDuringGesture.current = false
         }}
         onPointerUp={() => {
-          if (unset && pointerStartedOnSlider.current) {
+          if (unset && pointerStartedOnSlider.current && !changedDuringGesture.current) {
             onChange(values[index])
           }
           pointerStartedOnSlider.current = false
         }}
         onPointerCancel={() => {
           pointerStartedOnSlider.current = false
+          changedDuringGesture.current = false
         }}
       />
       <div className="ticks">

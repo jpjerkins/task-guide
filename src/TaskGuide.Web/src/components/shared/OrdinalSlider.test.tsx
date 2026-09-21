@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { OrdinalSlider } from './OrdinalSlider'
 
@@ -59,6 +58,46 @@ describe('OrdinalSlider', () => {
     expect(screen.queryByRole('button', { name: /leave at the default/i })).not.toBeInTheDocument()
   })
 
+  // #147: the keyboard commit path is gone, so an unset slider needs a button — a range parked at
+  // index 0 fires no `change` for a decrementing key or a drag-to-0, and there is otherwise no way
+  // to commit the least value.
+  it('offers a "Use <least value>" button in the chipset while unset, and clicking it commits values[0]', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const button = screen.getByRole('button', { name: 'Use whisper' })
+    expect(button.closest('.chipset')).not.toBeNull()
+
+    fireEvent.click(button)
+
+    expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
+  // Duration declares no default, so the chipset used to be entirely absent for it. With the
+  // keyboard path deleted, that would leave a Duration slider parked at index 0 with no way at all
+  // to commit — the wrapper's condition must widen to `hasDefault || unset`.
+  it('shows the chipset with the "Use <least value>" button but no "Leave at the default" button when no default is declared', () => {
+    render(<OrdinalSlider label="Duration" values={VALUES} value={null} onChange={() => {}} />)
+
+    expect(screen.getByRole('button', { name: 'Use whisper' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /leave at the default/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the "Use <least value>" button once a value is set, while "Leave at the default" remains', () => {
+    render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={() => {}} />)
+
+    expect(screen.queryByRole('button', { name: 'Use whisper' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /leave at the default/i })).toBeInTheDocument()
+  })
+
+  it('renders the "Use <least value>" button disabled when read-only', () => {
+    render(
+      <OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} readOnly />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Use whisper' })).toBeDisabled()
+  })
+
   it('dims the slider (a class, not inline style) and shows index 0 while unset', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
 
@@ -74,7 +113,7 @@ describe('OrdinalSlider', () => {
     )
 
     expect(container.querySelector('.hint')?.textContent).toBe(
-      'Nothing chosen — the slider is showing whisper but the task carries the default. Touch it to commit a value.',
+      'Nothing chosen — the slider is showing whisper but the task carries the default. Drag it or use the button below to commit a value.',
     )
   })
 
@@ -99,205 +138,6 @@ describe('OrdinalSlider', () => {
     fireEvent.pointerUp(slider)
 
     expect(onChange).toHaveBeenCalledWith('whisper')
-  })
-
-  it('commits the value it is showing from any keystroke while unset, not just a chosen key list (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
-    fireEvent.keyUp(slider, { key: 'ArrowLeft' })
-
-    expect(onChange).toHaveBeenCalledWith('whisper')
-  })
-
-  // #147: ArrowDown is a decrementing key too, but the range input parked at index 0 fires no
-  // `change` for it (same as ArrowLeft/Home) — the old key-list guard missed it. The fix is
-  // deliberately keyless, so any key the guard used to miss now commits too.
-  it('commits from unset on a key the old ArrowLeft/Home-only guard missed (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowDown' })
-    fireEvent.keyUp(slider, { key: 'ArrowDown' })
-
-    expect(onChange).toHaveBeenCalledWith('whisper')
-  })
-
-  // #147 (4th review pass): Cmd/Ctrl/Alt+arrow doesn't move a range input, but keydown and keyup
-  // both still land on the focused slider and the key name is in RANGE_KEYS — so the old guard
-  // committed values[0] on a control the user never meant to touch (Cmd+ArrowDown scrolls the
-  // page on macOS). Shift+arrow is different: a range input DOES move for it, so Shift must not
-  // be excluded the same way.
-  it('does not commit on a modified arrow (Cmd/Ctrl/Alt), but Shift+arrow still commits (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowDown', metaKey: true })
-    fireEvent.keyUp(slider, { key: 'ArrowDown', metaKey: true })
-
-    expect(onChange).not.toHaveBeenCalled()
-
-    fireEvent.keyDown(slider, { key: 'ArrowDown', shiftKey: true })
-    fireEvent.keyUp(slider, { key: 'ArrowDown', shiftKey: true })
-
-    expect(onChange).toHaveBeenCalledWith('whisper')
-  })
-
-  // #147 (2nd review pass): the keyup handler's job is "commit the value being shown if this
-  // keystroke moved nothing" — once a `change` fires during the keypress, the keystroke already
-  // committed, whatever a deferring parent (an awaited API call, `startTransition`) has applied
-  // yet. A parent that ignores onChange stands in for that lag: `value` stays null, so `unset` is
-  // still true at keyup, but the guard must not fire a second, stale commit.
-  it('does not also commit on keyup once a change fired during the same keystroke, even if the parent has not applied it (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowRight' })
-    fireEvent.change(slider, { target: { value: '1' } })
-    fireEvent.keyUp(slider, { key: 'ArrowRight' })
-
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith('quiet')
-  })
-
-  // #147: keyup is dispatched to the element focused AT keyup time, not keydown time. Tabbing
-  // INTO a slider fires keydown on the element being left, then keyup lands on the slider — so
-  // without provenance tracking, tabbing over an unset slider would commit values[0] on a control
-  // the user never touched.
-  it('does not commit on Tab landing on an unset slider (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'Tab' })
-
-    expect(onChange).not.toHaveBeenCalled()
-  })
-
-  it('does not re-commit on keyUp once a value is already set (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowDown' })
-    fireEvent.keyUp(slider, { key: 'ArrowDown' })
-
-    expect(onChange).not.toHaveBeenCalled()
-  })
-
-  it('committing on keyUp while unset does not remount the slider (#147)', () => {
-    // A parent that ignores onChange can't tell a remount from a no-op re-render, so this wraps
-    // a stateful parent that actually applies the commit — proving the input survives a real
-    // value-prop change, not just an event that nothing downstream reacted to.
-    function StatefulSlider() {
-      const [value, setValue] = useState<string | null>(null)
-      return <OrdinalSlider label="Volume" values={VALUES} value={value} defaultValue="normal" onChange={setValue} />
-    }
-    render(<StatefulSlider />)
-
-    const el = screen.getByLabelText('Volume')
-    expect(screen.getByText(/Nothing chosen/)).toBeInTheDocument()
-
-    fireEvent.keyDown(el, { key: 'ArrowDown' })
-    fireEvent.keyUp(el, { key: 'ArrowDown' })
-
-    expect(screen.getByLabelText('Volume')).toBe(el)
-    expect(screen.getByText('Set to whisper.')).toBeInTheDocument()
-  })
-
-  // #147 (3rd review pass): keyStartedOnSlider is only ever cleared on THIS control's keyup, but
-  // Tab moves focus on keydown — tabbing forward out of an unset slider fires keydown here
-  // (setting the ref true) then the keyup lands on the NEXT control, so this slider's keyup never
-  // runs and the ref stays stale. Shift+Tab back in then sees a stale `true` with
-  // changedDuringKeypress still false and wrongly commits values[0]. Clearing the ref on blur
-  // mirrors onPointerCancel's guard on the pointer path.
-  it("does not commit a range-key keyup whose keydown landed elsewhere, after a Tab-out consumed this control's keyup (stale keyStartedOnSlider) (#147)", () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    // Tab forward out: keydown lands here, focus moves before keyup fires, so this control's
-    // keyup never runs and only the blur clears the flag.
-    fireEvent.keyDown(slider, { key: 'Tab' })
-    fireEvent.blur(slider)
-    // A later range-key keyup arrives with no keydown having landed here — focus returned mid
-    // keystroke (a held arrow released after focus moved back). Deliberately a RANGE_KEYS key:
-    // asserting with Tab/Shift would pass on the key list alone and never exercise the blur.
-    fireEvent.keyUp(slider, { key: 'ArrowDown' })
-
-    expect(onChange).not.toHaveBeenCalled()
-  })
-
-  // #147 (3rd review pass): a held key auto-repeats, firing repeated keydowns during one
-  // keystroke. changedDuringKeypress must survive those repeats — resetting it on every keydown
-  // would erase the record of a `change` that already fired earlier in the same keystroke, and a
-  // parent that defers applying onChange (an awaited API write, `startTransition`) would then see
-  // the keyup wrongly re-commit values[0].
-  it('does not erase a same-keystroke change on an auto-repeated keydown (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowRight' })
-    fireEvent.change(slider, { target: { value: '1' } })
-    fireEvent.keyDown(slider, { key: 'ArrowRight', repeat: true })
-    fireEvent.keyUp(slider, { key: 'ArrowRight' })
-
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith('quiet')
-  })
-
-  // #147 (4th review pass): `!e.repeat` only guards a HELD key's auto-repeat, not a different key
-  // pressed before the first is released — that keydown is not a repeat, so it still reset the
-  // flag. With a deferring parent (value stays null until the write lands): ArrowRight fires
-  // `change` and sets changedDuringKeypress, then ArrowLeft's keydown (before ArrowRight's keyup)
-  // wrongly cleared it, so ArrowLeft's own keyup re-committed values[0] over the value just chosen.
-  it('does not erase a same-keystroke change when a second key is pressed before the first is released (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'ArrowRight' })
-    fireEvent.change(slider, { target: { value: '1' } })
-    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
-    fireEvent.keyUp(slider, { key: 'ArrowLeft' })
-
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith('quiet')
-  })
-
-  // Phil's call, 2026-09-21: provenance alone stops traversal commits, but a key aimed at the
-  // form — Enter to submit, Escape to dismiss, Ctrl+S — still starts and ends on a focused,
-  // untouched slider. Require the key be one a range input actually responds to.
-  // #147 (4th review pass): keyup cleared keyStartedOnSlider for ANY key, so Shift+Home's Shift
-  // release (before Home's) wiped provenance and Home's own keyup then saw it false and swallowed
-  // the commit — the whole keystroke did nothing. Only a RANGE_KEYS key's release should clear it.
-  it('commits on Shift+Home even though Shift releases first (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'Shift' })
-    fireEvent.keyDown(slider, { key: 'Home', shiftKey: true })
-    fireEvent.keyUp(slider, { key: 'Shift' })
-    fireEvent.keyUp(slider, { key: 'Home' })
-
-    expect(onChange).toHaveBeenCalledWith('whisper')
-  })
-
-  it('does not commit on Enter (key not aimed at the slider) (#147)', () => {
-    const onChange = vi.fn()
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
-
-    const slider = screen.getByLabelText('Volume')
-    fireEvent.keyDown(slider, { key: 'Enter' })
-    fireEvent.keyUp(slider, { key: 'Enter' })
-
-    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('does not commit a pointer release that did not start on the slider', () => {
@@ -328,6 +168,23 @@ describe('OrdinalSlider', () => {
     fireEvent.pointerUp(slider)
 
     expect(onChange).not.toHaveBeenCalled()
+  })
+
+  // A parent that defers applying onChange (an awaited write, startTransition) leaves `value`
+  // still null after `change` fires — so pointerUp's `unset` check is still true and would fire a
+  // second, wrong onChange(values[0]), downgrading the click. Standing in for that parent: this
+  // one ignores onChange entirely, so `value` never changes.
+  it('does not downgrade a click to the least value when the parent has not applied the change yet', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.pointerDown(slider)
+    fireEvent.change(slider, { target: { value: '2' } })
+    fireEvent.pointerUp(slider)
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('normal')
   })
 
   // Review finding 6: a value that isn't in `values` gives indexOf === -1. React would then write
