@@ -1118,6 +1118,17 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   also absent (not an empty div) when read-only with no declared default, since neither of its two
   children — the default toggle and the "Use …" button — renders there; the wrapper condition is
   `hasDefault || (unset && !readOnly)`, not `hasDefault || unset`
+- (7th pass) finding 3 investigated and rejected: a bare `change` outside any pointer gesture (a
+  native arrow-key edit — the range still responds to arrows even though #147 deleted our key
+  handlers) does not block the next drag-to-least-value commit, because `onPointerDown`'s reset of
+  `changedDuringGesture` is deliberately conditional on a fresh gesture, not unconditional and not
+  absent — unconditional would instead defeat the second-pointerdown guard, and absent would leave
+  a bare `change`'s stale flag blocking the next commit
+- residual, known and accepted: a `pointerdown` with no matching up/cancel (a right-click, whose
+  release the context menu consumes) leaves `pointerStartedOnSlider` stuck `true`; combined with a
+  later bare `change`, this can suppress one subsequent least-value commit. It self-heals — the
+  blocked `pointerUp` clears both flags on its way out — so it was left as-is rather than adding
+  more state to close a one-shot, self-correcting edge case
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle

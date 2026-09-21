@@ -318,4 +318,24 @@ describe('OrdinalSlider', () => {
     expect(container.querySelector('.chipset')).toBeNull()
   })
 
+  // Review finding 3 (7th pass) — investigated and rejected: a native range still fires `change`
+  // on arrow keys even though #147 deleted our key handlers, so a bare `change` outside any
+  // pointer gesture is reachable (a keyboard edit). The `onPointerDown` reset below exists
+  // precisely to clear the stale `changedDuringGesture` flag such a `change` leaves behind, so the
+  // next drag-to-least-value commit isn't blocked by it.
+  it('a bare change outside a gesture does not block the next drag-to-least-value commit', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    // A native arrow-key edit: fires `change` with no surrounding pointerdown/pointerup.
+    fireEvent.change(slider, { target: { value: '2' } })
+
+    // A complete gesture with no `change` — dragging straight to index 0 — must still commit the
+    // least value on this still-unset slider (the parent below never applies onChange).
+    fireEvent.pointerDown(slider)
+    fireEvent.pointerUp(slider)
+
+    expect(onChange).toHaveBeenLastCalledWith('whisper')
+  })
 })

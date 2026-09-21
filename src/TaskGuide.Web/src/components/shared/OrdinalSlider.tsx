@@ -105,9 +105,12 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // hasn't re-rendered with the new value yet, `unset` here is still true and pointerUp
         // would fire a second, wrong onChange(values[0]) on top of it.
         onPointerDown={() => {
-          // Only a fresh gesture (no prior pointerdown pending) resets the guard — a second
-          // pointerdown mid-gesture (a stray pointer, a second finger) must not clear it, or it
-          // defeats the downgrade guard below the same way the keyboard path's old bugs did.
+          // Conditional on purpose, not unconditional and not absent. A native range still fires
+          // `change` on arrow keys even though #147 deleted our key handlers, so a bare `change`
+          // outside any gesture (a keyboard edit) can leave `changedDuringGesture` stale true —
+          // this reset clears it before the next gesture starts. But it must run only on a FRESH
+          // gesture: a second pointerdown mid-gesture (a stray pointer, a second finger) must not
+          // clear a `change` that already fired, or it defeats the downgrade guard below.
           if (!pointerStartedOnSlider.current) {
             changedDuringGesture.current = false
           }
