@@ -105,7 +105,9 @@ describe('OrdinalSlider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
-    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowLeft' })
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
+    fireEvent.keyUp(slider, { key: 'ArrowLeft' })
 
     expect(onChange).toHaveBeenCalledWith('whisper')
   })
@@ -117,15 +119,52 @@ describe('OrdinalSlider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
-    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowDown' })
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'ArrowDown' })
+    fireEvent.keyUp(slider, { key: 'ArrowDown' })
 
     expect(onChange).toHaveBeenCalledWith('whisper')
   })
 
+  // #147 (2nd review pass): key identity can't distinguish "this keypress started here" from "it
+  // started elsewhere" — Tab is not the only key a Tab traversal fires a keyup for. Backward
+  // navigation into an unset slider keydowns Shift then Tab on the PREVIOUS control, then keyups
+  // Tab then Shift on the newly-focused slider; neither keyup follows a keydown that started here,
+  // so neither commits. Naming 'Shift' alongside 'Tab' would just repeat the mistake #147 already
+  // found once — the fix is provenance, not a longer key list.
+  it('does not commit on a Shift+Tab traversal landing on an unset slider (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyUp(slider, { key: 'Tab' })
+    fireEvent.keyUp(slider, { key: 'Shift' })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  // #147 (2nd review pass): the keyup handler's job is "commit the value being shown if this
+  // keystroke moved nothing" — once a `change` fires during the keypress, the keystroke already
+  // committed, whatever a deferring parent (an awaited API call, `startTransition`) has applied
+  // yet. A parent that ignores onChange stands in for that lag: `value` stays null, so `unset` is
+  // still true at keyup, but the guard must not fire a second, stale commit.
+  it('does not also commit on keyup once a change fired during the same keystroke, even if the parent has not applied it (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    fireEvent.change(slider, { target: { value: '1' } })
+    fireEvent.keyUp(slider, { key: 'ArrowRight' })
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('quiet')
+  })
+
   // #147: keyup is dispatched to the element focused AT keyup time, not keydown time. Tabbing
   // INTO a slider fires keydown on the element being left, then keyup lands on the slider — so
-  // without this exclusion, tabbing over an unset slider would commit values[0] on a control the
-  // user never touched.
+  // without provenance tracking, tabbing over an unset slider would commit values[0] on a control
+  // the user never touched.
   it('does not commit on Tab landing on an unset slider (#147)', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
@@ -139,7 +178,9 @@ describe('OrdinalSlider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
 
-    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowDown' })
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'ArrowDown' })
+    fireEvent.keyUp(slider, { key: 'ArrowDown' })
 
     expect(onChange).not.toHaveBeenCalled()
   })
@@ -157,6 +198,7 @@ describe('OrdinalSlider', () => {
     const el = screen.getByLabelText('Volume')
     expect(screen.getByText(/Nothing chosen/)).toBeInTheDocument()
 
+    fireEvent.keyDown(el, { key: 'ArrowDown' })
     fireEvent.keyUp(el, { key: 'ArrowDown' })
 
     expect(screen.getByLabelText('Volume')).toBe(el)

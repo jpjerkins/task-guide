@@ -25,6 +25,8 @@ interface OrdinalSliderProps {
 // style) and shows index 0. Duration declares no default, so that control is simply absent.
 export function OrdinalSlider({ label, values, value, onChange, defaultValue, readOnly, id }: OrdinalSliderProps) {
   const pointerStartedOnSlider = useRef(false)
+  const keyStartedOnSlider = useRef(false)
+  const changedDuringKeypress = useRef(false)
   const hasDefault = defaultValue !== undefined && defaultValue !== null
   // A value not present in `values` (indexOf === -1) falls back to the unset presentation too —
   // otherwise React writes value="-1" on the input, the browser clamps the visible thumb to
@@ -63,24 +65,29 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         step={1}
         value={index}
         disabled={readOnly}
-        onChange={(e) => onChange(values[Number(e.target.value)])}
+        onChange={(e) => {
+          changedDuringKeypress.current = true
+          onChange(values[Number(e.target.value)])
+        }}
         // While unset, the thumb sits at index 0 — a decrementing key (ArrowLeft, ArrowDown,
         // Home, PageDown) is a no-op there and the browser fires no `change` for it, so it would
-        // commit nothing. Deliberately keyless rather than listing those keys (#147): a key list
-        // can always be incomplete (or falsified by RTL, where left/right invert), where "any
-        // keystroke while unset commits" cannot be. An incrementing key still commits via its own
-        // `change` event first, and this handler then sees `unset === false` and does nothing —
-        // which assumes the parent applies `onChange` synchronously; a parent that defers it
-        // (an awaited API call, a `startTransition`, a clamp or rejection) would still see
-        // `unset && index === 0` here and downgrade the selection to `values[0]`.
-        // Tab is excluded (#147): `keyup` fires on the element focused AT keyup time, not
-        // keydown time, so tabbing INTO an unset slider would otherwise commit values[0] on a
-        // control the user never touched. Excluding it can't reintroduce the incompleteness this
-        // handler exists to avoid — Tab never adjusts a range input, it's focus navigation.
-        onKeyUp={(e) => {
-          if (unset && e.key !== 'Tab') {
+        // commit nothing. The rule is: a keystroke that started on this control and moved the
+        // thumb nowhere commits the value being shown. That's deliberately not keyed off which
+        // key it was (#147, 2nd pass) — a key list can always be incomplete, and `keyup` fires on
+        // whatever element is focused AT keyup time, not keydown time, so `Tab` and `Shift+Tab`
+        // both land a keyup on a slider whose keydown happened on the control being left (Shift
+        // is released last, so it fires on essentially every backward Tab traversal). Naming those
+        // keys would just repeat the mistake; tracking where the keydown landed subsumes them
+        // without knowing their names, mirroring `pointerStartedOnSlider` below.
+        onKeyDown={() => {
+          keyStartedOnSlider.current = true
+          changedDuringKeypress.current = false
+        }}
+        onKeyUp={() => {
+          if (unset && keyStartedOnSlider.current && !changedDuringKeypress.current) {
             onChange(values[index])
           }
+          keyStartedOnSlider.current = false
         }}
         // While unset, the thumb already sits at index 0 — dragging it TO 0 fires no `change`
         // event, so a user could never explicitly commit the least value. A pointerUp (covers a

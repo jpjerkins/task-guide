@@ -1088,13 +1088,16 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - committing index 0 while unset (no `change` event fires, since the thumb already sits there) on
   `pointerUp` still commits the least value, without remounting the slider or double-committing
   once a value is already set
-- while unset, ANY keystroke except `Tab` on the focused slider commits the value it is showing
-  (#147) — deliberately keyless, not a decrementing-key list, because a range parked at index 0
-  fires no `change` for ArrowLeft/ArrowDown/Home/PageDown alike; a key the old ArrowLeft/Home-only
-  guard missed (ArrowDown) now commits too, without remounting the slider or double-committing
-  once a value is already set. `Tab` is excluded because its `keyup` lands on the element it
-  focused (not the one it left), so tabbing into an unset slider would otherwise commit a value
-  the user never touched
+- while unset, a keystroke that started on this control and moved the thumb nowhere commits the
+  value it is showing (#147) — deliberately not keyed off which key it was, because a key list can
+  always be incomplete; a range parked at index 0 fires no `change` for ArrowLeft/ArrowDown/
+  Home/PageDown alike, and a key the old ArrowLeft/Home-only guard missed (ArrowDown) commits too,
+  without remounting the slider or double-committing once a value is already set. `Tab` and
+  `Shift+Tab` land a keyup on a slider whose keydown happened on the control being left — neither
+  commits, because provenance (not key identity) gates the commit. A `change` firing during the
+  keypress also suppresses the keyup commit, even if a deferring parent hasn't applied it yet, so
+  the keystroke doesn't double-commit or downgrade the selection once it's already committed via
+  `change`
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
