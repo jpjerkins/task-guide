@@ -1356,10 +1356,9 @@ nothing to confirm.
   `split` there) omits the clause entirely rather than naming a split nobody was offered; the
   one-off-day sentence itself stays unconditional
 - the sheet's date text (`When — …`, both notes) renders through `fmtShort`, not a local formatter
-- the time row wraps its two inputs in `.timerow`, and each option's description renders as
-  `.btn.wide .d` with no `<br>` (`display:block` on `.btn .d` does that job instead) — the classes
-  #142 added to `index.css` for the prototypes' inline-styled time row and description spans
-  (`the_time_inputs_share_a_timerow_parent_and_each_resolution_option_renders_its_description_as_btn_wide_d_with_no_br`)
+- the time inputs share a `.timerow` parent, and each resolution option renders its description as
+  `.btn.wide .d` with no `<br>` — #142 added all three rules to `index.css`, where both prototypes
+  had styled these two spots inline, and `display:block` on `.btn .d` does the break's old job
 - interaction stays **select-then-submit** (`aria-pressed` options + a separate "Add event"
   button), not the prototype's tap-to-apply: `POST /api/events` requires every overlapping
   window's resolution in one body, refused otherwise with *Every overlapping Window needs a
