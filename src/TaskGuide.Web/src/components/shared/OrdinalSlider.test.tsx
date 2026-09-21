@@ -285,4 +285,37 @@ describe('OrdinalSlider', () => {
 
     expect(screen.queryByRole('button', { name: 'Use whisper' })).not.toBeInTheDocument()
   })
+
+  // Review finding 1 (7th pass): a read-only viewer can't drag a disabled slider or press a
+  // button that isn't rendered, so the hint must not tell them to.
+  it('the read-only unset hint (no default) omits the instruction to drag or press a button', () => {
+    const { container } = render(
+      <OrdinalSlider label="Duration" values={VALUES} value={null} onChange={() => {}} readOnly />,
+    )
+
+    expect(container.querySelector('.hint')?.textContent).toBe('Not set.')
+    expect(container.querySelector('.chipset')).toBeNull()
+  })
+
+  it('the read-only unset hint (with default) omits the instruction to drag or press a button', () => {
+    const { container } = render(
+      <OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} readOnly />,
+    )
+
+    expect(container.querySelector('.hint')?.textContent).toBe(
+      'Nothing chosen — the slider is showing whisper but the task carries the default.',
+    )
+    expect(screen.getByRole('button', { name: /leave at the default \(normal\)/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /use whisper/i })).not.toBeInTheDocument()
+  })
+
+  // Review finding 2 (7th pass): with no declared default, the chipset wrapper rendered an empty
+  // `.chipset` div on a read-only unset slider (both its children independently gated off) — a
+  // stray 8px flex-gap contributor with nothing in it.
+  it('renders no chipset at all when read-only, unset, and no default is declared', () => {
+    const { container } = render(<OrdinalSlider label="Duration" values={VALUES} value={null} onChange={() => {}} readOnly />)
+
+    expect(container.querySelector('.chipset')).toBeNull()
+  })
+
 })

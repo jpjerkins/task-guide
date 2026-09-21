@@ -40,9 +40,13 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
 
   let hint: string
   if (unset) {
-    hint = hasDefault
-      ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Drag it, or press "Use ${values[0]}", to commit a value.`
-      : `Not set. Drag the slider, or press "Use ${values[0]}", to commit a value.`
+    if (readOnly) {
+      hint = hasDefault ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default.` : 'Not set.'
+    } else {
+      hint = hasDefault
+        ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Drag it, or press "Use ${values[0]}", to commit a value.`
+        : `Not set. Drag the slider, or press "Use ${values[0]}", to commit a value.`
+    }
   } else {
     hint = `Set to ${value}.`
   }
@@ -50,7 +54,7 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
   return (
     <div className="stack">
       <div className="lbl">{label}</div>
-      {(hasDefault || unset) && (
+      {(hasDefault || (unset && !readOnly)) && (
         // Five review rounds tried to make a keyboard keystroke commit an unset slider and each
         // found another key/ordering that fired wrongly — #147's final call was to delete that
         // path and replace it with this button, keyboard-reachable by construction. It's an

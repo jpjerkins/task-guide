@@ -1112,6 +1112,12 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - the "Use \<least value\>" button is an authoring affordance, absent (not disabled) in the
   read-only presentation — `DimensionsScreen`'s catalog always passes `value={null}`, so a
   permanently-unset, never-actionable button would otherwise sit on every ordinal dimension there
+- (7th pass) the unset hint's instruction clause ("Drag it/the slider, or press … ") is omitted in
+  the read-only presentation, for both the with-default and no-default wording — a read-only viewer
+  can't drag a disabled slider or press a button that isn't rendered there. The chipset itself is
+  also absent (not an empty div) when read-only with no declared default, since neither of its two
+  children — the default toggle and the "Use …" button — renders there; the wrapper condition is
+  `hasDefault || (unset && !readOnly)`, not `hasDefault || unset`
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
