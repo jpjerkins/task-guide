@@ -412,4 +412,38 @@ describe('TaskDetail — form', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(/duration belongs in the duration field/i)
   })
+
+  it("a refused Save's note survives a reload that also fails", async () => {
+    // TasksScreen.tsx's precedent: a failed write's note must render outside the three-arm
+    // conditional. The reload a write triggers can itself fail, flipping state to 'error' and
+    // unmounting the ready-state body — if the note lived inside TaskForm (part of that body), it
+    // would vanish along with it, and the user would see a generic load failure with no memory of
+    // why the write was refused.
+    let taskCall = 0
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/dimensions' && !init) return Promise.resolve(jsonResponse(DIMENSIONS))
+      if (url === '/api/tasks/1' && !init) {
+        taskCall++
+        if (taskCall === 1) return Promise.resolve(jsonResponse(rawTask({ title: 'A task' })))
+        return Promise.reject(new Error('offline'))
+      }
+      if (url === '/api/tasks/1' && init?.method === 'PUT') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'duration belongs in the duration field' }), { status: 400 }),
+        )
+      }
+      throw new Error(`Unhandled fetch: ${init?.method ?? 'GET'} ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByDisplayValue('A task')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/duration belongs in the duration field/i)
+    expect(await screen.findByText(/couldn.t load this task/i)).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/duration belongs in the duration field/i)
+  })
 })

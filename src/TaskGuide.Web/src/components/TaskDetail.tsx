@@ -122,11 +122,17 @@ function TaskForm({
   task,
   dimensions,
   onSaved,
+  onNote,
 }: {
   taskId: string
   task: Task
   dimensions: DimensionResponse[]
   onSaved: () => Promise<void>
+  // Lifted to TaskDetail, rendered outside the three-arm conditional — same reasoning as
+  // TasksScreen.tsx's actionNote: the reload a write triggers can itself fail, which unmounts this
+  // whole component (the 'error' arm replaces it), and the note must survive that rather than
+  // vanishing along with the ready-state body it would otherwise live inside.
+  onNote: (text: string | null) => void
 }) {
   const [title, setTitle] = useState(task.title)
   const [notes, setNotes] = useState(task.notes)
@@ -136,7 +142,6 @@ function TaskForm({
   const [offsetValue, setOffsetValue] = useState('')
   const [offsetUnit, setOffsetUnit] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState<string | null>(null)
 
   // Resets the form to match whatever the server just returned — every write this screen makes
   // (Save, clear Postpone, Defer) re-reads afterwards, and the fresh read is the source of truth.
@@ -160,24 +165,24 @@ function TaskForm({
   }
 
   async function handleSave() {
-    setNote(null)
+    onNote(null)
     setBusy(true)
     try {
       await saveTaskDetails(taskId, { title, notes, duration, deadline, dimensions: withoutDurationKey(dims) })
     } catch (err) {
-      setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't save.")
+      onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't save.")
     }
     await onSaved()
     setBusy(false)
   }
 
   async function handleClearPostpone() {
-    setNote(null)
+    onNote(null)
     setBusy(true)
     try {
       await clearPostpone(taskId)
     } catch (err) {
-      setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't clear postpone.")
+      onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't clear postpone.")
     }
     await onSaved()
     setBusy(false)
@@ -186,12 +191,12 @@ function TaskForm({
   async function handleDefer() {
     const offset = Number(offsetValue)
     if (!offsetValue || Number.isNaN(offset)) return
-    setNote(null)
+    onNote(null)
     setBusy(true)
     try {
       await deferTaskByOffset(taskId, offset, offsetUnit)
     } catch (err) {
-      setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't defer.")
+      onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't defer.")
     }
     await onSaved()
     setBusy(false)
@@ -203,11 +208,6 @@ function TaskForm({
 
   return (
     <>
-      {note && (
-        <div className="note" role="alert">
-          {note}
-        </div>
-      )}
       <div className="stack">
         <label className="stack">
           <span className="lbl">Title</span>
@@ -321,6 +321,7 @@ function TaskForm({
 
 export function TaskDetail({ taskId, now = new Date() }: { taskId: string; now?: Date }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [note, setNote] = useState<string | null>(null)
   const loadToken = useRef(0)
 
   const today = useMemo(
@@ -352,6 +353,11 @@ export function TaskDetail({ taskId, now = new Date() }: { taskId: string; now?:
     <>
       <ScreenNav title="Task" />
       <div className="scroll">
+        {note && (
+          <div className="note" role="alert">
+            {note}
+          </div>
+        )}
         {state.status === 'loading' && <div className="empty">Loading…</div>}
         {state.status === 'error' && (
           <div className="empty">Couldn't load this task. Check your connection and try again.</div>
@@ -359,7 +365,13 @@ export function TaskDetail({ taskId, now = new Date() }: { taskId: string; now?:
         {state.status === 'ready' && (
           <>
             {fitBar(state.task, state.dimensions, today)}
-            <TaskForm taskId={taskId} task={state.task} dimensions={state.dimensions} onSaved={load} />
+            <TaskForm
+              taskId={taskId}
+              task={state.task}
+              dimensions={state.dimensions}
+              onSaved={load}
+              onNote={setNote}
+            />
           </>
         )}
       </div>
