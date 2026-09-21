@@ -85,15 +85,24 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // keydown here can be followed by the keyup landing on the NEXT control instead of this
         // one — this slider's keyup never runs, and the ref would stay stale until a later,
         // unrelated keyup found it still `true`. Clearing it on blur closes that gap, mirroring
-        // `onPointerCancel`'s guard on the pointer path. `changedDuringKeypress` skips the reset
-        // on an auto-repeated keydown (`e.repeat`) so a held key doesn't erase the record of a
-        // `change` that already fired earlier in the same keystroke. And the key itself must be
-        // one from RANGE_KEYS — a keystroke can start and end on this control without moving the
-        // thumb because it was never aimed at the slider at all (Enter to submit the form, Escape
-        // to dismiss, Ctrl+S), and provenance alone can't tell that apart from a real no-op arrow
-        // press. This is knowingly a key list again, the failure mode #147 opened with — an
-        // omitted key silently can't commit — but here the list is exhaustive over what a range
-        // input responds to at all, not a guess at which keys decrement.
+        // `onPointerCancel`'s guard on the pointer path — and only a RANGE_KEYS key's keyup clears
+        // it here, so a combo's other key releasing first (Shift+Home: Shift then Home) doesn't
+        // wipe provenance before the range key's own keyup runs (#147, 4th pass). The key itself
+        // must be one from RANGE_KEYS — a keystroke can start and end on this control without
+        // moving the thumb because it was never aimed at the slider at all (Enter to submit the
+        // form, Escape to dismiss, Ctrl+S), and provenance alone can't tell that apart from a real
+        // no-op arrow press. This is knowingly a key list again, the failure mode #147 opened
+        // with — an omitted key silently can't commit — but here the list is exhaustive over what
+        // a range input responds to at all, not a guess at which keys decrement. A range input
+        // also doesn't move for Ctrl/Alt/Meta+arrow even though the key name is in RANGE_KEYS, so
+        // the commit also requires none of those modifiers (#147, 4th pass) — Shift is excluded
+        // from that check because Shift+arrow DOES move a range input. `changedDuringKeypress`
+        // resets on keydown only when no key is already down on this control, i.e. at the start of
+        // a fresh keystroke — which covers both a held key's auto-repeat and a second, different
+        // key pressed before the first is released, either of which would otherwise erase the
+        // record of a `change` that already fired earlier in the same keystroke (#147, 4th pass).
+        // `onBlur` clears both refs, so neither a stale provenance flag nor a stale change record
+        // survives a focus change.
         onKeyDown={() => {
           if (!keyStartedOnSlider.current) {
             changedDuringKeypress.current = false
