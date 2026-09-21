@@ -72,7 +72,9 @@ function splitTopLevel(text, separator) {
 // text since it has no single property. A repeated key deletes then re-sets,
 // so the later declaration also wins the cascade position.
 function declarations(body, into = new Map()) {
-  for (const raw of splitTopLevel(body, ';')) {
+  // Comments come out before the split, not after: an unbalanced bracket
+  // inside one (`/* see (#125 */`) would corrupt splitTopLevel's depth.
+  for (const raw of splitTopLevel(body.replace(/\/\*[\s\S]*?\*\//g, ''), ';')) {
     const decl = normalizedChunk(raw);
     if (!decl) continue;
     const key = decl.includes('{') ? decl : decl.slice(0, decl.indexOf(':'));
