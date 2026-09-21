@@ -162,7 +162,48 @@ export interface paths {
                 };
             };
         };
-        put?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateTaskDetailsRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
         post?: never;
         delete: {
             parameters: {
@@ -438,12 +479,30 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description No Content */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -475,7 +534,27 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["OrphanRepairResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
                 };
             };
         };
@@ -2643,6 +2722,10 @@ export interface components {
             asT1?: components["schemas"]["LastWeekdayBefore"];
         };
         OffsetUnit: number;
+        OrphanRepairResponse: {
+            blameDimensionIds: string[];
+            templateIds: string[];
+        };
         OverrideSpanApiRequest: {
             from: string;
             to: string;
@@ -2752,6 +2835,17 @@ export interface components {
             /** Format: int32 */
             patternWeekCount: null | number | string;
             zeroKind: null | string;
+            orphanBlameDimensions: string[];
+        };
+        UpdateTaskDetailsRequest: {
+            title: string;
+            notes: null | string;
+            duration: null | string;
+            /** Format: date */
+            deadline: null | string;
+            dimensions: {
+                [key: string]: string[];
+            };
         };
         WindowId: {
             value?: string;

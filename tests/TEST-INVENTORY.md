@@ -888,7 +888,7 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `PATCH /api/tasks/{id}` rejects a malformed Task id
 - `PUT /api/tasks/{id}/postpone` is refused on a recurring Task and on a derived Task
 - `PUT /api/tasks/{id}/postpone` postpones a plain Task
-- `TaskResponse_schema_is_present_with_its_seventeen_members`
+- `TaskResponse_schema_is_present_with_its_eighteen_members`
 - `GET_api_tasks_carries_derived_status_and_fit_inputs_with_absence_distinct_from_zero`
 - `GET_api_tasks_reports_unknown_opportunities_for_an_unavailable_fetched_dimension`
 - `GET_api_tasks_reports_done_without_fit_inputs_when_completion_precedes_unprocessed`
@@ -899,6 +899,16 @@ production behaviour — accepted knowingly, since the deleted tests never detec
 - `GET /api/tasks/{id} returns 404 for a well-formed Task id that does not exist`
 - `GET /api/tasks/{id} rejects a malformed Task id`
 - `PUT /api/tasks/{id}/postpone` rejects a malformed Task id
+- `PUT /api/tasks/{id}` saves the task-detail form as one whole authored fact while preserving lifecycle facts
+- `GET /api/tasks/{id}` names only independently unsatisfied Dimensions as an Orphan's blame axes
+- `GET /api/tasks/{id}` does not blame a Dimension merely because its value and the Task's Duration occur on different Windows
+- `GET /api/tasks/{id}/orphan-repair` returns active-Pattern templates that need the blamed values
+- `Task_detail_write_orphan_repair_and_clear_postpone_are_typed_for_the_SPA`
+- `GET_api_tasks_id_keeps_blame_axes_and_repair_templates_empty_when_only_the_conjunction_is_orphaned`
+- `GET_api_tasks_with_an_Unprocessed_Task_does_not_compute_orphan_blame_or_repair`
+- `GET /api/tasks/{id}/orphan-repair` rejects malformed ids and returns not found for absent Tasks
+- `DELETE /api/tasks/{id}/postpone` clears a plain Task's stored Postpone fact and refuses derived Tasks
+- `DELETE /api/tasks/{id}/postpone` rejects malformed Task ids
 - `GET /api/days/{date}` **writes nothing** — reading a shape never materialises an Override
 - `POST /api/overrides` over a range writes one Override per date
 - `POST /api/overrides` freeze copies each date's current shape and preserves Window ids

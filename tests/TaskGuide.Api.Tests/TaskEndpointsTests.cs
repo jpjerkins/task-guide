@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using OneOf;
 using TaskGuide.Application.Ports;
 using TaskGuide.Domain.Common;
 using TaskGuide.Domain.Dimensions;
@@ -414,6 +415,204 @@ public sealed class TaskEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task PUT_api_tasks_id_saves_the_task_detail_form_as_one_whole_authored_fact_while_preserving_lifecycle_facts()
+    {
+        var deferred = new DateOnly(2026, 9, 8);
+        var postponed = new DateOnly(2026, 9, 9);
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Defer = new AbsoluteDefer(deferred),
+            Postpone = postponed,
+            Source = "capture",
+        };
+        await SeedTasksAsync(task);
+
+        var response = await _client.PutAsJsonAsync($"/api/tasks/{task.Id.Value}", new
+        {
+            title = "Edited title",
+            notes = "Edited notes",
+            duration = "60",
+            deadline = new DateOnly(2026, 10, 1),
+            dimensions = new Dictionary<string, string[]> { [KnownDimensions.Location.Value] = ["garage"] },
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var stored = Assert.Single(_factory.Services.GetRequiredService<IStore>().Read().Tasks);
+        Assert.Equal("Edited title", stored.Title);
+        Assert.Equal("Edited notes", stored.Notes);
+        Assert.Equal("60", stored.Tags.SingleOn(KnownDimensions.Duration)?.Value);
+        Assert.Equal("garage", stored.Tags.SingleOn(KnownDimensions.Location)?.Value);
+        var storedDefer = stored.Defer;
+        Assert.NotNull(storedDefer);
+        Assert.Equal(deferred, storedDefer.AsT0.Date);
+        Assert.Equal(postponed, stored.Postpone);
+        Assert.Equal("capture", stored.Source);
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_names_only_independently_unsatisfied_Dimensions_as_an_Orphan_s_blame_axes()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Tags = new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Duration] = [new TagValue("30")],
+                [KnownDimensions.Location] = [new TagValue("garage")],
+            }, []),
+        };
+        await SeedTasksAsync(task);
+        await SeedActivePatternAsync(new DayTemplate(
+            new DayTemplateId("dt_active"), "Active", [new AvailabilityWindow(new WindowId("w_active"), "Active", new TimeOnly(9, 0), new TimeOnly(10, 0), TagSet.Empty)], []));
+
+        var response = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}");
+
+        Assert.Equal("orphan", response.GetProperty("zeroKind").GetString());
+        Assert.Equal([KnownDimensions.Location.Value], response.GetProperty("orphanBlameDimensions").EnumerateArray().Select(RequiredString).ToArray());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_orphan_repair_returns_active_Pattern_templates_that_need_the_blamed_values()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Tags = new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Duration] = [new TagValue("30")],
+                [KnownDimensions.Location] = [new TagValue("garage")],
+            }, []),
+        };
+        var active = new DayTemplate(new DayTemplateId("dt_active"), "Active", [new AvailabilityWindow(new WindowId("w_active"), "Active", new TimeOnly(9, 0), new TimeOnly(10, 0), TagSet.Empty)], []);
+        await SeedTasksAsync(task);
+        await SeedActivePatternAsync(active);
+
+        var response = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}/orphan-repair");
+
+        Assert.Equal([KnownDimensions.Location.Value], response.GetProperty("blameDimensionIds").EnumerateArray().Select(RequiredString).ToArray());
+        Assert.Equal([active.Id.Value], response.GetProperty("templateIds").EnumerateArray().Select(RequiredString).ToArray());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_keeps_blame_axes_and_repair_templates_empty_when_only_the_conjunction_is_orphaned()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Tags = new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Duration] = [new TagValue("30")],
+                [KnownDimensions.Location] = [new TagValue("garage")],
+                [KnownDimensions.WithWhom] = [new TagValue("sam")],
+            }, []),
+        };
+        var location = new DayTemplate(new DayTemplateId("dt_location"), "Location", [new AvailabilityWindow(
+            new WindowId("w_location"), "Location", new TimeOnly(9, 0), new TimeOnly(10, 0),
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>> { [KnownDimensions.Location] = [new TagValue("garage")] }, []))], []);
+        var person = new DayTemplate(new DayTemplateId("dt_person"), "Person", [new AvailabilityWindow(
+            new WindowId("w_person"), "Person", new TimeOnly(9, 0), new TimeOnly(10, 0),
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>> { [KnownDimensions.WithWhom] = [new TagValue("sam")] }, []))], []);
+        var pattern = new Pattern(new PatternId("p_active"), "Active", [location.Id, person.Id, location.Id, person.Id, location.Id, person.Id, location.Id]);
+        await SeedTasksAsync(task);
+        var store = _factory.Services.GetRequiredService<IStore>();
+        await store.MutateAsync<Never>(_ => OneOf<StoreMutation, Never>.FromT0(new StoreMutation([
+            new DayTemplatesWrite([location, person]),
+            new PatternsWrite(new PatternBook(pattern.Id, [pattern])),
+        ])), CancellationToken.None);
+
+        var detail = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}");
+        var repair = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}/orphan-repair");
+
+        Assert.Equal("orphan", detail.GetProperty("zeroKind").GetString());
+        Assert.Empty(detail.GetProperty("orphanBlameDimensions").EnumerateArray());
+        Assert.Empty(repair.GetProperty("blameDimensionIds").EnumerateArray());
+        Assert.Empty(repair.GetProperty("templateIds").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_does_not_blame_a_Dimension_merely_because_its_value_and_the_Task_s_Duration_occur_on_different_Windows()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with
+        {
+            Tags = new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>>
+            {
+                [KnownDimensions.Duration] = [new TagValue("60")],
+                [KnownDimensions.Location] = [new TagValue("garage")],
+            }, []),
+        };
+        var garage = new DayTemplate(new DayTemplateId("dt_garage"), "Garage", [new AvailabilityWindow(
+            new WindowId("w_garage"), "Garage", new TimeOnly(9, 0), new TimeOnly(9, 30),
+            new TagSet(new Dictionary<DimensionId, IReadOnlyList<TagValue>> { [KnownDimensions.Location] = [new TagValue("garage")] }, []))], []);
+        var home = new DayTemplate(new DayTemplateId("dt_home"), "Home", [new AvailabilityWindow(
+            new WindowId("w_home"), "Home", new TimeOnly(9, 0), new TimeOnly(10, 0), TagSet.Empty)], []);
+        var pattern = new Pattern(new PatternId("p_active"), "Active", [garage.Id, home.Id, garage.Id, home.Id, garage.Id, home.Id, garage.Id]);
+        await SeedTasksAsync(task);
+        var store = _factory.Services.GetRequiredService<IStore>();
+        await store.MutateAsync<Never>(_ => OneOf<StoreMutation, Never>.FromT0(new StoreMutation([
+            new DayTemplatesWrite([garage, home]),
+            new PatternsWrite(new PatternBook(pattern.Id, [pattern])),
+        ])), CancellationToken.None);
+
+        var detail = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}");
+        var repair = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}/orphan-repair");
+
+        Assert.Equal("orphan", detail.GetProperty("zeroKind").GetString());
+        Assert.Empty(detail.GetProperty("orphanBlameDimensions").EnumerateArray());
+        Assert.Empty(repair.GetProperty("blameDimensionIds").EnumerateArray());
+        Assert.Empty(repair.GetProperty("templateIds").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_with_an_Unprocessed_Task_does_not_compute_orphan_blame_or_repair()
+    {
+        var task = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with { Tags = TagSet.Empty };
+        await SeedTasksAsync(task);
+        await SeedActivePatternAsync(new DayTemplate(
+            new DayTemplateId("dt_active"), "Active", [new AvailabilityWindow(
+                new WindowId("w_active"), "Active", new TimeOnly(9, 0), new TimeOnly(10, 0), TagSet.Empty)], []));
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/tasks");
+        var detail = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}");
+        var repair = await _client.GetFromJsonAsync<JsonElement>($"/api/tasks/{task.Id.Value}/orphan-repair");
+
+        Assert.Equal("unprocessed", Assert.Single(list.EnumerateArray()).GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("zeroKind").ValueKind);
+        Assert.Empty(detail.GetProperty("orphanBlameDimensions").EnumerateArray());
+        Assert.Empty(repair.GetProperty("blameDimensionIds").EnumerateArray());
+        Assert.Empty(repair.GetProperty("templateIds").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task DELETE_api_tasks_id_postpone_clears_a_plain_Task_s_stored_Postpone_fact_and_refuses_derived_Tasks()
+    {
+        var plain = Task("t_01ARZ3NDEKTSV4RRFFQ69G5FAW") with { Postpone = new DateOnly(2026, 9, 8) };
+        var derived = Task("t_derived_absence_event_1") with { Provenance = new DerivedProvenance(new RuleId("absence"), "event_1") };
+        await SeedTasksAsync(plain, derived);
+
+        var cleared = await _client.DeleteAsync($"/api/tasks/{plain.Id.Value}/postpone");
+        var refused = await _client.DeleteAsync($"/api/tasks/{derived.Id.Value}/postpone");
+
+        Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Null(_factory.Services.GetRequiredService<IStore>().Read().Tasks.Single(task => task.Id == plain.Id).Postpone);
+    }
+
+    [Fact]
+    public async Task GET_api_tasks_id_orphan_repair_rejects_malformed_ids_and_returns_not_found_for_absent_Tasks()
+    {
+        var malformed = await _client.GetAsync("/api/tasks/banana/orphan-repair");
+        var missing = await _client.GetAsync("/api/tasks/t_01ARZ3NDEKTSV4RRFFQ69G5FBX/orphan-repair");
+
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
+    public async Task DELETE_api_tasks_id_postpone_rejects_malformed_Task_ids()
+    {
+        var response = await _client.DeleteAsync("/api/tasks/banana/postpone");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PATCH_api_tasks_id_is_refused_on_a_derived_Task()
     {
         var derived = Task("t_derived_absence_event_1") with
@@ -489,6 +688,16 @@ public sealed class TaskEndpointsTests : IDisposable
         await store.MutateAsync<Never>(_ => new StoreMutation([new TasksWrite(tasks)]), CancellationToken.None);
     }
 
+    private async Task SeedActivePatternAsync(DayTemplate template)
+    {
+        var pattern = new Pattern(new PatternId("p_active"), "Active", [.. Enumerable.Repeat(template.Id, 7)]);
+        var store = _factory.Services.GetRequiredService<IStore>();
+        await store.MutateAsync<Never>(_ => OneOf<StoreMutation, Never>.FromT0(new StoreMutation([
+            new DayTemplatesWrite([template]),
+            new PatternsWrite(new PatternBook(pattern.Id, [pattern])),
+        ])), CancellationToken.None);
+    }
+
     private static TaskItem Task(string id) => new(
         new TaskId(id),
         "Seeded task",
@@ -502,6 +711,9 @@ public sealed class TaskEndpointsTests : IDisposable
         Postpone: null,
         Recurrence: null,
         DateTimeOffset.UtcNow);
+
+    private static string RequiredString(JsonElement value) =>
+        Assert.IsType<string>(value.GetString());
 
     private static TaskItem Task(string id, string duration) => new(
         new TaskId(id),

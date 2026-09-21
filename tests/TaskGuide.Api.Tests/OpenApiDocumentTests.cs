@@ -54,7 +54,7 @@ public sealed class OpenApiDocumentTests : IDisposable
         await _client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
 
     [Fact]
-    public async Task TaskResponse_schema_is_present_with_its_seventeen_members()
+    public async Task TaskResponse_schema_is_present_with_its_eighteen_members()
     {
         var doc = await GetDocumentAsync();
 
@@ -79,9 +79,10 @@ public sealed class OpenApiDocumentTests : IDisposable
         Assert.True(properties.TryGetProperty("opportunities", out _));
         Assert.True(properties.TryGetProperty("patternWeekCount", out _));
         Assert.True(properties.TryGetProperty("zeroKind", out _));
+        Assert.True(properties.TryGetProperty("orphanBlameDimensions", out _));
 
         Assert.Equal(
-            ["createdAt", "deadline", "defer", "derived", "dimensions", "duration", "eligible", "id", "looseTags", "notes", "opportunities", "patternWeekCount", "postpone", "recurring", "status", "title", "zeroKind"],
+            ["createdAt", "deadline", "defer", "derived", "dimensions", "duration", "eligible", "id", "looseTags", "notes", "opportunities", "orphanBlameDimensions", "patternWeekCount", "postpone", "recurring", "status", "title", "zeroKind"],
             properties.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
     }
 
@@ -156,6 +157,27 @@ public sealed class OpenApiDocumentTests : IDisposable
         var requestSchema = operation.GetProperty("requestBody").GetProperty("content")
             .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString();
         Assert.Equal("#/components/schemas/SetTaskDurationRequest", requestSchema);
+    }
+
+    [Fact]
+    public async Task Task_detail_write_orphan_repair_and_clear_postpone_are_typed_for_the_SPA()
+    {
+        var doc = await GetDocumentAsync();
+        var paths = doc.GetProperty("paths");
+
+        var update = paths.GetProperty("/api/tasks/{id}").GetProperty("put");
+        Assert.Equal("#/components/schemas/UpdateTaskDetailsRequest", update.GetProperty("requestBody")
+            .GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString());
+        Assert.Equal(["204", "400", "409"], update.GetProperty("responses").EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
+
+        var repair = paths.GetProperty("/api/tasks/{id}/orphan-repair").GetProperty("get").GetProperty("responses");
+        Assert.Equal("#/components/schemas/OrphanRepairResponse", repair.GetProperty("200").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString());
+        Assert.True(repair.TryGetProperty("400", out _));
+        Assert.True(repair.TryGetProperty("404", out _));
+
+        var clear = paths.GetProperty("/api/tasks/{id}/postpone").GetProperty("delete").GetProperty("responses");
+        Assert.Equal(["204", "400", "409"], clear.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
     }
 
     [Fact]

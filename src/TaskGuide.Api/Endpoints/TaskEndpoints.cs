@@ -199,6 +199,28 @@ public static class TaskEndpoints
                 invalid => TypedResults.BadRequest<object>(new { error = invalid.Reason }),
                 refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
+        // Detail is one form and one Save: these authored fields cross the lock together so a
+        // later gesture cannot race a stale, piecemeal title/notes/dimensions update.
+        tasks.MapPut("/{id}", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (
+            string id,
+            UpdateTaskDetailsRequest request,
+            IStore store,
+            DimensionRegistry registry,
+            DerivedTaskComposer derivedTasks,
+            CancellationToken ct) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
+            }
+
+            var details = new TaskDetails(request.Title, request.Notes, request.Duration, request.Deadline, request.Dimensions);
+            var result = await new UpdateTaskDetails(store, registry, derivedTasks).ExecuteAsync(new TaskId(id), details, ct);
+            return result.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
+                _ => TypedResults.NoContent(),
+                invalid => TypedResults.BadRequest<object>(new { error = invalid.Reason }),
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
+        });
         tasks.MapDelete("/{id}", (string id) => Results.NoContent());
 
         // The only authored completion fact. Refused on an `Unprocessed` Task — there is nothing
@@ -240,12 +262,56 @@ public static class TaskEndpoints
                 _ => TypedResults.NoContent(),
                 refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
         });
-        tasks.MapDelete("/{id}/postpone", (string id) => Results.NoContent());
+        tasks.MapDelete("/{id}/postpone", async Task<Results<NoContent, BadRequest<object>, Conflict<object>>> (
+            string id,
+            IStore store,
+            DerivedTaskComposer derivedTasks,
+            CancellationToken ct) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
+            }
+
+            var result = await new ClearTaskPostpone(store, derivedTasks).ExecuteAsync(new TaskId(id), ct);
+            return result.Match<Results<NoContent, BadRequest<object>, Conflict<object>>>(
+                _ => TypedResults.NoContent(),
+                refusal => TypedResults.Conflict<object>(new { error = refusal.Reason }));
+        });
 
 
         // The Orphan badge's deep link: the active Pattern's distinct Day templates that don't yet
         // declare a value on this Task's unmatched Dimension.
-        tasks.MapGet("/{id}/orphan-repair", (string id) => Results.NoContent());
+        tasks.MapGet("/{id}/orphan-repair", Results<Ok<OrphanRepairResponse>, BadRequest<object>, NotFound<object>> (
+            string id,
+            IStore store,
+            DimensionRegistry registry,
+            StaleThresholds staleThresholds,
+            TimeProvider timeProvider,
+            DayBoundary boundary,
+            IDayShapeReader shapes,
+            ClockTimeResolution resolution,
+            DerivedTaskComposer derivedTasks) =>
+        {
+            if (!IsTaskId(id))
+            {
+                return TypedResults.BadRequest<object>(new { error = "id must be a Task id" });
+            }
+
+            var view = store.Read();
+            var task = derivedTasks.Compose(view).SingleOrDefault(candidate => candidate.Id.Value == id);
+            if (task is null)
+            {
+                return TypedResults.NotFound<object>(new { error = "Task was not found" });
+            }
+
+            var now = timeProvider.GetUtcNow();
+            var opportunities = new OpportunityCounter(shapes, registry, resolution, boundary);
+            var analysis = new TaskOrphanAnalysis(registry, staleThresholds, boundary, opportunities)
+                .Analyze(task, view, now);
+
+            return TypedResults.Ok(new OrphanRepairResponse(analysis.BlameDimensionIds, analysis.RepairTemplateIds));
+        });
 
         return tasks;
     }
@@ -275,6 +341,8 @@ public static class TaskEndpoints
                 ? OrphanDetection.KindOfZero(status, opportunityCount, weekCount)
                 : OrphanDetection.IsTaskOrphan(status, weekCount) ? ZeroKind.Orphan : null;
 
+        var analysis = new TaskOrphanAnalysis(registry, staleThresholds, boundary, opportunities)
+            .Analyze(task, view, now, status, patternWeekCount);
         return new TaskResponse(
             task.Id.Value,
             task.Title,
@@ -294,7 +362,8 @@ public static class TaskEndpoints
             task.Provenance is not null,
             opportunityCount,
             patternWeekCount,
-            zeroKind is { } kind ? ToWireName(kind) : null);
+            zeroKind is { } kind ? ToWireName(kind) : null,
+            analysis.BlameDimensionIds);
     }
 
     private static readonly IReadOnlyDictionary<DimensionId, IReadOnlyList<TagValue>> EmptyFetchedValues =
@@ -397,7 +466,21 @@ public sealed record TaskResponse(
     bool Derived,
     int? Opportunities,
     int? PatternWeekCount,
-    string? ZeroKind);
+    string? ZeroKind,
+    IReadOnlyList<string> OrphanBlameDimensions);
+
+/// <summary>The complete authored Task detail form; Duration stays separate from the other axes on the wire.</summary>
+public sealed record UpdateTaskDetailsRequest(
+    string Title,
+    string? Notes,
+    string? Duration,
+    DateOnly? Deadline,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> Dimensions);
+
+/// <summary>The active Pattern locations that can repair an orphaned Task without touching dormant plans.</summary>
+public sealed record OrphanRepairResponse(
+    IReadOnlyList<string> BlameDimensionIds,
+    IReadOnlyList<string> TemplateIds);
 
 public sealed record PostponeTaskRequest(DateOnly Date);
 
