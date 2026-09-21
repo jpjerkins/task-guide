@@ -159,7 +159,7 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
           <div className="lbl">Name</div>
           <input aria-label="Name" className="field" value={name} onChange={(event) => setName(event.target.value)} />
           <div className="lbl">When — {fmtShort(date)}</div>
-          <div>
+          <div className="timerow">
             <input aria-label="Start" className="field time" value={start} onChange={(event) => setStart(event.target.value)} />
             <span>to</span>
             <input aria-label="End" className="field time" value={end} onChange={(event) => setEnd(event.target.value)} />
@@ -191,8 +191,8 @@ export function EventCreateSheet({ date, windows, onCancel, onCreated }: EventCr
                         onClick={() => id !== null && setResolutions((current) => ({ ...current, [id]: option }))}
                         aria-pressed={id !== null && resolutions[id] === option}
                       >
-                        {copy.label}<br />
-                        <span>{copy.description}</span>
+                        {copy.label}
+                        <span className="d">{copy.description}</span>
                       </button>
                       )
                     })}

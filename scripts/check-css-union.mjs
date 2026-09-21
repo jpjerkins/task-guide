@@ -116,6 +116,12 @@ const retainedSelectors = new Set([
   '[hidden]',
   '.btn:disabled, .chipset button:disabled',
   '.range.unset',
+  // #142: eventSheet's time row and eventOverlapSheet's option descriptions
+  // are inline styles in the prototypes, never classes - no selector to port,
+  // so index.css's own .timerow/.timerow span/.btn .d are retained here.
+  '.timerow',
+  '.timerow span',
+  '.btn .d',
 ]);
 // schedule-editing is later and overrides ui-screens rule-for-rule on every
 // shared header (not merged with it - some of its omissions, like dropping

@@ -158,6 +158,8 @@ body,
 
 .btn.ghost { background:none; border-color:transparent; color:var(--accent); }
 
+.btn .d { display:block; font-size:12px; color:var(--ink-2); font-weight:400; }
+
 .btn-row { display:flex; gap:9px; padding:14px 16px; }
 
 .btn-row .btn { flex:1; }
@@ -200,6 +202,10 @@ input.field.time { max-width:112px; font-variant-numeric:tabular-nums; }
 input.field.date { max-width:190px; font-variant-numeric:tabular-nums; }
 
 input.field.bad { border-color:var(--danger); background:var(--danger-soft); color:var(--danger); }
+
+.timerow { display:flex; gap:9px; align-items:center; }
+
+.timerow span { color:var(--ink-3); }
 
 .chipset { display:flex; flex-wrap:wrap; gap:7px; }
 
