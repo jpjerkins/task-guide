@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskDetail } from './TaskDetail'
@@ -251,6 +251,20 @@ describe('TaskDetail — form', () => {
     expect(screen.getAllByText('Duration')).toHaveLength(1)
     expect(screen.getByText('Location')).toBeInTheDocument()
     expect(screen.getByText('Energy')).toBeInTheDocument()
+  })
+
+  it("names each Dimension chipset's axis for a screen reader — values repeat across axes", async () => {
+    // 'home' is a Location value; 'low' is an Energy value; a chip's own accessible name is just
+    // its value, and the <div className="lbl"> above the chipset isn't programmatically associated
+    // with it. Without a group label, "low, pressed" gives a screen-reader user no idea which axis
+    // it's on. #163 set this precedent for the postpone buttons (71d987e).
+    vi.stubGlobal('fetch', makeFetchMock({ taskResponses: [rawTask({ dimensions: { location: ['home'] } })] }))
+    render(<TaskDetail taskId="1" />)
+
+    const locationGroup = await screen.findByRole('group', { name: 'Location' })
+    expect(within(locationGroup).getByRole('button', { name: 'home' })).toBeInTheDocument()
+    const energyGroup = screen.getByRole('group', { name: 'Energy' })
+    expect(within(energyGroup).getByRole('button', { name: 'low' })).toBeInTheDocument()
   })
 
   it("the Deadline date entry survives its own input event — same DOM node", async () => {

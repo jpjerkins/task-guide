@@ -276,7 +276,12 @@ function TaskForm({
         {pickableDimensions.map((d) => (
           <div key={d.id}>
             <div className="lbl">{d.label}</div>
-            <div className="chipset">
+            {/* A chip's own accessible name is just its value, and values repeat across axes in
+                the real registry ('home' on Location, 'low' on Energy) — the .lbl above isn't
+                programmatically associated with the chipset, so a screen reader would hear "low,
+                pressed" with no idea which axis. #163 set this precedent for the postpone buttons
+                (71d987e). */}
+            <div className="chipset" role="group" aria-label={d.label}>
               {d.values.map((v) => (
                 <button
                   key={v}
