@@ -1698,6 +1698,9 @@ specified under **Shared controls** above and are not restated here.
   (`DELETE .../completions/{due}` is a stub), so re-tapping must not be able to double-complete it
 - "A month" clamps to the target month's last day at a month end (2026-01-31 → 2026-02-28), rather
   than overflowing into the month after next
+- "Not now", its three interval chips, and its "Postpone" confirm all carry the Task's title in
+  their accessible name — otherwise two eligible rows expose N identical-sounding controls to a
+  screen reader
 - a failed write's note (mark-off or postpone) renders outside the ready-state body, at the top
   of the scroll, naming the Task — so it survives a reload that also fails, rather than vanishing
   with the rows it would otherwise render inside (#102's rule, TriageScreen.tsx's taskActionNote)

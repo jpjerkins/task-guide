@@ -256,6 +256,7 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                         <>
                           <button
                             type="button"
+                            aria-label={`Not now — ${t.title}`}
                             disabled={busyIds.has(t.id)}
                             onClick={() => {
                               setPickedDate(null)
@@ -270,6 +271,7 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                                 <button
                                   key={interval.label}
                                   type="button"
+                                  aria-label={`${interval.label} — ${t.title}`}
                                   onClick={() => handlePostpone(t.id, t.title, interval.date)}
                                 >
                                   {interval.label}
@@ -278,6 +280,7 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                               <DateEntry label="Pick a date…" value={pickedDate} onChange={setPickedDate} />
                               <button
                                 type="button"
+                                aria-label={`Postpone — ${t.title}`}
                                 disabled={!pickedDate}
                                 onClick={() => pickedDate && handlePostpone(t.id, t.title, pickedDate)}
                               >

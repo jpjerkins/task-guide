@@ -376,6 +376,30 @@ describe('TasksScreen', () => {
       await screen.findByText('Derived task')
       expect(screen.queryByRole('button', { name: /not now/i })).not.toBeInTheDocument()
     })
+
+    it("carries the Task's title in its accessible name, distinguishing two eligible rows' identical-looking gestures", async () => {
+      const user = userEvent.setup()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse([
+            rawTask({ id: '1', title: 'Water the plants', status: 'active', eligible: true }),
+            rawTask({ id: '2', title: 'File the receipt', status: 'active', eligible: true }),
+          ]),
+        ),
+      )
+      render(<TasksScreen />)
+      await screen.findByText('Water the plants')
+
+      expect(screen.getByRole('button', { name: /not now.*water the plants/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /not now.*file the receipt/i })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /not now.*water the plants/i }))
+      expect(screen.getByRole('button', { name: /tomorrow.*water the plants/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /a week.*water the plants/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /a month.*water the plants/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /postpone.*water the plants/i })).toBeInTheDocument()
+    })
   })
 
   describe('postpone', () => {
