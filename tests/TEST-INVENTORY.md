@@ -1747,6 +1747,17 @@ specified under **Shared controls** above and are not restated here.
   path, so there is no undo affordance on the row itself
 - a recurring Task offers Defer's **offset** form only; an absolute Defer is not authorable there
 - the Deadline date entry survives its own input event
+- a recurring Task's Deadline is **derived** (the live instance's), not authored: it renders
+  read-only, and Save always sends `deadline: null` for one — the wire's Deadline is a non-nullable
+  `DateOnly` even for a recurring Task, and sending it back verbatim would refuse every Save
+- a refused write (Save, Postpone-clear, Defer) never reloads — only a successful write does — so
+  the user's unsaved edits survive a refusal instead of being wiped by the reload's reset
+- title and notes are disabled while a write is in flight, like every other control on the form
+- the fit bar renders nothing at all — not an empty `.fitbar` — when it has neither a count nor an
+  orphan reading to show
+- a Defer offset of zero, negative, or fractional is rejected client-side before it reaches the API
+- each Dimension chipset carries its axis in its accessible name (`role="group"`), since a chip's
+  own name is just its value and values repeat across axes
 
 — **reduced scope (#175):** task detail has no `*.screen.tsx` registration and is not reachable
   in the running app; `registerScreen` carries no Task id and the row tap needs files this ticket
