@@ -1114,7 +1114,10 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   permanently-unset, never-actionable button would otherwise sit on every ordinal dimension there
 - (7th pass) the unset hint's instruction clause ("Drag it/the slider, or press … ") is omitted in
   the read-only presentation, for both the with-default and no-default wording — a read-only viewer
-  can't drag a disabled slider or press a button that isn't rendered there. The chipset itself is
+  can't drag a disabled slider or press a button that isn't rendered there. (8th pass) the
+  with-default read-only wording also no longer claims "the task carries the default" — the only
+  live read-only caller, `DimensionsScreen`'s catalog, has no task in view, so the hint instead
+  names the declared default plainly ("the declared default is \<default\>"). The chipset itself is
   also absent (not an empty div) when read-only with no declared default, since neither of its two
   children — the default toggle and the "Use …" button — renders there; the wrapper condition is
   `hasDefault || (unset && !readOnly)`, not `hasDefault || unset`
@@ -1124,11 +1127,12 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   `changedDuringGesture` is deliberately conditional on a fresh gesture, not unconditional and not
   absent — unconditional would instead defeat the second-pointerdown guard, and absent would leave
   a bare `change`'s stale flag blocking the next commit
-- residual, known and accepted: a `pointerdown` with no matching up/cancel (a right-click, whose
-  release the context menu consumes) leaves `pointerStartedOnSlider` stuck `true`; combined with a
-  later bare `change`, this can suppress one subsequent least-value commit. It self-heals — the
-  blocked `pointerUp` clears both flags on its way out — so it was left as-is rather than adding
-  more state to close a one-shot, self-correcting edge case
+- (8th pass) a `pointerdown` with no matching up/cancel (a right-click, whose release the context
+  menu consumes) does not wedge the next gesture's reset off — the fresh-vs-mid-gesture reset
+  (previously keyed on `pointerStartedOnSlider`, which only `pointerup`/`pointercancel` clear, and
+  so could get stuck `true`) is keyed on the pointer event's own `isPrimary` instead, true for every
+  gesture's first pointer and false for a second simultaneous touch, with no dependence on a flag a
+  missing release can wedge
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
