@@ -202,6 +202,10 @@ describe('App', () => {
 
       expect(screen.getByText('Pushed Content')).toBeInTheDocument()
       expect(screen.getByText(/now fake/i)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText(/now fake/i))
+      expect(screen.getByText('Push it')).toBeInTheDocument()
+      expect(screen.queryByText('Pushed Content')).not.toBeInTheDocument()
     })
 
     it('the pushed screen replaces the tab\'s own screen and the tab bar stays — it is a push, not a route', () => {
