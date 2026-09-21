@@ -226,11 +226,16 @@ function TaskForm({
       <div className="stack">
         <label className="stack">
           <span className="lbl">Title</span>
-          <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className="field" value={title} disabled={busy} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="stack">
           <span className="lbl">Notes</span>
-          <textarea className="field" value={notes ?? ''} onChange={(e) => setNotes(e.target.value || null)} />
+          <textarea
+            className="field"
+            value={notes ?? ''}
+            disabled={busy}
+            onChange={(e) => setNotes(e.target.value || null)}
+          />
         </label>
         <div className="lbl">Duration</div>
         <div className="chipset">

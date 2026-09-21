@@ -486,4 +486,30 @@ describe('TaskDetail — form', () => {
   // failed reload can no longer happen in the same gesture. The note is still rendered outside the
   // three-arm conditional in TaskDetail (belt-and-suspenders for any future write that does
   // reload), but there is no live path today that exercises that distinction on its own.
+
+  it('title and notes are disabled while a write is in flight, like every other control', async () => {
+    let resolvePut!: (value: Response) => void
+    const putPromise = new Promise<Response>((resolve) => {
+      resolvePut = resolve
+    })
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/dimensions' && !init) return Promise.resolve(jsonResponse(DIMENSIONS))
+      if (url === '/api/tasks/1' && !init) {
+        return Promise.resolve(jsonResponse(rawTask({ title: 'A task', notes: 'Original notes' })))
+      }
+      if (url === '/api/tasks/1' && init?.method === 'PUT') return putPromise
+      throw new Error(`Unhandled fetch: ${init?.method ?? 'GET'} ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByDisplayValue('A task')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(screen.getByDisplayValue('A task')).toBeDisabled()
+    expect(screen.getByDisplayValue('Original notes')).toBeDisabled()
+
+    resolvePut(new Response(null, { status: 204 }))
+  })
 })
