@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "gen:api": "openapi-typescript http://localhost:8007/openapi/v1.json -o src/api/schema.d.ts"
+    "gen:api": "openapi-typescript http://localhost:8007/openapi/v1.json -o src/api/schema.d.ts",
+    "check:css": "cd ../.. && node scripts/check-css-union.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -155,6 +155,19 @@ green from the repo root. Web lanes additionally:
 cd src/TaskGuide.Web && npm test
 ```
 
+**If the diff touches `src/TaskGuide.Web/src/index.css`**, run the prototype-union guard as well:
+
+```sh
+cd src/TaskGuide.Web && npm run check:css
+```
+
+It checks `index.css` against the union of the prototypes in `docs/prototypes/` — selectors and
+declarations both. Nothing else runs it: there is no CI, and `npm test`, `npm run build` and
+`dotnet test` are all green while `index.css` drifts (#178). It is not a formality — #148 was
+caught by it, and #149, #176 and #177 all sharpened it. A **failure is a report, not an edit**, on
+the same terms as the drift check below: if your lane did not change `index.css`, name the drift
+and leave it to the lane that did.
+
 **If the diff touches API surface** — any `Api/Endpoints/` file, or a response/request type one
 serializes — you own regenerating `src/TaskGuide.Web/src/api/schema.d.ts`, **whatever lane you are
 on** (#171). It is generated, not authored: merge safety protects intent, and this file has none.
