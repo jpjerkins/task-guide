@@ -1748,6 +1748,16 @@ specified under **Shared controls** above and are not restated here.
 - a recurring Task offers Defer's **offset** form only; an absolute Defer is not authorable there
 - the Deadline date entry survives its own input event
 
+— **reduced scope (#175):** task detail has no `*.screen.tsx` registration and is not reachable
+  in the running app; `registerScreen` carries no Task id and the row tap needs files this ticket
+  does not own. Filed as #180, which owns `App.tsx`, `TasksScreen.tsx` and `screenRegistry.ts`.
+
+- `client.ts`'s `fetchTask` normalises `opportunities`/`patternWeekCount` through the same
+  int32-as-string/number wire artifact `duration` already carries, keeping `null` as `null`
+- `client.ts`'s `fetchTask` returns `null` on a 204 and throws on a 404, for the screen's error arm
+- Save (`saveTaskDetails`), clearing Postpone (`clearPostpone`) and Defer (`deferTaskByOffset`) each
+  hit their one wire endpoint with the documented request shape
+
 #### Quick capture
 
 - the sheet asks for a title and a Duration and nothing else — Duration is the only property the

@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskDetail } from './TaskDetail'
 
@@ -69,7 +70,7 @@ describe('TaskDetail — fit bar', () => {
     stub(rawTask({ opportunities: 3, patternWeekCount: 3, deadline: null }))
     render(<TaskDetail taskId="1" />)
 
-    expect(await screen.findByText(/3/)).toBeInTheDocument()
+    expect(await screen.findByText('3', { selector: '.n' })).toBeInTheDocument()
     expect(screen.getByText(/in the next 7 days/i)).toBeInTheDocument()
   })
 
@@ -78,7 +79,7 @@ describe('TaskDetail — fit bar', () => {
     stub(rawTask({ opportunities: 2, patternWeekCount: 2, deadline: '2026-09-25' }))
     render(<TaskDetail taskId="1" now={now} />)
 
-    expect(await screen.findByText(/2/)).toBeInTheDocument()
+    expect(await screen.findByText('2', { selector: '.n' })).toBeInTheDocument()
     expect(screen.getByText(/before it is due/i)).toBeInTheDocument()
     expect(screen.queryByText(/in the next 7 days/i)).not.toBeInTheDocument()
   })
@@ -111,9 +112,8 @@ describe('TaskDetail — fit bar', () => {
     )
     render(<TaskDetail taskId="1" />)
 
-    expect(await screen.findByText(/no window declares/i)).toBeInTheDocument()
-    expect(screen.getByText(/Location/)).toBeInTheDocument()
-    expect(screen.getByText(/With whom/)).toBeInTheDocument()
+    const which = await screen.findByText(/no window declares/i)
+    expect(which).toHaveTextContent(/Location or With whom/)
   })
 
   it('an empty blame list reads as no single property being to blame, not an empty list', async () => {
@@ -182,5 +182,197 @@ describe('TaskDetail — fit bar', () => {
 
     await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument())
     expect(screen.queryByText(/orphan/i)).not.toBeInTheDocument()
+  })
+})
+
+// GET /api/tasks/{id} calls carry no `init` (getJson calls `fetch(path)` bare); writes always
+// carry a `method`. Routes by URL and consumes each endpoint's response queue in order, so a test
+// can name the initial read and the post-write re-read separately without depending on Promise.all
+// call ordering beyond "GET task, then GET dimensions" (the order the component's own code issues
+// them in).
+function makeFetchMock(options: {
+  taskResponses: unknown[]
+  dimensionsResponses?: unknown[]
+  writes?: { match: (url: string, init: RequestInit | undefined) => boolean; response: Response }[]
+}) {
+  const { taskResponses, dimensionsResponses = [DIMENSIONS], writes = [] } = options
+  let taskIdx = 0
+  let dimIdx = 0
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (url === '/api/dimensions' && !init) {
+      const body = dimensionsResponses[Math.min(dimIdx, dimensionsResponses.length - 1)]
+      dimIdx++
+      return Promise.resolve(jsonResponse(body))
+    }
+    if (url === '/api/tasks/1' && !init) {
+      const body = taskResponses[Math.min(taskIdx, taskResponses.length - 1)]
+      taskIdx++
+      return Promise.resolve(jsonResponse(body))
+    }
+    const write = writes.find((w) => w.match(url, init))
+    if (write) return Promise.resolve(write.response)
+    throw new Error(`Unhandled fetch: ${init?.method ?? 'GET'} ${url}`)
+  })
+}
+
+describe('TaskDetail — form', () => {
+  it('renders title, notes, the Duration chipset, Deadline, and one chipset per Dimension', async () => {
+    vi.stubGlobal(
+      'fetch',
+      makeFetchMock({
+        taskResponses: [
+          rawTask({ title: 'Water the plants', notes: 'A note', duration: '30', deadline: '2026-10-01', dimensions: { location: ['home'] } }),
+        ],
+      }),
+    )
+    render(<TaskDetail taskId="1" />)
+
+    expect(await screen.findByDisplayValue('Water the plants')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('A note')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('Deadline')).toHaveValue('2026-10-01')
+    // "Duration" appears once — the chipset control, not the same-named Dimension in the registry.
+    expect(screen.getAllByText('Duration')).toHaveLength(1)
+    expect(screen.getByText('Location')).toBeInTheDocument()
+    expect(screen.getByText('Energy')).toBeInTheDocument()
+  })
+
+  it("the Deadline date entry survives its own input event — same DOM node", async () => {
+    vi.stubGlobal('fetch', makeFetchMock({ taskResponses: [rawTask({ deadline: '2026-09-01' })] }))
+    render(<TaskDetail taskId="1" />)
+
+    const input = await screen.findByLabelText('Deadline')
+    fireEvent.change(input, { target: { value: '2026-09-30' } })
+    expect(screen.getByLabelText('Deadline')).toBe(input)
+    expect(input).toHaveValue('2026-09-30')
+  })
+
+  it('the Dimensions section offers no add/remove/rename control', async () => {
+    vi.stubGlobal('fetch', makeFetchMock({ taskResponses: [rawTask()] }))
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByText('Location')
+    expect(screen.queryByRole('button', { name: /add|new dimension|remove|rename/i })).not.toBeInTheDocument()
+  })
+
+  it('loose Tags render as kept-but-inert pills under "Unresolved", distinct from matched values', async () => {
+    vi.stubGlobal('fetch', makeFetchMock({ taskResponses: [rawTask({ looseTags: ['errand'] })] }))
+    render(<TaskDetail taskId="1" />)
+
+    const pill = await screen.findByText(/errand.*kept but inert/i)
+    expect(pill.tagName).not.toBe('BUTTON')
+    expect(screen.getByText('Unresolved')).toBeInTheDocument()
+  })
+
+  it('clearing Postpone DELETEs and re-reads, and the control then disappears', async () => {
+    const fetchMock = makeFetchMock({
+      taskResponses: [rawTask({ postpone: '2026-09-25', eligible: false }), rawTask({ postpone: null, eligible: true })],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1/postpone' && init?.method === 'DELETE',
+          response: new Response(null, { status: 204 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    const clearBtn = await screen.findByRole('button', { name: /clear postpone/i })
+    await user.click(clearBtn)
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /clear postpone/i })).not.toBeInTheDocument())
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/tasks/1/postpone' && init?.method === 'DELETE')).toBe(true)
+  })
+
+  it('a recurring Task offers only Defer\'s offset form — no date control for Defer', async () => {
+    vi.stubGlobal('fetch', makeFetchMock({ taskResponses: [rawTask({ recurring: true })] }))
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByRole('button', { name: /defer/i })
+    // The only date input on the whole screen is Deadline's — Defer's offset form has none.
+    expect(screen.getAllByDisplayValue(/^\d{4}-\d{2}-\d{2}$|^$/).filter((el) => el.getAttribute('type') === 'date')).toHaveLength(1)
+    expect(screen.getByLabelText(/offset/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/unit/i)).toBeInTheDocument()
+  })
+
+  it('Defer PATCHes {date: null, offset, unit} and re-reads', async () => {
+    const fetchMock = makeFetchMock({
+      taskResponses: [rawTask({ recurring: true, defer: null }), rawTask({ recurring: true, defer: '2026-09-28' })],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1' && init?.method === 'PATCH',
+          response: new Response(null, { status: 204 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    await user.type(await screen.findByLabelText(/offset/i), '2')
+    await user.selectOptions(screen.getByLabelText(/unit/i), 'Weeks')
+    await user.click(screen.getByRole('button', { name: /defer/i }))
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/tasks/1' && init?.method === 'PATCH')
+      expect(patchCall).toBeDefined()
+      expect(JSON.parse((patchCall as [string, RequestInit])[1].body as string)).toEqual({ date: null, offset: 2, unit: 1 })
+    })
+  })
+
+  it('Save PUTs the whole form in one request and re-reads', async () => {
+    const fetchMock = makeFetchMock({
+      taskResponses: [
+        rawTask({ title: 'Old title', notes: null, duration: '10', deadline: null, dimensions: {} }),
+        rawTask({ title: 'New title', notes: null, duration: '10', deadline: null, dimensions: {} }),
+      ],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1' && init?.method === 'PUT',
+          response: new Response(null, { status: 204 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    const titleInput = await screen.findByDisplayValue('Old title')
+    await user.clear(titleInput)
+    await user.type(titleInput, 'New title')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await screen.findByDisplayValue('New title')
+    const putCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/tasks/1' && init?.method === 'PUT')
+    expect(putCall).toBeDefined()
+    expect(JSON.parse((putCall as [string, RequestInit])[1].body as string)).toEqual({
+      title: 'New title',
+      notes: null,
+      duration: '10',
+      deadline: null,
+      dimensions: {},
+    })
+  })
+
+  it("a refused Save renders the server's reason in the alert note", async () => {
+    const fetchMock = makeFetchMock({
+      taskResponses: [rawTask({ title: 'A task' }), rawTask({ title: 'A task' })],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1' && init?.method === 'PUT',
+          response: new Response(JSON.stringify({ error: 'duration belongs in the duration field' }), { status: 400 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByDisplayValue('A task')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/duration belongs in the duration field/i)
   })
 })

@@ -1,6 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchDimensions, fetchTask, type DimensionResponse, type Task } from '../api/client'
+import {
+  ApiError,
+  clearPostpone,
+  deferTaskByOffset,
+  fetchDimensions,
+  fetchTask,
+  saveTaskDetails,
+  type DimensionResponse,
+  type Task,
+} from '../api/client'
+import { DateEntry } from './shared/DateEntry'
 import { ScreenNav } from './shared/ScreenNav'
+
+// Duration's five buckets (KnownDimensions.DurationBuckets), same rule TasksScreen.tsx's durLabel
+// and TriageScreen.tsx's durLabel use — copied, not imported, since the two Web lanes deliberately
+// don't share components.
+const DURATION_BUCKETS = ['2', '10', '30', '60', 'longer']
+function durLabel(bucket: string) {
+  return Number.isNaN(Number(bucket)) ? 'Longer' : `${bucket}m`
+}
+
+const OFFSET_UNITS = [
+  { value: 0, label: 'Days' },
+  { value: 1, label: 'Weeks' },
+  { value: 2, label: 'Months' },
+]
 
 // Same three-arm shape as TasksScreen.tsx/TriageScreen.tsx: a loading arm so the first paint
 // doesn't say "Nothing here." before the first read returns, and an error arm the ready-state
@@ -72,6 +96,212 @@ function fitBar(task: Task, dimensions: DimensionResponse[], today: string) {
   )
 }
 
+// The one form, the one Save (#174: Detail's PUT crosses the lock as one request — Duration
+// included — so a later gesture can't race a stale, piecemeal write). Postpone-clear and Defer
+// are separate writes with their own re-read, same as TasksScreen.tsx's row gestures, because
+// neither is part of the authored-fields PUT.
+function TaskForm({
+  taskId,
+  task,
+  dimensions,
+  onSaved,
+}: {
+  taskId: string
+  task: Task
+  dimensions: DimensionResponse[]
+  onSaved: () => Promise<void>
+}) {
+  const [title, setTitle] = useState(task.title)
+  const [notes, setNotes] = useState(task.notes)
+  const [duration, setDuration] = useState(task.duration)
+  const [deadline, setDeadline] = useState(task.deadline)
+  const [dims, setDims] = useState(task.dimensions)
+  const [offsetValue, setOffsetValue] = useState('')
+  const [offsetUnit, setOffsetUnit] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
+  // Resets the form to match whatever the server just returned — every write this screen makes
+  // (Save, clear Postpone, Defer) re-reads afterwards, and the fresh read is the source of truth.
+  useEffect(() => {
+    setTitle(task.title)
+    setNotes(task.notes)
+    setDuration(task.duration)
+    setDeadline(task.deadline)
+    setDims(task.dimensions)
+  }, [task])
+
+  function toggleDimensionValue(dimension: DimensionResponse, value: string) {
+    setDims((prev) => {
+      const current = prev[dimension.id] ?? []
+      if (dimension.algebra === 'ordinal') {
+        return { ...prev, [dimension.id]: current.includes(value) ? [] : [value] }
+      }
+      const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+      return { ...prev, [dimension.id]: next }
+    })
+  }
+
+  async function handleSave() {
+    setNote(null)
+    setBusy(true)
+    try {
+      await saveTaskDetails(taskId, { title, notes, duration, deadline, dimensions: dims })
+    } catch (err) {
+      setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't save.")
+    }
+    await onSaved()
+    setBusy(false)
+  }
+
+  async function handleClearPostpone() {
+    setNote(null)
+    setBusy(true)
+    try {
+      await clearPostpone(taskId)
+    } catch (err) {
+      setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't clear postpone.")
+    }
+    await onSaved()
+    setBusy(false)
+  }
+
+  async function handleDefer() {
+    const offset = Number(offsetValue)
+    if (!offsetValue || Number.isNaN(offset)) return
+    setNote(null)
+    setBusy(true)
+    try {
+      await deferTaskByOffset(taskId, offset, offsetUnit)
+    } catch (err) {
+      setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't defer.")
+    }
+    await onSaved()
+    setBusy(false)
+  }
+
+  // KnownDimensions.Default declares `duration` as a Dimension too, for the window side of
+  // matching — it has its own control here (the chipset above), so it's excluded from this loop.
+  const pickableDimensions = dimensions.filter((d) => d.id !== 'duration')
+
+  return (
+    <>
+      {note && (
+        <div className="note" role="alert">
+          {note}
+        </div>
+      )}
+      <div className="stack">
+        <label className="stack">
+          <span className="lbl">Title</span>
+          <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="stack">
+          <span className="lbl">Notes</span>
+          <textarea className="field" value={notes ?? ''} onChange={(e) => setNotes(e.target.value || null)} />
+        </label>
+        <div className="lbl">Duration</div>
+        <div className="chipset">
+          {DURATION_BUCKETS.map((b) => (
+            <button
+              key={b}
+              type="button"
+              aria-pressed={duration === b}
+              disabled={busy}
+              onClick={() => setDuration(b)}
+            >
+              {durLabel(b)}
+            </button>
+          ))}
+        </div>
+        <DateEntry label="Deadline" value={deadline} onChange={setDeadline} disabled={busy} />
+      </div>
+      <div className="sec-h">Dimensions</div>
+      <div className="stack">
+        {pickableDimensions.map((d) => (
+          <div key={d.id}>
+            <div className="lbl">{d.label}</div>
+            <div className="chipset">
+              {d.values.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={(dims[d.id] ?? []).includes(v)}
+                  disabled={busy}
+                  onClick={() => toggleDimensionValue(d, v)}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {task.looseTags.length > 0 && (
+          <>
+            <div className="lbl">Unresolved</div>
+            <div className="chipset">
+              {task.looseTags.map((tag) => (
+                <span key={tag} className="pill inert">
+                  {tag} · kept but inert
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      {task.postpone !== null && (
+        <div className="stack">
+          <button type="button" disabled={busy} onClick={handleClearPostpone}>
+            Clear postpone
+          </button>
+        </div>
+      )}
+      {task.recurring && (
+        <div className="stack">
+          <div className="lbl">Defer</div>
+          <label className="stack">
+            <span className="lbl">Offset</span>
+            <input
+              className="field"
+              type="number"
+              value={offsetValue}
+              disabled={busy}
+              onChange={(e) => setOffsetValue(e.target.value)}
+            />
+          </label>
+          <label className="stack">
+            <span className="lbl">Unit</span>
+            <select
+              className="field"
+              value={offsetUnit}
+              disabled={busy}
+              onChange={(e) => setOffsetUnit(Number(e.target.value))}
+            >
+              {OFFSET_UNITS.map((u) => (
+                <option key={u.value} value={u.value}>
+                  {u.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" disabled={busy} onClick={handleDefer}>
+            Defer
+          </button>
+        </div>
+      )}
+      <div className="btn-row">
+        <button type="button" className="btn primary wide" disabled={busy} onClick={handleSave}>
+          Save
+        </button>
+      </div>
+      <div className="note">
+        Dimensions themselves are declared in code. This screen picks values on them, never edits
+        the axes.
+      </div>
+    </>
+  )
+}
+
 export function TaskDetail({ taskId, now = new Date() }: { taskId: string; now?: Date }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const loadToken = useRef(0)
@@ -112,7 +342,7 @@ export function TaskDetail({ taskId, now = new Date() }: { taskId: string; now?:
         {state.status === 'ready' && (
           <>
             {fitBar(state.task, state.dimensions, today)}
-            <div className="stack" />
+            <TaskForm taskId={taskId} task={state.task} dimensions={state.dimensions} onSaved={load} />
           </>
         )}
       </div>
