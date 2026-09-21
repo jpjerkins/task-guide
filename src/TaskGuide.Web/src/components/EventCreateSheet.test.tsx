@@ -110,6 +110,27 @@ describe('EventCreateSheet', () => {
     expect(screen.getByText(/move the end time to 12p or later/i)).toBeInTheDocument()
   })
 
+  it('the time inputs share a .timerow parent and each resolution option renders its description as .btn.wide .d with no br', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<EventCreateSheet date="2026-09-07" windows={[windows[0]]} onCancel={() => {}} onCreated={() => {}} />)
+    await user.clear(screen.getByLabelText('Start'))
+    await user.type(screen.getByLabelText('Start'), '10:00')
+    await user.clear(screen.getByLabelText('End'))
+    await user.type(screen.getByLabelText('End'), '11:00')
+
+    const start = screen.getByLabelText('Start')
+    const end = screen.getByLabelText('End')
+    expect(start.parentElement).toHaveClass('timerow')
+    expect(start.parentElement).toBe(end.parentElement)
+
+    const buttons = container.querySelectorAll('.stack .btn.wide')
+    expect(buttons.length).toBeGreaterThan(0)
+    buttons.forEach((button) => {
+      expect(button.querySelector('.d')).toBeInTheDocument()
+      expect(button.querySelector('br')).not.toBeInTheDocument()
+    })
+  })
+
   it('the resolution set is closed at the four wire values, and no option whose guard is false is ever rendered', async () => {
     const user = userEvent.setup()
     render(<EventCreateSheet date="2026-09-07" windows={[windows[0]]} onCancel={() => {}} onCreated={() => {}} />)
