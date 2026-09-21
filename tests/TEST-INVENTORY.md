@@ -1053,7 +1053,8 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - `DateEntry` renders a null value as blank and a given ISO value verbatim
 - `DateEntry` reports the new ISO value on change, and `null` when cleared
 - `DateEntry`'s date input survives its own input event — same DOM node before and after
-- `DateEntry` renders the prototype's structure — a `.stack` label wrapping a `.lbl` caption and an `input.field.date`
+- `DateEntry` renders the default structure — a `.stack` label wrapping a `.lbl` caption and a full-width `input.field` (no `.date` class)
+- `DateEntry` adds the tag-entry `.date` class when the `narrow` prop is set
 - `RecurrenceEditor` renders no rule as "does not repeat"
 - changing `RecurrenceEditor`'s kind reports a fresh rule for that kind, with its own defaults
 - changing the N field on an N-based rule updates only `n`
