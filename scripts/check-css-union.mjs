@@ -114,12 +114,7 @@ const retainedSelectors = new Set([
   'html, body, #root',
   '[hidden]',
   '.btn:disabled, .chipset button:disabled',
-  '.range',
   '.range.unset',
-  '.ticks',
-  '.hint',
-  // tag-entry.prototype.html:148 — a third prototype this guard does not source; see #177
-  'input.field.date',
 ]);
 // schedule-editing is later and overrides ui-screens rule-for-rule on every
 // shared header (not merged with it - some of its omissions, like dropping
@@ -133,15 +128,28 @@ const source = new Map([
   ...rules(styleFrom('docs/prototypes/ui-screens.prototype.html')),
   ...rules(styleFrom('docs/prototypes/schedule-editing.prototype.html')),
 ]);
+// tag-entry is a third prototype, but it can't join `source` the way
+// schedule-editing does: 27 of the 46 selectors it shares with the existing
+// union have a different body there, and those differences are the settled
+// ui-screens/schedule-editing contract, not drift to inherit. So tag-entry
+// contributes only the selectors it alone defines - its other 75 selectors,
+// filtered here to those `source` doesn't already have. Most of those 75
+// describe screens the SPA hasn't built, so they're permitted in index.css
+// and drift-checked when present, but never required - `missing` below stays
+// scoped to `source`. See #177.
+const optional = new Map(
+  [...rules(styleFrom('docs/prototypes/tag-entry.prototype.html'))]
+    .filter(([selector]) => !source.has(selector)),
+);
 const duplicateSelectors = [];
 const actual = rules(readFileSync('src/TaskGuide.Web/src/index.css', 'utf8'), '', new Map(), duplicateSelectors);
 const alias = (selector) => selectorAliases.get(selector) ?? selector;
 const missing = [...source.keys()].filter((selector) => !actual.has(alias(selector)));
-const drifted = [...source].filter(([selector, declMap]) =>
+const drifted = [...source, ...optional].filter(([selector, declMap]) =>
   actual.has(alias(selector)) && serialize(actual.get(alias(selector))) !== serialize(declMap),
 ).map(([selector, declMap]) =>
   `${alias(selector)}\n  prototype: ${serialize(declMap)}\n  index.css: ${serialize(actual.get(alias(selector)))}`);
-const allowedSelectors = new Set([...[...source.keys()].map(alias), ...retainedSelectors]);
+const allowedSelectors = new Set([...[...source.keys()].map(alias), ...[...optional.keys()].map(alias), ...retainedSelectors]);
 const unexpected = [...actual.keys()].filter((selector) => !allowedSelectors.has(selector));
 
 // Equal-specificity rules resolve by source order, so a rule moved past
@@ -167,4 +175,4 @@ if (missing.length > 0 || unexpected.length > 0 || drifted.length > 0 || outOfOr
   throw new Error(`index.css ${errors.join('\n\n')}`);
 }
 
-console.log('index.css covers the ui-screens and schedule-editing prototype union, declarations included.');
+console.log('index.css covers the ui-screens and schedule-editing prototype union, declarations included, plus tag-entry\'s selectors where present.');
