@@ -101,7 +101,15 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
           }
         }}
         onKeyUp={(e) => {
-          if (unset && keyStartedOnSlider.current && !changedDuringKeypress.current && RANGE_KEYS.includes(e.key)) {
+          if (
+            unset &&
+            keyStartedOnSlider.current &&
+            !changedDuringKeypress.current &&
+            RANGE_KEYS.includes(e.key) &&
+            !e.ctrlKey &&
+            !e.altKey &&
+            !e.metaKey
+          ) {
             onChange(values[index])
           }
           keyStartedOnSlider.current = false

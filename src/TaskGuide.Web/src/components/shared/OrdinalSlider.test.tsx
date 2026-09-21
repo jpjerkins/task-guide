@@ -126,21 +126,25 @@ describe('OrdinalSlider', () => {
     expect(onChange).toHaveBeenCalledWith('whisper')
   })
 
-  // #147 (2nd review pass): key identity can't distinguish "this keypress started here" from "it
-  // started elsewhere" — Tab is not the only key a Tab traversal fires a keyup for. Backward
-  // navigation into an unset slider keydowns Shift then Tab on the PREVIOUS control, then keyups
-  // Tab then Shift on the newly-focused slider; neither keyup follows a keydown that started here,
-  // so neither commits. Naming 'Shift' alongside 'Tab' would just repeat the mistake #147 already
-  // found once — the fix is provenance, not a longer key list.
-  it('does not commit on a Shift+Tab traversal landing on an unset slider (#147)', () => {
+  // #147 (4th review pass): Cmd/Ctrl/Alt+arrow doesn't move a range input, but keydown and keyup
+  // both still land on the focused slider and the key name is in RANGE_KEYS — so the old guard
+  // committed values[0] on a control the user never meant to touch (Cmd+ArrowDown scrolls the
+  // page on macOS). Shift+arrow is different: a range input DOES move for it, so Shift must not
+  // be excluded the same way.
+  it('does not commit on a modified arrow (Cmd/Ctrl/Alt), but Shift+arrow still commits (#147)', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
     const slider = screen.getByLabelText('Volume')
-    fireEvent.keyUp(slider, { key: 'Tab' })
-    fireEvent.keyUp(slider, { key: 'Shift' })
+    fireEvent.keyDown(slider, { key: 'ArrowDown', metaKey: true })
+    fireEvent.keyUp(slider, { key: 'ArrowDown', metaKey: true })
 
     expect(onChange).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(slider, { key: 'ArrowDown', shiftKey: true })
+    fireEvent.keyUp(slider, { key: 'ArrowDown', shiftKey: true })
+
+    expect(onChange).toHaveBeenCalledWith('whisper')
   })
 
   // #147 (2nd review pass): the keyup handler's job is "commit the value being shown if this
