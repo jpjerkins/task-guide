@@ -1098,7 +1098,9 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
   commit, even if a deferring parent hasn't applied it yet, so the keystroke doesn't
   double-commit or downgrade the selection once it's already committed via `change`. The
   provenance flag is cleared on blur, because Tab moves focus on keydown and can leave a stale
-  `true` behind for a later Shift+Tab back in to see; auto-repeat on a held key does not erase an
+  `true` behind for a later keyup to find — asserted with a *range* key's keyup, since a Tab or
+  Shift keyup would pass on the key set alone and never exercise the blur; auto-repeat on a held
+  key does not erase an
   earlier `change` from the same keystroke; and a key not in the range-input's own key set (Enter
   to submit the form, Escape to dismiss) does not commit even when it starts and ends on a
   focused, untouched slider

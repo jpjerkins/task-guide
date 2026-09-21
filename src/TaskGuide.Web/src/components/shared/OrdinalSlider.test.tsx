@@ -211,17 +211,19 @@ describe('OrdinalSlider', () => {
   // runs and the ref stays stale. Shift+Tab back in then sees a stale `true` with
   // changedDuringKeypress still false and wrongly commits values[0]. Clearing the ref on blur
   // mirrors onPointerCancel's guard on the pointer path.
-  it('does not commit on Shift+Tab back into a slider that was left via Tab (stale keyStartedOnSlider) (#147)', () => {
+  it("does not commit a range-key keyup whose keydown landed elsewhere, after a Tab-out consumed this control's keyup (stale keyStartedOnSlider) (#147)", () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
     const slider = screen.getByLabelText('Volume')
-    // Tab forward out: keydown lands here, focus moves before keyup fires.
+    // Tab forward out: keydown lands here, focus moves before keyup fires, so this control's
+    // keyup never runs and only the blur clears the flag.
     fireEvent.keyDown(slider, { key: 'Tab' })
     fireEvent.blur(slider)
-    // Shift+Tab back in: keyup lands here without a keydown having landed here first.
-    fireEvent.keyUp(slider, { key: 'Tab' })
-    fireEvent.keyUp(slider, { key: 'Shift' })
+    // A later range-key keyup arrives with no keydown having landed here — focus returned mid
+    // keystroke (a held arrow released after focus moved back). Deliberately a RANGE_KEYS key:
+    // asserting with Tab/Shift would pass on the key list alone and never exercise the blur.
+    fireEvent.keyUp(slider, { key: 'ArrowDown' })
 
     expect(onChange).not.toHaveBeenCalled()
   })
