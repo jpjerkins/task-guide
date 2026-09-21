@@ -191,7 +191,16 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
               <div className="empty">Nothing here.</div>
             ) : (
               shown.map((t) => {
-                const postponed = t.postpone !== null
+                // Whether a stored Postpone/Defer has *elapsed* is a timing predicate, and there
+                // is no client-side clock: the server already answers it as part of `eligible`
+                // (StatusRules.IsEligible's `now >= Postpone` / `now >= Defer`), so the row reads
+                // that field rather than comparing the stored date against a locally-resolved
+                // `today`. Constrained to `active` so an `Unprocessed` Task — ineligible for
+                // having no Duration, not for a clock gate — can't render a stale surface date.
+                // This is deliberately the same predicate `canPostpone` uses below, so the
+                // gesture and the marker can never disagree.
+                const stillWaiting = t.status === 'active' && !t.eligible
+                const postponed = stillWaiting && t.postpone !== null
                 return (
                   // Greyed the way the prototype greys a Done row (opacity:.45,
                   // ui-screens.prototype.html:775) — inline, not a CSS class: index.css isn't
@@ -227,7 +236,7 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                             {pastDeadline(t, t.postpone as string) ? ' · past its deadline' : ''}
                           </span>
                         ) : (
-                          t.defer !== null && <span className="pill dim">surfaces {t.defer}</span>
+                          stillWaiting && t.defer !== null && <span className="pill dim">surfaces {t.defer}</span>
                         )}
                       </div>
                       {canPostpone(t) && (

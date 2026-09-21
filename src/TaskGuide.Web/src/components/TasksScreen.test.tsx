@@ -385,7 +385,7 @@ describe('TasksScreen', () => {
         .fn()
         .mockResolvedValueOnce(jsonResponse([stubPostponable()]))
         .mockResolvedValueOnce(new Response(null, { status: 204 }))
-        .mockResolvedValueOnce(jsonResponse([stubPostponable({ postpone: '2026-09-21' })]))
+        .mockResolvedValueOnce(jsonResponse([stubPostponable({ postpone: '2026-09-21', eligible: false })]))
       vi.stubGlobal('fetch', fetchMock)
       const user = userEvent.setup()
       render(<TasksScreen now={now} />)
@@ -409,7 +409,7 @@ describe('TasksScreen', () => {
         .mockResolvedValueOnce(jsonResponse([stubPostponable({ deadline: '2026-09-25' })]))
         .mockResolvedValueOnce(new Response(null, { status: 204 }))
         .mockResolvedValueOnce(
-          jsonResponse([stubPostponable({ deadline: '2026-09-25', postpone: '2026-10-20' })]),
+          jsonResponse([stubPostponable({ deadline: '2026-09-25', postpone: '2026-10-20', eligible: false })]),
         )
       vi.stubGlobal('fetch', fetchMock)
       const user = userEvent.setup()
@@ -434,6 +434,34 @@ describe('TasksScreen', () => {
       fireEvent.change(input, { target: { value: '2026-09-30' } })
       expect(screen.getByLabelText('Pick a date…')).toBe(input)
       expect(input).toHaveValue('2026-09-30')
+    })
+
+    // There is no client-side clock (tests/TEST-INVENTORY.md § Web-Now): whether a stored
+    // Postpone or Defer has elapsed is a predicate the server already answers via `eligible`
+    // (StatusRules.IsEligible's `now >= Postpone` / `now >= Defer` conjunction), so the row reads
+    // that field rather than comparing `t.postpone`/`t.defer` against a locally-resolved `today`.
+    it('an elapsed Postpone (now eligible again) renders ungreyed, with no postponed pill, and offers "Not now"', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(jsonResponse([stubPostponable({ postpone: '2026-09-01', eligible: true })])),
+      )
+      render(<TasksScreen now={now} />)
+
+      const row = (await screen.findByText('Postponable')).closest('.row') as HTMLElement
+      expect(row).not.toHaveStyle({ opacity: '.45' })
+      expect(screen.queryByText(/postponed to/i)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /not now/i })).toBeInTheDocument()
+    })
+
+    it('an elapsed Defer (now eligible again) renders with no "surfaces" pill', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(jsonResponse([stubPostponable({ defer: '2026-09-01', eligible: true })])),
+      )
+      render(<TasksScreen now={now} />)
+
+      await screen.findByText('Postponable')
+      expect(screen.queryByText(/surfaces/i)).not.toBeInTheDocument()
     })
   })
 
