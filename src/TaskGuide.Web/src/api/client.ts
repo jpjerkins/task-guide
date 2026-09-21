@@ -76,9 +76,27 @@ export interface Task {
   title: string
   duration: string | null
   createdAt: string
+  // #163: status/eligible/deadline/defer/postpone/recurring/derived/zeroKind pass through as-is —
+  // the wire already sends camelCase strings and booleans, so there's nothing to normalise.
+  // opportunities and patternWeekCount get the same `int32 | string` normalisation as duration,
+  // for the same reason: .NET's OpenAPI generator artifact, not a real ambiguity on the wire.
+  status: string
+  eligible: boolean
+  deadline: string | null
+  defer: string | null
+  postpone: string | null
+  recurring: boolean
+  derived: boolean
+  opportunities: number | null
+  patternWeekCount: number | null
+  zeroKind: string | null
 }
 
 export type NewTask = Pick<CreateTaskRequest, 'title'> & { duration: number }
+
+function toNumber(raw: number | string | null | undefined): number | null {
+  return raw === null || raw === undefined ? null : Number(raw)
+}
 
 function toTask(raw: TaskResponse): Task {
   return {
@@ -86,6 +104,16 @@ function toTask(raw: TaskResponse): Task {
     title: raw.title,
     duration: raw.duration === null || raw.duration === undefined ? null : String(raw.duration),
     createdAt: raw.createdAt,
+    status: raw.status,
+    eligible: raw.eligible,
+    deadline: raw.deadline,
+    defer: raw.defer,
+    postpone: raw.postpone,
+    recurring: raw.recurring,
+    derived: raw.derived,
+    opportunities: toNumber(raw.opportunities),
+    patternWeekCount: toNumber(raw.patternWeekCount),
+    zeroKind: raw.zeroKind,
   }
 }
 

@@ -1672,6 +1672,9 @@ specified under **Shared controls** above and are not restated here.
   the *active* Pattern references that do not yet declare a value on that Tag's Dimension** — never
   dormant ones, since fixing those would not help today. The destination is Web-Authoring's, the
   link and its filter are this lane's
+  — **reduced scope (#163):** `GET /api/tasks/{id}/orphan-repair`, the endpoint this deep-link's
+  payload would come from, is a `Results.NoContent()` stub (filed as #174). Shipped instead: the
+  badge renders with no link at all. Full coverage of this line is blocked on #174.
 - a deferred Task is absent from every match-driven surface but present in this list, marked with its
   surface date, so it stays findable
 - the "Not now" gesture is gated on **eligibility**, not on the `Active` label alone: a deferred
