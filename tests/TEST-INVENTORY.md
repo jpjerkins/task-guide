@@ -1716,6 +1716,12 @@ specified under **Shared controls** above and are not restated here.
   with the rows it would otherwise render inside (#102's rule, TriageScreen.tsx's taskActionNote)
 - a refused postpone's note carries the server's reason (`{ error }`, #138) appended to the sentence
 
+#### Screen push
+
+- a task row opens that task's detail as a pushed screen, with a back control to the list
+- the pushed screen replaces the tab's own screen and the tab bar stays — it is a push, not a route
+- switching tabs drops the pushed screen, so a tab never reopens someone else's detail
+
 #### Task detail
 
 - renders title, notes, the Duration chipset, Deadline, and one value chipset per Dimension
