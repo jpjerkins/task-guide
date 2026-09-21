@@ -39,7 +39,6 @@ function normalizedHeader(block) {
 
 function normalizedChunk(text) {
   return text
-    .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/"/g, "'")
     .replace(/\s+/g, ' ')
     .replace(/\s*([:;,])\s*/g, '$1')
@@ -47,10 +46,10 @@ function normalizedChunk(text) {
     .trim();
 }
 
-// Splits `text` on `separator` at depth 0, treating both `{}` and `()` as
-// nesting, so calc()/env() args and a nested block (e.g. @keyframes steps)
-// survive as one piece.
-function splitTopLevel(text, separator) {
+// Splits `text` on ';' at depth 0, treating both `{}` and `()` as nesting, so
+// calc()/env() args and a nested block (e.g. @keyframes steps) survive as one
+// piece.
+function splitTopLevel(text) {
   const parts = [];
   let start = 0;
   let depth = 0;
@@ -58,7 +57,7 @@ function splitTopLevel(text, separator) {
     const char = text[index];
     if (char === '{' || char === '(') depth += 1;
     else if (char === '}' || char === ')') depth -= 1;
-    else if (char === separator && depth === 0) {
+    else if (char === ';' && depth === 0) {
       parts.push(text.slice(start, index));
       start = index + 1;
     }
@@ -71,17 +70,16 @@ function splitTopLevel(text, separator) {
 // chunk with a nested block (e.g. an @keyframes stop), keyed by its whole
 // text since it has no single property. A repeated key deletes then re-sets,
 // so the later declaration also wins the cascade position.
-function declarations(body, into = new Map()) {
+function declarations(body, into) {
   // Comments come out before the split, not after: an unbalanced bracket
   // inside one (`/* see (#125 */`) would corrupt splitTopLevel's depth.
-  for (const raw of splitTopLevel(body.replace(/\/\*[\s\S]*?\*\//g, ''), ';')) {
+  for (const raw of splitTopLevel(body.replace(/\/\*[\s\S]*?\*\//g, ''))) {
     const decl = normalizedChunk(raw);
     if (!decl) continue;
     const key = decl.includes('{') ? decl : decl.slice(0, decl.indexOf(':'));
     into.delete(key);
     into.set(key, decl);
   }
-  return into;
 }
 
 function serialize(declMap) {
@@ -89,17 +87,21 @@ function serialize(declMap) {
 }
 
 // header (media-query-aware) -> Map<prop, declaration>; a header repeated
-// within one file layers into the same inner map instead of replacing it.
-function rules(css, prefix = '', into = new Map()) {
+// within one file layers into the same inner map instead of replacing it,
+// unless `duplicates` is given, in which case the repeat is reported there
+// instead of layered - see the `actual` parse below, where a split rule
+// would otherwise pass silently at its first-seen position.
+function rules(css, prefix = '', into = new Map(), duplicates = null) {
   for (const block of blocks(css)) {
     const header = normalizedHeader(block);
     const body = block.slice(block.indexOf('{') + 1, -1);
     if (header.startsWith('@media')) {
-      rules(body, `${prefix}${header}|`, into);
+      rules(body, `${prefix}${header}|`, into, duplicates);
       continue;
     }
     const key = `${prefix}${header}`;
     if (!into.has(key)) into.set(key, new Map());
+    else if (duplicates) duplicates.push(key);
     declarations(body, into.get(key));
   }
   return into;
@@ -123,12 +125,16 @@ const retainedSelectors = new Set([
 // shared header (not merged with it - some of its omissions, like dropping
 // .blk.event's dashed border, are deliberate redesigns, not accidental
 // drops). Map-spread replaces a duplicate key's whole value while keeping
-// the first-seen insertion position, which gives exactly that override.
+// the first-seen insertion position, which gives exactly that override. That
+// first-seen position is also the order-check tiebreak for the 13 (of 96
+// shared) headers the two prototypes order differently: ui-screens' position
+// wins, even though the declaration values come from schedule-editing.
 const source = new Map([
   ...rules(styleFrom('docs/prototypes/ui-screens.prototype.html')),
   ...rules(styleFrom('docs/prototypes/schedule-editing.prototype.html')),
 ]);
-const actual = rules(readFileSync('src/TaskGuide.Web/src/index.css', 'utf8'));
+const duplicateSelectors = [];
+const actual = rules(readFileSync('src/TaskGuide.Web/src/index.css', 'utf8'), '', new Map(), duplicateSelectors);
 const alias = (selector) => selectorAliases.get(selector) ?? selector;
 const missing = [...source.keys()].filter((selector) => !actual.has(alias(selector)));
 const drifted = [...source].filter(([selector, declMap]) =>
@@ -142,16 +148,19 @@ const unexpected = [...actual.keys()].filter((selector) => !allowedSelectors.has
 // another changes rendering even though the set-based checks above pass.
 // Media-query-prefixed keys participate in this same flat sequence, since
 // @media bodies are recursed into the same map in place.
-const expected = [...source.keys()].map(alias).filter((selector) => actual.has(selector));
+const expected = [...new Set([...source.keys()].map(alias))].filter((selector) => actual.has(selector));
 const expectedSet = new Set(expected);
 const found = [...actual.keys()].filter((selector) => expectedSet.has(selector));
 const outOfOrder = expected.findIndex((selector, index) => found[index] !== selector);
 
-if (missing.length > 0 || unexpected.length > 0 || drifted.length > 0 || outOfOrder >= 0) {
+if (missing.length > 0 || unexpected.length > 0 || drifted.length > 0 || outOfOrder >= 0 || duplicateSelectors.length > 0) {
   const errors = [];
   if (missing.length > 0) errors.push(`missing prototype selectors:\n${missing.join('\n')}`);
   if (drifted.length > 0) errors.push(`declarations differ from prototype:\n${drifted.join('\n')}`);
   if (unexpected.length > 0) errors.push(`unexpected selectors:\n${unexpected.join('\n')}`);
+  if (duplicateSelectors.length > 0) {
+    errors.push(`repeated selectors (index.css must declare each once, so its rule order is well-defined):\n${duplicateSelectors.join('\n')}`);
+  }
   if (outOfOrder >= 0) {
     errors.push(`rule order differs at position ${outOfOrder}: prototype has '${expected[outOfOrder]}', index.css has '${found[outOfOrder]}'`);
   }
