@@ -249,6 +249,12 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
         </label>
       </div>
 
+      <div className="hint" data-group="anchorHint" hidden={value === null}>
+        {value?.anchor === 'completion'
+          ? 'Doing it restarts the clock, so this can never build up a backlog.'
+          : 'The world imposes the date, so a missed one is silently superseded.'}
+      </div>
+
       {/* A completion-anchored Task needs a start point before its first completion. */}
       <div hidden={value?.anchor !== 'completion'} data-group="firstDue">
         <DateEntry label="First due" value={firstDue} onChange={onFirstDueChange} disabled={disabled} />

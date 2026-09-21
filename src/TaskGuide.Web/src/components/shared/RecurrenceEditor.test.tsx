@@ -212,7 +212,7 @@ describe('RecurrenceEditor', () => {
       <RecurrenceEditor value={null} onChange={() => {}} firstDue={null} onFirstDueChange={() => {}} />,
     )
 
-    for (const group of ['everyN', 'weekdays', 'dayOfMonth', 'monthDay', 'firstDue']) {
+    for (const group of ['everyN', 'weekdays', 'dayOfMonth', 'monthDay', 'firstDue', 'anchorHint']) {
       expect(container.querySelector(`[data-group="${group}"]`)).toHaveAttribute('hidden')
     }
   })
@@ -232,6 +232,44 @@ describe('RecurrenceEditor', () => {
     expect(container.querySelector('[data-group="dayOfMonth"]')).toHaveAttribute('hidden')
     expect(container.querySelector('[data-group="monthDay"]')).toHaveAttribute('hidden')
     expect(container.querySelector('[data-group="firstDue"]')).toHaveAttribute('hidden')
+  })
+
+  it('renders the completion-anchor hint sentence for a completion-anchored rule', () => {
+    const { container } = render(
+      <RecurrenceEditor
+        value={{ anchor: 'completion', kind: 'everyNDays', n: 2 }}
+        onChange={() => {}}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    const hint = container.querySelector('[data-group="anchorHint"]')
+    expect(hint).not.toHaveAttribute('hidden')
+    expect(hint).toHaveTextContent('Doing it restarts the clock, so this can never build up a backlog.')
+  })
+
+  it('renders the calendar-anchor hint sentence for a calendar-anchored rule', () => {
+    const { container } = render(
+      <RecurrenceEditor
+        value={{ anchor: 'calendar', kind: 'everyNDays', n: 2 }}
+        onChange={() => {}}
+        firstDue={null}
+        onFirstDueChange={() => {}}
+      />,
+    )
+
+    const hint = container.querySelector('[data-group="anchorHint"]')
+    expect(hint).not.toHaveAttribute('hidden')
+    expect(hint).toHaveTextContent('The world imposes the date, so a missed one is silently superseded.')
+  })
+
+  it('hides the anchor hint group when no rule is set', () => {
+    const { container } = render(
+      <RecurrenceEditor value={null} onChange={() => {}} firstDue={null} onFirstDueChange={() => {}} />,
+    )
+
+    expect(container.querySelector('[data-group="anchorHint"]')).toHaveAttribute('hidden')
   })
 
   it('a sub-field survives a kind change without remounting the select', () => {

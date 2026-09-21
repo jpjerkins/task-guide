@@ -1100,6 +1100,9 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - a rejected keystroke in a `RecurrenceEditor` number field leaves the field showing what was
   typed, not the previous committed value re-inserted ahead of it — clearing "3" and typing "12"
   commits 12, never 312
+- `RecurrenceEditor` shows one of the prototype's two anchor hint sentences, chosen by anchor —
+  completion gets "Doing it restarts the clock…", calendar gets "The world imposes the date…" —
+  and hides the hint group entirely when no rule is set
 
 ### Web-Authoring
 
