@@ -1772,9 +1772,10 @@ specified under **Shared controls** above and are not restated here.
 - each Dimension chipset carries its axis in its accessible name (`role="group"`), since a chip's
   own name is just its value and values repeat across axes
 
-— **reduced scope (#175):** task detail has no `*.screen.tsx` registration and is not reachable
-  in the running app; `registerScreen` carries no Task id and the row tap needs files this ticket
-  does not own. Filed as #180, which owns `App.tsx`, `TasksScreen.tsx` and `screenRegistry.ts`.
+— **reduced scope (#175):** task detail has no `*.screen.tsx` registration; `registerScreen`
+  carries no Task id and the row tap needs files this ticket does not own. Filed as #180, which
+  owns `App.tsx`, `TasksScreen.tsx` and `screenRegistry.ts`. As of #180 it is reachable in the
+  running app, via the task row's title (a push, not a registration).
 
 - `client.ts`'s `fetchTask` normalises `opportunities`/`patternWeekCount` through the same
   int32-as-string/number wire artifact `duration` already carries, keeping `null` as `null`
@@ -1793,6 +1794,10 @@ specified under **Shared controls** above and are not restated here.
 - the sheet renders the Duration bucket the server returned rather than the value it sent, since
   snapping is the server's and always rounds up
 - "Add more details…" carries the typed title into task detail rather than discarding it
+
+— **reduced scope (#180):** not built — `QuickAdd.tsx` is #103's file and this lane can't edit
+  it. The door is `usePush()`; carrying the typed title across it will also need `createTask`
+  (`api/client.ts`) to return the created Task's id, which it does not today.
 
 #### "Right now" on demand
 
