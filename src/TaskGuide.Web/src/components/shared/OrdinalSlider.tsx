@@ -64,8 +64,14 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         value={index}
         disabled={readOnly}
         onChange={(e) => onChange(values[Number(e.target.value)])}
-        onKeyUp={(e) => {
-          if (unset && (e.key === 'ArrowLeft' || e.key === 'Home')) {
+        // While unset, the thumb sits at index 0 — a decrementing key (ArrowLeft, ArrowDown,
+        // Home, PageDown) is a no-op there and the browser fires no `change` for it, so it would
+        // commit nothing. Deliberately keyless rather than listing those keys (#147): a key list
+        // can always be incomplete (or falsified by RTL, where left/right invert), where "any
+        // keystroke while unset commits" cannot be. An incrementing key still commits via its own
+        // `change` event first; a second commit from this handler is idempotent, not wrong.
+        onKeyUp={() => {
+          if (unset) {
             onChange(values[index])
           }
         }}

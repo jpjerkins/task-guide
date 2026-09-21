@@ -100,13 +100,43 @@ describe('OrdinalSlider', () => {
     expect(onChange).toHaveBeenCalledWith('whisper')
   })
 
-  it('commits the least value from the keyboard while unset', () => {
+  it('commits the value it is showing from any keystroke while unset, not just a chosen key list (#147)', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
     fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowLeft' })
 
     expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
+  // #147: ArrowDown is a decrementing key too, but the range input parked at index 0 fires no
+  // `change` for it (same as ArrowLeft/Home) — the old key-list guard missed it. The fix is
+  // deliberately keyless, so any key the guard used to miss now commits too.
+  it('commits from unset on a key the old ArrowLeft/Home-only guard missed (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowDown' })
+
+    expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
+  it('does not re-commit on keyUp once a value is already set (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'ArrowDown' })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('committing on keyUp while unset does not remount the slider (#147)', () => {
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
+
+    const el = screen.getByLabelText('Volume')
+    fireEvent.keyUp(el, { key: 'ArrowDown' })
+
+    expect(screen.getByLabelText('Volume')).toBe(el)
   })
 
   it('does not commit a pointer release that did not start on the slider', () => {

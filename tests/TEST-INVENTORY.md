@@ -1088,6 +1088,11 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - committing index 0 while unset (no `change` event fires, since the thumb already sits there) on
   `pointerUp` still commits the least value, without remounting the slider or double-committing
   once a value is already set
+- while unset, ANY keystroke on the focused slider commits the value it is showing (#147) —
+  deliberately keyless, not a decrementing-key list, because a range parked at index 0 fires no
+  `change` for ArrowLeft/ArrowDown/Home/PageDown alike; a key the old ArrowLeft/Home-only guard
+  missed (ArrowDown) now commits too, without remounting the slider or double-committing once a
+  value is already set
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
