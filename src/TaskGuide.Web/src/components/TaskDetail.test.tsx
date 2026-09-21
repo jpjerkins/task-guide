@@ -359,6 +359,39 @@ describe('TaskDetail — form', () => {
     })
   })
 
+  it('Save excludes `duration` from the dimensions payload — the server rejects it there', async () => {
+    // TaskEndpoints.ToResponse builds `dimensions` from Task.Tags.Dimensions, and Duration IS a
+    // declared Dimension (KnownDimensions.Default), so any Task with a Duration arrives with
+    // `dimensions: { duration: [...], ... }` on the wire. UpdateTaskDetails.Invalid refuses a
+    // write whose `dimensions` still carries that key ("duration belongs in the duration field") —
+    // so every Task with a Duration (every Active Task) would fail Save if it were sent verbatim.
+    const fetchMock = makeFetchMock({
+      taskResponses: [
+        rawTask({ title: 'A task', duration: '30', dimensions: { duration: ['30'], location: ['home'] } }),
+        rawTask({ title: 'A task', duration: '30', dimensions: { duration: ['30'], location: ['home'] } }),
+      ],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1' && init?.method === 'PUT',
+          response: new Response(null, { status: 204 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    await screen.findByDisplayValue('A task')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => {
+      const putCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/tasks/1' && init?.method === 'PUT')
+      expect(putCall).toBeDefined()
+      const body = JSON.parse((putCall as [string, RequestInit])[1].body as string)
+      expect(body.dimensions).toEqual({ location: ['home'] })
+    })
+  })
+
   it("a refused Save renders the server's reason in the alert note", async () => {
     const fetchMock = makeFetchMock({
       taskResponses: [rawTask({ title: 'A task' }), rawTask({ title: 'A task' })],

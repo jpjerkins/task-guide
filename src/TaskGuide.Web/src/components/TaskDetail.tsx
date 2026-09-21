@@ -20,6 +20,18 @@ function durLabel(bucket: string) {
   return Number.isNaN(Number(bucket)) ? 'Longer' : `${bucket}m`
 }
 
+// TaskEndpoints.ToResponse builds `dimensions` from Task.Tags.Dimensions, and Duration IS a
+// declared Dimension (KnownDimensions.Default) — for the window side of matching — so a Task's
+// raw wire `dimensions` can carry a `duration` key. The Duration *field* on this form is authored
+// separately (the chipset), and UpdateTaskDetails.Invalid refuses a write whose `dimensions` still
+// carries that key ("duration belongs in the duration field"). Stripped here, at the one place the
+// write payload is built, rather than trusting `pickableDimensions` (which only keeps it off the
+// render) to keep it out of every path that touches `dims`.
+function withoutDurationKey(dims: Record<string, string[]>): Record<string, string[]> {
+  const { duration: _duration, ...rest } = dims
+  return rest
+}
+
 const OFFSET_UNITS = [
   { value: 0, label: 'Days' },
   { value: 1, label: 'Weeks' },
@@ -151,7 +163,7 @@ function TaskForm({
     setNote(null)
     setBusy(true)
     try {
-      await saveTaskDetails(taskId, { title, notes, duration, deadline, dimensions: dims })
+      await saveTaskDetails(taskId, { title, notes, duration, deadline, dimensions: withoutDurationKey(dims) })
     } catch (err) {
       setNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't save.")
     }
