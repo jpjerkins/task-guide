@@ -69,9 +69,16 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // commit nothing. Deliberately keyless rather than listing those keys (#147): a key list
         // can always be incomplete (or falsified by RTL, where left/right invert), where "any
         // keystroke while unset commits" cannot be. An incrementing key still commits via its own
-        // `change` event first; a second commit from this handler is idempotent, not wrong.
-        onKeyUp={() => {
-          if (unset) {
+        // `change` event first, and this handler then sees `unset === false` and does nothing —
+        // which assumes the parent applies `onChange` synchronously; a parent that defers it
+        // (an awaited API call, a `startTransition`, a clamp or rejection) would still see
+        // `unset && index === 0` here and downgrade the selection to `values[0]`.
+        // Tab is excluded (#147): `keyup` fires on the element focused AT keyup time, not
+        // keydown time, so tabbing INTO an unset slider would otherwise commit values[0] on a
+        // control the user never touched. Excluding it can't reintroduce the incompleteness this
+        // handler exists to avoid — Tab never adjusts a range input, it's focus navigation.
+        onKeyUp={(e) => {
+          if (unset && e.key !== 'Tab') {
             onChange(values[index])
           }
         }}

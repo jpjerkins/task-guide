@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { OrdinalSlider } from './OrdinalSlider'
 
@@ -121,6 +122,19 @@ describe('OrdinalSlider', () => {
     expect(onChange).toHaveBeenCalledWith('whisper')
   })
 
+  // #147: keyup is dispatched to the element focused AT keyup time, not keydown time. Tabbing
+  // INTO a slider fires keydown on the element being left, then keyup lands on the slider — so
+  // without this exclusion, tabbing over an unset slider would commit values[0] on a control the
+  // user never touched.
+  it('does not commit on Tab landing on an unset slider (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    fireEvent.keyUp(screen.getByLabelText('Volume'), { key: 'Tab' })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('does not re-commit on keyUp once a value is already set (#147)', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
@@ -131,12 +145,22 @@ describe('OrdinalSlider', () => {
   })
 
   it('committing on keyUp while unset does not remount the slider (#147)', () => {
-    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
+    // A parent that ignores onChange can't tell a remount from a no-op re-render, so this wraps
+    // a stateful parent that actually applies the commit — proving the input survives a real
+    // value-prop change, not just an event that nothing downstream reacted to.
+    function StatefulSlider() {
+      const [value, setValue] = useState<string | null>(null)
+      return <OrdinalSlider label="Volume" values={VALUES} value={value} defaultValue="normal" onChange={setValue} />
+    }
+    render(<StatefulSlider />)
 
     const el = screen.getByLabelText('Volume')
+    expect(screen.getByText(/Nothing chosen/)).toBeInTheDocument()
+
     fireEvent.keyUp(el, { key: 'ArrowDown' })
 
     expect(screen.getByLabelText('Volume')).toBe(el)
+    expect(screen.getByText('Set to whisper.')).toBeInTheDocument()
   })
 
   it('does not commit a pointer release that did not start on the slider', () => {
