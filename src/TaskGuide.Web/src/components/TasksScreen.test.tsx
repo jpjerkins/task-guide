@@ -290,6 +290,23 @@ describe('TasksScreen', () => {
       expect(screen.queryByRole('link')).not.toBeInTheDocument()
     })
 
+    it('a Done Task strikes its title and disables its tick — re-tapping cannot double-complete it', async () => {
+      const user = userEvent.setup()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse([rawTask({ id: '1', title: 'Done task', status: 'done', duration: '10' })]),
+        ),
+      )
+      render(<TasksScreen />)
+      await user.click(await screen.findByRole('button', { name: /^Done /i }))
+
+      const tick = await screen.findByRole('button', { name: /mark done task done/i })
+      expect(tick).toBeDisabled()
+      expect(tick).toHaveAttribute('data-done', '1')
+      expect(screen.getByText('Done task')).toHaveStyle({ textDecoration: 'line-through' })
+    })
+
     it('a deferred Task is present in this list, marked with its surface date, so it stays findable', async () => {
       vi.stubGlobal(
         'fetch',

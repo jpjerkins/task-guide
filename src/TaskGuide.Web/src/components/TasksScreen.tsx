@@ -208,16 +208,26 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                   <div className="row" key={t.id} style={postponed ? { opacity: 0.45 } : undefined}>
                     <button
                       className="tick"
+                      data-done={t.status === 'done' ? 1 : 0}
                       aria-label={`Mark ${t.title} done`}
                       // ADR-0007: Unprocessed IS the absence of a Duration, so there is nothing
-                      // yet to be done within.
-                      disabled={t.duration === null || busyIds.has(t.id)}
+                      // yet to be done within. `DELETE .../completions/{due}` is a NoContent
+                      // stub (no un-complete path), and a second POST on an already-Done Task
+                      // would append a duplicate completion, re-anchoring a completion-anchored
+                      // Recurrence's next instance — so Done disables the tick rather than
+                      // toggling it.
+                      disabled={t.status === 'done' || t.duration === null || busyIds.has(t.id)}
                       onClick={() => handleMarkOff(t.id, t.title)}
                     >
                       ✓
                     </button>
                     <div className="body">
-                      <div className="title">{t.title}</div>
+                      <div
+                        className="title"
+                        style={t.status === 'done' ? { opacity: 0.45, textDecoration: 'line-through' } : undefined}
+                      >
+                        {t.title}
+                      </div>
                       <div className="meta">
                         {t.duration !== null ? (
                           <span className="pill dur">{durLabel(t.duration)}</span>

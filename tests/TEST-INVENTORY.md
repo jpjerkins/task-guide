@@ -1694,6 +1694,8 @@ specified under **Shared controls** above and are not restated here.
   whether it's elapsed is read off `eligible`, never a client-side comparison against today (there
   is no client-side clock, § *Web-Now*'s standing rule)
 - an **elapsed** Defer renders with no "surfaces" pill, for the same reason
+- a `Done` Task strikes its title and disables its tick — there is no un-complete path
+  (`DELETE .../completions/{due}` is a stub), so re-tapping must not be able to double-complete it
 - a failed write's note (mark-off or postpone) renders outside the ready-state body, at the top
   of the scroll, naming the Task — so it survives a reload that also fails, rather than vanishing
   with the rows it would otherwise render inside (#102's rule, TriageScreen.tsx's taskActionNote)
