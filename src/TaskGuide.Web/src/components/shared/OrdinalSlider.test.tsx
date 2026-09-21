@@ -273,6 +273,22 @@ describe('OrdinalSlider', () => {
   // Phil's call, 2026-09-21: provenance alone stops traversal commits, but a key aimed at the
   // form — Enter to submit, Escape to dismiss, Ctrl+S — still starts and ends on a focused,
   // untouched slider. Require the key be one a range input actually responds to.
+  // #147 (4th review pass): keyup cleared keyStartedOnSlider for ANY key, so Shift+Home's Shift
+  // release (before Home's) wiped provenance and Home's own keyup then saw it false and swallowed
+  // the commit — the whole keystroke did nothing. Only a RANGE_KEYS key's release should clear it.
+  it('commits on Shift+Home even though Shift releases first (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'Shift' })
+    fireEvent.keyDown(slider, { key: 'Home', shiftKey: true })
+    fireEvent.keyUp(slider, { key: 'Shift' })
+    fireEvent.keyUp(slider, { key: 'Home' })
+
+    expect(onChange).toHaveBeenCalledWith('whisper')
+  })
+
   it('does not commit on Enter (key not aimed at the slider) (#147)', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)

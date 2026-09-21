@@ -112,7 +112,9 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
           ) {
             onChange(values[index])
           }
-          keyStartedOnSlider.current = false
+          if (RANGE_KEYS.includes(e.key)) {
+            keyStartedOnSlider.current = false
+          }
         }}
         onBlur={() => {
           keyStartedOnSlider.current = false
