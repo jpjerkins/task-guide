@@ -22,10 +22,13 @@ interface OrdinalSliderProps {
 // chipset, not a checkbox, matching the prototype and our existing `.chipset button[aria-pressed]`
 // styling. Clicking it always commits null (it is an action, like the prototype's, not a
 // two-state toggle you press again to undo). While unset, the slider dims (a class, not inline
-// style) and shows index 0. Duration declares no default, so that control is simply absent.
+// style) and shows index 0. The "Leave at the default" toggle is absent without a declared
+// default, but the chipset still renders while unset to carry the "Use <least value>" button
+// (#147) — the only way a no-default (Duration) slider can ever commit its least value.
 export function OrdinalSlider({ label, values, value, onChange, defaultValue, readOnly, id }: OrdinalSliderProps) {
   const pointerStartedOnSlider = useRef(false)
   const changedDuringGesture = useRef(false)
+  const inputRef = useRef<HTMLInputElement>(null)
   const hasDefault = defaultValue !== undefined && defaultValue !== null
   // A value not present in `values` (indexOf === -1) falls back to the unset presentation too —
   // otherwise React writes value="-1" on the input, the browser clamps the visible thumb to
@@ -38,8 +41,8 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
   let hint: string
   if (unset) {
     hint = hasDefault
-      ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Drag it or use the button below to commit a value.`
-      : 'Not set.'
+      ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Drag it, or press "Use ${values[0]}", to commit a value.`
+      : `Not set. Drag the slider, or press "Use ${values[0]}", to commit a value.`
   } else {
     hint = `Set to ${value}.`
   }
@@ -49,25 +52,31 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
       <div className="lbl">{label}</div>
       {(hasDefault || unset) && (
         // Five review rounds tried to make a keyboard keystroke commit an unset slider and each
-        // found another key/ordering that fired wrongly (Tab, Shift+Tab, Enter/Escape, Cmd+arrow,
-        // modifier-release-order) — #147's final call was to delete that path entirely. A button
-        // is keyboard-reachable by construction, so it replaces the keyboard commit path outright.
-        // The chipset must render even with no default (Duration) — that's the only way an unset,
-        // no-default slider can ever commit its least value at all.
+        // found another key/ordering that fired wrongly — #147's final call was to delete that
+        // path and replace it with this button, keyboard-reachable by construction. It's an
+        // authoring affordance only: readOnly viewers (DimensionsScreen) can't act on it, so it's
+        // suppressed there rather than shown disabled and dead.
         <div className="chipset">
           {hasDefault && (
             <button type="button" aria-pressed={unset} disabled={readOnly} onClick={() => onChange(null)}>
               Leave at the default ({defaultValue})
             </button>
           )}
-          {unset && (
-            <button type="button" disabled={readOnly} onClick={() => onChange(values[0])}>
+          {unset && !readOnly && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(values[0])
+                inputRef.current?.focus()
+              }}
+            >
               Use {values[0]}
             </button>
           )}
         </div>
       )}
       <input
+        ref={inputRef}
         className={unset ? 'range unset' : 'range'}
         type="range"
         aria-label={label}
@@ -92,14 +101,20 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // hasn't re-rendered with the new value yet, `unset` here is still true and pointerUp
         // would fire a second, wrong onChange(values[0]) on top of it.
         onPointerDown={() => {
+          // Only a fresh gesture (no prior pointerdown pending) resets the guard — a second
+          // pointerdown mid-gesture (a stray pointer, a second finger) must not clear it, or it
+          // defeats the downgrade guard below the same way the keyboard path's old bugs did.
+          if (!pointerStartedOnSlider.current) {
+            changedDuringGesture.current = false
+          }
           pointerStartedOnSlider.current = true
-          changedDuringGesture.current = false
         }}
         onPointerUp={() => {
           if (unset && pointerStartedOnSlider.current && !changedDuringGesture.current) {
             onChange(values[index])
           }
           pointerStartedOnSlider.current = false
+          changedDuringGesture.current = false
         }}
         onPointerCancel={() => {
           pointerStartedOnSlider.current = false

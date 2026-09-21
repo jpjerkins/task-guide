@@ -1,8 +1,17 @@
+import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { OrdinalSlider } from './OrdinalSlider'
 
 const VALUES = ['whisper', 'quiet', 'normal', 'loud'] as const
+
+// A controlled parent that actually applies onChange, standing in for a real caller — needed
+// whenever a test must observe `unset` really flipping (the component itself never reads its own
+// prop back).
+function Controlled({ initial = null as string | null }) {
+  const [value, setValue] = useState<string | null>(initial)
+  return <OrdinalSlider label="Volume" values={VALUES} value={value} defaultValue="normal" onChange={setValue} />
+}
 
 describe('OrdinalSlider', () => {
   it('renders a labelled tick for every value, in order', () => {
@@ -90,13 +99,6 @@ describe('OrdinalSlider', () => {
     expect(screen.getByRole('button', { name: /leave at the default/i })).toBeInTheDocument()
   })
 
-  it('renders the "Use <least value>" button disabled when read-only', () => {
-    render(
-      <OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} readOnly />,
-    )
-
-    expect(screen.getByRole('button', { name: 'Use whisper' })).toBeDisabled()
-  })
 
   it('dims the slider (a class, not inline style) and shows index 0 while unset', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
@@ -113,7 +115,17 @@ describe('OrdinalSlider', () => {
     )
 
     expect(container.querySelector('.hint')?.textContent).toBe(
-      'Nothing chosen — the slider is showing whisper but the task carries the default. Drag it or use the button below to commit a value.',
+      'Nothing chosen — the slider is showing whisper but the task carries the default. Drag it, or press "Use whisper", to commit a value.',
+    )
+  })
+
+  // Review finding 5: the no-default case is the one where the button is the *only* way to
+  // commit values[0] (no "Leave at the default" fallback exists), so its hint must name it too.
+  it('the no-default hint names the "Use <least value>" button', () => {
+    const { container } = render(<OrdinalSlider label="Duration" values={VALUES} value={null} onChange={() => {}} />)
+
+    expect(container.querySelector('.hint')?.textContent).toBe(
+      'Not set. Drag the slider, or press "Use whisper", to commit a value.',
     )
   })
 
@@ -231,5 +243,46 @@ describe('OrdinalSlider', () => {
     fireEvent.click(screen.getByRole('button', { name: /leave at the default/i }))
 
     expect(screen.getByLabelText('Volume')).toBe(el)
+  })
+
+  // Review finding 1: a second pointerdown mid-gesture (a stray pointer, a second finger) must not
+  // reset `changedDuringGesture` — otherwise, with a deferring parent, a click at index 2 fires
+  // `change` -> onChange('normal'), the second pointerdown clears the guard, and pointerUp fires a
+  // downgrading onChange('whisper') on top of it.
+  it('a second pointerdown mid-gesture does not defeat the downgrade guard', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.pointerDown(slider)
+    fireEvent.change(slider, { target: { value: '2' } })
+    fireEvent.pointerDown(slider)
+    fireEvent.pointerUp(slider)
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('normal')
+  })
+
+  // Review finding 2: the "Use <least value>" button is the sole replacement for the deleted
+  // keyboard commit path, so it must not drop focus when it unmounts on activation.
+  it('moves focus to the slider when the "Use <least value>" button commits and unmounts', () => {
+    render(<Controlled />)
+
+    const button = screen.getByRole('button', { name: 'Use whisper' })
+    button.focus()
+    fireEvent.click(button)
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Volume'))
+  })
+
+  // Review finding 7: DimensionsScreen's read-only catalog always passes value={null}, so `unset`
+  // is permanently true there — a disabled action that can never fire is dead UI on a read-only
+  // viewer.
+  it('does not render the "Use <least value>" button when read-only', () => {
+    render(
+      <OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} readOnly />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Use whisper' })).not.toBeInTheDocument()
   })
 })
