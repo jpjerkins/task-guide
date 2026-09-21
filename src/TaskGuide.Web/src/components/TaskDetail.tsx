@@ -105,6 +105,11 @@ function fitBar(task: Task, dimensions: DimensionResponse[], today: string) {
       <span className="which">No single property is to blame; the combination has no home in this pattern</span>
     )
 
+  // .fitbar is position: sticky with padding, a background and a border — with both blocks empty
+  // (a deferred/postponed, non-orphan Active Task; any `done` Task) it would otherwise pin a blank
+  // grey band to the top of the screen. Same precedent as the `stale` arm above.
+  if (countBlock === null && orphanBlock === null) return null
+
   return (
     <div className="fitbar">
       {countBlock}

@@ -156,6 +156,18 @@ describe('TaskDetail — fit bar', () => {
     expect(screen.queryByText(/nothing is wrong with the task/i)).not.toBeInTheDocument()
   })
 
+  it('renders no .fitbar element at all when neither the count nor the orphan reading has anything to say', async () => {
+    // .fitbar is position: sticky with padding, a background and a border — with both blocks
+    // empty (a deferred/postponed, non-orphan Active Task) it would otherwise pin a blank grey
+    // band to the top of the screen. Same precedent as the `stale` arm just above, which already
+    // returns null rather than an empty container.
+    stub(rawTask({ eligible: false, defer: '2026-10-01', opportunities: null, patternWeekCount: 4, zeroKind: null }))
+    const { container } = render(<TaskDetail taskId="1" />)
+
+    await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument())
+    expect(container.querySelector('.fitbar')).not.toBeInTheDocument()
+  })
+
   it('a deferred Task with an orphan patternWeekCount still renders the orphan reading', async () => {
     stub(
       rawTask({
