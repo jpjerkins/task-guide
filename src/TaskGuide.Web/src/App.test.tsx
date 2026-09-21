@@ -3,6 +3,49 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { registerQuickAction, registerScreen, resetRegistry, usePush } from './components/shared/screenRegistry'
 import { ScreenNav } from './components/shared/ScreenNav'
+import { TasksScreen } from './components/TasksScreen'
+
+// Full raw wire TaskResponse — copied from TasksScreen.test.tsx/TaskDetail.test.tsx's rawTask
+// rather than imported, same reasoning those two files give for not sharing fixtures.
+function rawTask(overrides: Record<string, unknown> = {}) {
+  return {
+    id: '1',
+    title: 'Water the plants',
+    notes: null,
+    duration: 10,
+    dimensions: {},
+    looseTags: [],
+    createdAt: '2026-09-01T00:00:00Z',
+    status: 'active',
+    eligible: true,
+    deadline: null,
+    defer: null,
+    postpone: null,
+    recurring: false,
+    derived: false,
+    opportunities: null,
+    patternWeekCount: null,
+    zeroKind: null,
+    orphanBlameDimensions: [],
+    ...overrides,
+  }
+}
+
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+}
+
+// Routes the three endpoints the real TasksScreen -> TaskDetail seam hits, off one fetch mock.
+function stubTaskEndpoints(task: Record<string, unknown>) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url === '/api/tasks/1') return Promise.resolve(jsonResponse(task))
+      if (url === '/api/dimensions') return Promise.resolve(jsonResponse([]))
+      return Promise.resolve(jsonResponse([task]))
+    }),
+  )
+}
 
 // Resetting here means the real `screens/tasks.screen.tsx` wiring (App's eager glob runs its
 // registerScreen() exactly once, on this file's first import, before this very first beforeEach)
@@ -232,6 +275,30 @@ describe('App', () => {
 
       expect(screen.queryByText('Pushed Content')).not.toBeInTheDocument()
       expect(screen.getByText('Push it')).toBeInTheDocument()
+    })
+
+    // The tests above all push a fake screen, so a real TaskDetail that crashes on mount or a
+    // BackProvider miswiring would still pass them. This one wires the real TasksScreen (not the
+    // ./screens/tasks.screen glob — this file's beforeEach resets the registry, so registering it
+    // here is the only way it's live for this test) and drives the actual seam end to end.
+    it('opens the real task detail from a real task row, and its back control returns to the real list', async () => {
+      stubTaskEndpoints(rawTask({ id: '1', title: 'Water the plants' }))
+      registerScreen({ id: 'tasks-real', tab: 'tasks', title: 'Tasks', render: () => <TasksScreen /> })
+      render(<App />)
+
+      const title = await screen.findByRole('button', { name: 'Open Water the plants' })
+      fireEvent.click(title)
+
+      // TaskDetail's own ScreenNav title, and its Title field carrying the fetched Task's title —
+      // proof the pushed node is the real component, not just something shaped like it.
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'Task' })).toBeInTheDocument())
+      expect(screen.getByDisplayValue('Water the plants')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Open Water the plants' })).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '‹ Tasks' }))
+
+      expect(await screen.findByRole('button', { name: 'Open Water the plants' })).toBeInTheDocument()
+      expect(screen.queryByDisplayValue('Water the plants')).not.toBeInTheDocument()
     })
   })
 

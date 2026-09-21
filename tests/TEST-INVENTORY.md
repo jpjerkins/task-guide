@@ -1721,6 +1721,13 @@ specified under **Shared controls** above and are not restated here.
 - a task row opens that task's detail as a pushed screen, with a back control to the list
 - the pushed screen replaces the tab's own screen and the tab bar stays — it is a push, not a route
 - switching tabs drops the pushed screen, so a tab never reopens someone else's detail
+- opens the real task detail from a real task row, and its back control returns to the real list
+  — every other push test here pushes a fake screen, which would still pass a `TaskDetail` that
+  crashes on mount or a `BackProvider` miswiring; this one drives the real `TasksScreen` ->
+  `TaskDetail` seam end to end
+
+— **reduced scope (#180):** task detail has no cold-linkable `/tasks/{id}` URL, deliberately —
+  unlike the Reminder landing page, nothing outside the app links to it.
 
 #### Task detail
 
