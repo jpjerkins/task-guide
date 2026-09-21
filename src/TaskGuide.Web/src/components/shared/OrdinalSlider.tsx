@@ -22,9 +22,10 @@ interface OrdinalSliderProps {
 // chipset, not a checkbox, matching the prototype and our existing `.chipset button[aria-pressed]`
 // styling. Clicking it always commits null (it is an action, like the prototype's, not a
 // two-state toggle you press again to undo). While unset, the slider dims (a class, not inline
-// style) and shows index 0. The "Leave at the default" toggle is absent without a declared
-// default, but the chipset still renders while unset to carry the "Use <least value>" button
-// (#147) — the only way a no-default (Duration) slider can ever commit its least value.
+// style) and shows index 0. The chipset also carries the "Use <least value>" button (#147) — the
+// only way a no-default (Duration) slider can ever commit its least value — but only for an
+// authoring viewer: readOnly (DimensionsScreen) suppresses it, so the chipset doesn't render at
+// all there while unset and no default is declared.
 export function OrdinalSlider({ label, values, value, onChange, defaultValue, readOnly, id }: OrdinalSliderProps) {
   const pointerStartedOnSlider = useRef(false)
   const changedDuringGesture = useRef(false)
@@ -41,7 +42,9 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
   let hint: string
   if (unset) {
     if (readOnly) {
-      hint = hasDefault ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default.` : 'Not set.'
+      hint = hasDefault
+        ? `Nothing chosen — the slider is showing ${values[0]}; the declared default is ${defaultValue}.`
+        : 'Not set.'
     } else {
       hint = hasDefault
         ? `Nothing chosen — the slider is showing ${values[0]} but the task carries the default. Drag it, or press "Use ${values[0]}", to commit a value.`
@@ -104,14 +107,18 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // transition): a click at index 2 fires `change` -> onChange('normal'), but if the parent
         // hasn't re-rendered with the new value yet, `unset` here is still true and pointerUp
         // would fire a second, wrong onChange(values[0]) on top of it.
-        onPointerDown={() => {
+        onPointerDown={(e) => {
           // Conditional on purpose, not unconditional and not absent. A native range still fires
           // `change` on arrow keys even though #147 deleted our key handlers, so a bare `change`
           // outside any gesture (a keyboard edit) can leave `changedDuringGesture` stale true —
           // this reset clears it before the next gesture starts. But it must run only on a FRESH
           // gesture: a second pointerdown mid-gesture (a stray pointer, a second finger) must not
           // clear a `change` that already fired, or it defeats the downgrade guard below.
-          if (!pointerStartedOnSlider.current) {
+          // `isPrimary` (not `pointerStartedOnSlider`) tells fresh from mid-gesture: it's true for
+          // every gesture's first pointer (including a right-click), so a pointerdown with no
+          // matching pointerup — the release a context menu eats — can't wedge the next gesture's
+          // reset off the way a flag only pointerup/pointercancel clear could.
+          if (e.isPrimary) {
             changedDuringGesture.current = false
           }
           pointerStartedOnSlider.current = true

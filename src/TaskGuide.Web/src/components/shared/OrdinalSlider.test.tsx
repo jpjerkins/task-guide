@@ -146,7 +146,7 @@ describe('OrdinalSlider', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
     const slider = screen.getByLabelText('Volume')
-    fireEvent.pointerDown(slider)
+    fireEvent.pointerDown(slider, { isPrimary: true })
     fireEvent.pointerUp(slider)
 
     expect(onChange).toHaveBeenCalledWith('whisper')
@@ -165,7 +165,7 @@ describe('OrdinalSlider', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={() => {}} />)
 
     const el = screen.getByLabelText('Volume')
-    fireEvent.pointerDown(el)
+    fireEvent.pointerDown(el, { isPrimary: true })
     fireEvent.pointerUp(el)
 
     expect(screen.getByLabelText('Volume')).toBe(el)
@@ -176,7 +176,7 @@ describe('OrdinalSlider', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value="quiet" defaultValue="normal" onChange={onChange} />)
 
     const slider = screen.getByLabelText('Volume')
-    fireEvent.pointerDown(slider)
+    fireEvent.pointerDown(slider, { isPrimary: true })
     fireEvent.pointerUp(slider)
 
     expect(onChange).not.toHaveBeenCalled()
@@ -191,7 +191,7 @@ describe('OrdinalSlider', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
     const slider = screen.getByLabelText('Volume')
-    fireEvent.pointerDown(slider)
+    fireEvent.pointerDown(slider, { isPrimary: true })
     fireEvent.change(slider, { target: { value: '2' } })
     fireEvent.pointerUp(slider)
 
@@ -254,7 +254,7 @@ describe('OrdinalSlider', () => {
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
 
     const slider = screen.getByLabelText('Volume')
-    fireEvent.pointerDown(slider)
+    fireEvent.pointerDown(slider, { isPrimary: true })
     fireEvent.change(slider, { target: { value: '2' } })
     fireEvent.pointerDown(slider)
     fireEvent.pointerUp(slider)
@@ -303,7 +303,7 @@ describe('OrdinalSlider', () => {
     )
 
     expect(container.querySelector('.hint')?.textContent).toBe(
-      'Nothing chosen — the slider is showing whisper but the task carries the default.',
+      'Nothing chosen — the slider is showing whisper; the declared default is normal.',
     )
     expect(screen.getByRole('button', { name: /leave at the default \(normal\)/i })).toBeDisabled()
     expect(screen.queryByRole('button', { name: /use whisper/i })).not.toBeInTheDocument()
@@ -333,7 +333,30 @@ describe('OrdinalSlider', () => {
 
     // A complete gesture with no `change` — dragging straight to index 0 — must still commit the
     // least value on this still-unset slider (the parent below never applies onChange).
-    fireEvent.pointerDown(slider)
+    fireEvent.pointerDown(slider, { isPrimary: true })
+    fireEvent.pointerUp(slider)
+
+    expect(onChange).toHaveBeenLastCalledWith('whisper')
+  })
+
+  // Review finding 1 (8th pass): a pointerdown with no matching pointerup on the input — a
+  // right-click, whose release the context menu consumes — must not wedge
+  // `pointerStartedOnSlider` true forever. If it does, the NEXT gesture's own pointerdown sees
+  // `pointerStartedOnSlider.current` already true, skips the `changedDuringGesture` reset, and a
+  // stale-true flag from the abandoned gesture blocks that next gesture's commit.
+  it('a pointerdown with no release (a right-click) does not wedge the next gesture out', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    // The abandoned gesture: pointerdown, a change, then no pointerup/pointercancel at all — the
+    // context menu ate the release.
+    fireEvent.pointerDown(slider, { isPrimary: true })
+    fireEvent.change(slider, { target: { value: '2' } })
+
+    // A complete fresh gesture with no `change` — dragging straight to index 0 — on a slider the
+    // parent left unset (it ignores onChange).
+    fireEvent.pointerDown(slider, { isPrimary: true })
     fireEvent.pointerUp(slider)
 
     expect(onChange).toHaveBeenLastCalledWith('whisper')
