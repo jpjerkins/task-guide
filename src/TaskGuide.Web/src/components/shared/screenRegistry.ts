@@ -75,9 +75,14 @@ export interface PushedScreen {
 // A push must be callable from any screen without that screen importing App.tsx (which renders
 // the push slot) — importing App from a screen would be an import cycle, the same hazard this
 // file's registerScreen/registerQuickAction exist to avoid. This is the one shared file #180
-// owns, so the context lives here rather than on ScreenNav.tsx. Default is a no-op so a screen
-// rendered outside App (every component test) still renders instead of throwing on a null context.
-export const PushContext = createContext<(screen: PushedScreen) => void>(() => {})
+// owns, so the context lives here rather than on ScreenNav.tsx. The default throws only when
+// *called*, not on read: registerScreen and registerQuickAction both throw on misuse so a lane
+// can't silently lose a wiring, and a no-op default would break that convention by swallowing a
+// click with no error. Reading the context stays safe (it's a plain function value) so every
+// component test that renders a screen but never clicks its push button still renders.
+export const PushContext = createContext<(screen: PushedScreen) => void>(() => {
+  throw new Error('usePush: no PushContext provider — a screen was rendered outside App')
+})
 
 export function usePush(): (screen: PushedScreen) => void {
   return useContext(PushContext)
