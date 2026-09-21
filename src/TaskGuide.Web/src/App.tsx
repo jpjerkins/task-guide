@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { PlaceholderScreen } from './components/PlaceholderScreen'
 import { ReminderPage } from './components/ReminderPage'
 import { TabBar, type Tab } from './components/TabBar'
-import { installHmrGuard, screensFor } from './components/shared/screenRegistry'
+import { installHmrGuard, PushContext, screensFor, type PushedScreen } from './components/shared/screenRegistry'
 import { BackProvider, ScreenNav } from './components/shared/ScreenNav'
 import { parseReminderRoute } from './reminderRoute'
 
@@ -26,6 +26,9 @@ const TAB_TITLES: Record<Tab, string> = {
 export default function App() {
   const [tab, setTab] = useState<Tab>('tasks')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // One-deep push, not a stack — #180. A screen is pushed on top of whichever tab is active,
+  // replacing that tab's own content; switching tabs clears it rather than carrying it along.
+  const [pushed, setPushed] = useState<PushedScreen | null>(null)
   const reminderRoute = parseReminderRoute(window.location.pathname)
 
   if (reminderRoute) {
@@ -41,10 +44,15 @@ export default function App() {
   function changeTab(next: Tab) {
     setTab(next)
     setSelectedId(null)
+    setPushed(null)
   }
 
   let content
-  if (screens.length === 0) {
+  if (pushed) {
+    // The pushed screen renders its own ScreenNav, exactly as the ad-hoc index's selected screen
+    // does — the shell must not wrap it in a second one.
+    content = <BackProvider value={{ label: pushed.backLabel, onBack: () => setPushed(null) }}>{pushed.node}</BackProvider>
+  } else if (screens.length === 0) {
     content = <PlaceholderScreen title={TAB_TITLES[tab]} />
   } else if (screens.length === 1) {
     content = screens[0].render()
@@ -76,8 +84,10 @@ export default function App() {
 
   return (
     <div className="device">
-      {content}
-      <TabBar active={tab} onChange={changeTab} />
+      <PushContext.Provider value={setPushed}>
+        {content}
+        <TabBar active={tab} onChange={changeTab} />
+      </PushContext.Provider>
     </div>
   )
 }

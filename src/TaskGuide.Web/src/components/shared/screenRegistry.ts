@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 
 // The tab identifiers the shell renders. Owned here (not TabBar.tsx) so the registry has no
 // import-cycle back to the component that consumes it; TabBar re-exports this type so existing
@@ -65,6 +65,22 @@ export function registerQuickAction(render: () => ReactNode): void {
 
 export function quickAction(): (() => ReactNode) | null {
   return quickActionRenderer
+}
+
+export interface PushedScreen {
+  node: ReactNode
+  backLabel: string
+}
+
+// A push must be callable from any screen without that screen importing App.tsx (which renders
+// the push slot) — importing App from a screen would be an import cycle, the same hazard this
+// file's registerScreen/registerQuickAction exist to avoid. This is the one shared file #180
+// owns, so the context lives here rather than on ScreenNav.tsx. Default is a no-op so a screen
+// rendered outside App (every component test) still renders instead of throwing on a null context.
+export const PushContext = createContext<(screen: PushedScreen) => void>(() => {})
+
+export function usePush(): (screen: PushedScreen) => void {
+  return useContext(PushContext)
 }
 
 // Test-only seam so registrations from one test don't leak into the next.

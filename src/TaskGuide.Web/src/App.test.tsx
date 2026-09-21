@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { registerQuickAction, registerScreen, resetRegistry } from './components/shared/screenRegistry'
+import { registerQuickAction, registerScreen, resetRegistry, usePush } from './components/shared/screenRegistry'
 import { ScreenNav } from './components/shared/ScreenNav'
 
 // Resetting here means the real `screens/tasks.screen.tsx` wiring (App's eager glob runs its
@@ -160,6 +160,75 @@ describe('App', () => {
 
     goTo('Now')
     expect(screen.getByLabelText('Quick add')).toBeInTheDocument()
+  })
+
+  describe('screen push', () => {
+    function registerPushingScreen() {
+      registerScreen({
+        id: 'now-fake',
+        tab: 'now',
+        title: 'Now Fake',
+        render: () => <PushingScreen />,
+      })
+    }
+
+    function PushingScreen() {
+      const push = usePush()
+      return (
+        <button
+          onClick={() =>
+            push({
+              node: (
+                <>
+                  <ScreenNav title="Pushed" />
+                  <div>Pushed Content</div>
+                </>
+              ),
+              backLabel: 'Now Fake',
+            })
+          }
+        >
+          Push it
+        </button>
+      )
+    }
+
+    it("a task row opens that task's detail as a pushed screen, with a back control to the list", () => {
+      registerPushingScreen()
+      render(<App />)
+
+      goTo('Now')
+      fireEvent.click(screen.getByText('Push it'))
+
+      expect(screen.getByText('Pushed Content')).toBeInTheDocument()
+      expect(screen.getByText(/now fake/i)).toBeInTheDocument()
+    })
+
+    it('the pushed screen replaces the tab\'s own screen and the tab bar stays — it is a push, not a route', () => {
+      registerPushingScreen()
+      render(<App />)
+
+      goTo('Now')
+      fireEvent.click(screen.getByText('Push it'))
+
+      expect(screen.queryByText('Push it')).not.toBeInTheDocument()
+      expect(document.querySelector('.tabbar')).not.toBeNull()
+    })
+
+    it('switching tabs drops the pushed screen, so a tab never reopens someone else\'s detail', () => {
+      registerPushingScreen()
+      render(<App />)
+
+      goTo('Now')
+      fireEvent.click(screen.getByText('Push it'))
+      expect(screen.getByText('Pushed Content')).toBeInTheDocument()
+
+      goTo('More')
+      goTo('Now')
+
+      expect(screen.queryByText('Pushed Content')).not.toBeInTheDocument()
+      expect(screen.getByText('Push it')).toBeInTheDocument()
+    })
   })
 
   it('shows the registered quick action on a single-screen tab, via that screen\'s own ScreenNav', () => {
