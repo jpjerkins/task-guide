@@ -100,11 +100,7 @@ export function RecurrenceEditor({ value, onChange, firstDue, onFirstDueChange, 
   }, [value, resetDrafts])
 
   function handleKindChange(next: string) {
-    const nextValue = defaultFor(next as Selection)
-    if (value?.anchor === 'completion' && nextValue?.anchor !== 'completion') {
-      onFirstDueChange(null)
-    }
-    onChange(nextValue)
+    onChange(defaultFor(next as Selection))
   }
 
   function handleNChange(raw: string) {

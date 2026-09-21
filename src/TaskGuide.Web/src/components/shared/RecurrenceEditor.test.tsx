@@ -121,7 +121,7 @@ describe('RecurrenceEditor', () => {
     expect(screen.getByLabelText(/first due/i)).toHaveValue('2026-09-10')
   })
 
-  it('changing kind away from a completion anchor clears the first-due date', () => {
+  it('changing kind away from a completion anchor leaves the first-due date alone', () => {
     const onFirstDueChange = vi.fn()
     render(
       <RecurrenceEditor
@@ -134,7 +134,7 @@ describe('RecurrenceEditor', () => {
 
     fireEvent.change(screen.getByLabelText(/repeats/i), { target: { value: 'calendar:everyNDays' } })
 
-    expect(onFirstDueChange).toHaveBeenCalledWith(null)
+    expect(onFirstDueChange).not.toHaveBeenCalled()
   })
 
   it('changing between completion-anchored kinds leaves the first-due date alone', () => {
