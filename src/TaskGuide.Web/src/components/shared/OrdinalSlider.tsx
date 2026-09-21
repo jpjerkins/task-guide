@@ -78,15 +78,27 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // both land a keyup on a slider whose keydown happened on the control being left (Shift
         // is released last, so it fires on essentially every backward Tab traversal). Naming those
         // keys would just repeat the mistake; tracking where the keydown landed subsumes them
-        // without knowing their names, mirroring `pointerStartedOnSlider` below.
-        onKeyDown={() => {
+        // without knowing their names, mirroring `pointerStartedOnSlider` below. But Tab also
+        // moves focus ON keydown, so a keydown here can be followed by the keyup landing on the
+        // NEXT control instead of this one — this slider's keyup never runs, and the ref would
+        // stay stale until a later, unrelated keyup found it still `true`. Clearing it on blur
+        // closes that gap, mirroring `onPointerCancel`'s guard on the pointer path.
+        // `changedDuringKeypress` skips the reset on an auto-repeated keydown (`e.repeat`) so a
+        // held key doesn't erase the record of a `change` that already fired earlier in the same
+        // keystroke.
+        onKeyDown={(e) => {
           keyStartedOnSlider.current = true
-          changedDuringKeypress.current = false
+          if (!e.repeat) {
+            changedDuringKeypress.current = false
+          }
         }}
         onKeyUp={() => {
           if (unset && keyStartedOnSlider.current && !changedDuringKeypress.current) {
             onChange(values[index])
           }
+          keyStartedOnSlider.current = false
+        }}
+        onBlur={() => {
           keyStartedOnSlider.current = false
         }}
         // While unset, the thumb already sits at index 0 — dragging it TO 0 fires no `change`

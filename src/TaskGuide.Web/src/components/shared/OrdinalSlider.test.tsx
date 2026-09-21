@@ -205,6 +205,46 @@ describe('OrdinalSlider', () => {
     expect(screen.getByText('Set to whisper.')).toBeInTheDocument()
   })
 
+  // #147 (3rd review pass): keyStartedOnSlider is only ever cleared on THIS control's keyup, but
+  // Tab moves focus on keydown — tabbing forward out of an unset slider fires keydown here
+  // (setting the ref true) then the keyup lands on the NEXT control, so this slider's keyup never
+  // runs and the ref stays stale. Shift+Tab back in then sees a stale `true` with
+  // changedDuringKeypress still false and wrongly commits values[0]. Clearing the ref on blur
+  // mirrors onPointerCancel's guard on the pointer path.
+  it('does not commit on Shift+Tab back into a slider that was left via Tab (stale keyStartedOnSlider) (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    // Tab forward out: keydown lands here, focus moves before keyup fires.
+    fireEvent.keyDown(slider, { key: 'Tab' })
+    fireEvent.blur(slider)
+    // Shift+Tab back in: keyup lands here without a keydown having landed here first.
+    fireEvent.keyUp(slider, { key: 'Tab' })
+    fireEvent.keyUp(slider, { key: 'Shift' })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  // #147 (3rd review pass): a held key auto-repeats, firing repeated keydowns during one
+  // keystroke. changedDuringKeypress must survive those repeats — resetting it on every keydown
+  // would erase the record of a `change` that already fired earlier in the same keystroke, and a
+  // parent that defers applying onChange (an awaited API write, `startTransition`) would then see
+  // the keyup wrongly re-commit values[0].
+  it('does not erase a same-keystroke change on an auto-repeated keydown (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    fireEvent.change(slider, { target: { value: '1' } })
+    fireEvent.keyDown(slider, { key: 'ArrowRight', repeat: true })
+    fireEvent.keyUp(slider, { key: 'ArrowRight' })
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('quiet')
+  })
+
   it('does not commit a pointer release that did not start on the slider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
