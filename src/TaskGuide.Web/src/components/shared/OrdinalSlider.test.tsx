@@ -251,6 +251,25 @@ describe('OrdinalSlider', () => {
     expect(onChange).toHaveBeenCalledWith('quiet')
   })
 
+  // #147 (4th review pass): `!e.repeat` only guards a HELD key's auto-repeat, not a different key
+  // pressed before the first is released — that keydown is not a repeat, so it still reset the
+  // flag. With a deferring parent (value stays null until the write lands): ArrowRight fires
+  // `change` and sets changedDuringKeypress, then ArrowLeft's keydown (before ArrowRight's keyup)
+  // wrongly cleared it, so ArrowLeft's own keyup re-committed values[0] over the value just chosen.
+  it('does not erase a same-keystroke change when a second key is pressed before the first is released (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    fireEvent.change(slider, { target: { value: '1' } })
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
+    fireEvent.keyUp(slider, { key: 'ArrowLeft' })
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('quiet')
+  })
+
   // Phil's call, 2026-09-21: provenance alone stops traversal commits, but a key aimed at the
   // form — Enter to submit, Escape to dismiss, Ctrl+S — still starts and ends on a focused,
   // untouched slider. Require the key be one a range input actually responds to.

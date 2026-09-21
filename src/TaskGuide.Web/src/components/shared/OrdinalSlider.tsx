@@ -94,11 +94,11 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         // press. This is knowingly a key list again, the failure mode #147 opened with — an
         // omitted key silently can't commit — but here the list is exhaustive over what a range
         // input responds to at all, not a guess at which keys decrement.
-        onKeyDown={(e) => {
-          keyStartedOnSlider.current = true
-          if (!e.repeat) {
+        onKeyDown={() => {
+          if (!keyStartedOnSlider.current) {
             changedDuringKeypress.current = false
           }
+          keyStartedOnSlider.current = true
         }}
         onKeyUp={(e) => {
           if (
@@ -116,6 +116,7 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         }}
         onBlur={() => {
           keyStartedOnSlider.current = false
+          changedDuringKeypress.current = false
         }}
         // While unset, the thumb already sits at index 0 — dragging it TO 0 fires no `change`
         // event, so a user could never explicitly commit the least value. A pointerUp (covers a
