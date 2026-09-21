@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PushContext, type PushedScreen } from './shared/screenRegistry'
+import { TaskDetail } from './TaskDetail'
 import { TasksScreen } from './TasksScreen'
 
 // Stubbed at the network boundary via a global `fetch` mock rather than MSW: the walking
@@ -573,6 +575,29 @@ describe('TasksScreen', () => {
       const alert = await screen.findByRole('alert')
       expect(alert).toHaveTextContent(/Postponable/)
       expect(alert).toHaveTextContent(/already done/)
+    })
+  })
+
+  describe('opening task detail', () => {
+    it('a task row opens that task\'s detail as a pushed screen, with a back control to the list', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(jsonResponse([rawTask({ id: '1', title: 'Water the plants' })])),
+      )
+      const push = vi.fn<(screen: PushedScreen) => void>()
+      render(
+        <PushContext.Provider value={push}>
+          <TasksScreen />
+        </PushContext.Provider>,
+      )
+
+      const title = await screen.findByRole('button', { name: 'Open Water the plants' })
+      fireEvent.click(title)
+
+      expect(push).toHaveBeenCalledTimes(1)
+      const pushed = push.mock.calls[0][0]
+      expect(pushed.backLabel).toBe('Tasks')
+      expect(pushed.node).toMatchObject({ type: TaskDetail, props: { taskId: '1' } })
     })
   })
 

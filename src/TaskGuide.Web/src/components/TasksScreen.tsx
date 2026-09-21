@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, createTask, fetchTasks, sendJson, type Task } from '../api/client'
 import { QuickAdd } from './QuickAdd'
 import { DateEntry } from './shared/DateEntry'
+import { usePush } from './shared/screenRegistry'
+import { TaskDetail } from './TaskDetail'
 
 // Same three-state shape as TriageScreen.tsx: a loading arm so the first paint doesn't say
 // "Nothing here." before the first read returns, and an error arm the ready-state counts can't
@@ -61,6 +63,7 @@ function pastDeadline(task: Task, date: string): boolean {
 }
 
 export function TasksScreen({ now = new Date() }: { now?: Date }) {
+  const push = usePush()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [sheetOpen, setSheetOpen] = useState(false)
   const [filter, setFilter] = useState<Filter>('Active')
@@ -225,12 +228,21 @@ export function TasksScreen({ now = new Date() }: { now?: Date }) {
                       ✓
                     </button>
                     <div className="body">
-                      <div
+                      <button
                         className="title"
-                        style={t.status === 'done' ? { opacity: 0.45, textDecoration: 'line-through' } : undefined}
+                        aria-label={`Open ${t.title}`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          textAlign: 'left',
+                          width: '100%',
+                          ...(t.status === 'done' ? { opacity: 0.45, textDecoration: 'line-through' } : undefined),
+                        }}
+                        onClick={() => push({ node: <TaskDetail taskId={t.id} />, backLabel: 'Tasks' })}
                       >
                         {t.title}
-                      </div>
+                      </button>
                       <div className="meta">
                         {t.duration !== null ? (
                           <span className="pill dur">{durLabel(t.duration)}</span>
