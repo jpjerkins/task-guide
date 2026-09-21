@@ -155,18 +155,35 @@ green from the repo root. Web lanes additionally:
 cd src/TaskGuide.Web && npm test
 ```
 
-**If the diff touches `src/TaskGuide.Web/src/index.css`**, run the prototype-union guard as well:
+**If the diff touches `src/TaskGuide.Web/src/index.css` — or any of
+`docs/prototypes/{ui-screens,schedule-editing,tag-entry}.prototype.html`, which are the guard's
+other inputs** — run the prototype-union guard as well:
 
 ```sh
 cd src/TaskGuide.Web && npm run check:css
 ```
 
-It checks `index.css` against the union of the prototypes in `docs/prototypes/` — selectors and
-declarations both. Nothing else runs it: there is no CI, and `npm test`, `npm run build` and
-`dotnet test` are all green while `index.css` drifts (#178). It is not a formality — #148 was
-caught by it, and #149, #176 and #177 all sharpened it. A **failure is a report, not an edit**, on
-the same terms as the drift check below: if your lane did not change `index.css`, name the drift
-and leave it to the lane that did.
+It checks `index.css` against the union of `ui-screens` and `schedule-editing`, selectors *and*
+declarations, plus `tag-entry`'s selectors where those two don't already define them. The two
+remaining prototypes are **not** inputs and you cannot port class names from them on this guard's
+authority: `override-authoring` links the real `index.css`, and `date-picker-probe` carries its own
+throwaway design system, so every class in it would come back as `unexpected selectors`.
+
+Nothing else runs the guard: there is no CI, and `npm test`, `npm run build` and `dotnet test` are
+all green while `index.css` drifts (#178). It is not a formality — #148 tripped it, and #149, #176
+and #177 all sharpened it. The trigger names the prototypes because a design lane that edits one
+without touching `index.css` otherwise merges a red guard, and the next `index.css` lane inherits
+a failure it did not cause.
+
+Two failure shapes, and neither is fixed by editing around the guard:
+
+- **Drift in a rule your change didn't touch** — a report, not an edit, on the same terms as the
+  drift check below. Name it and leave it to the lane that moved it.
+- **`unexpected selectors` on a class you added deliberately** — `index.css` is frozen for the Web
+  lanes, so a design needing a class no prototype defines is *a report to the integration lane,
+  not an edit* (`override-authoring.prototype.html`'s own header; #142 is one). That lane either
+  ports the rule from a prototype or adds it to `retainedSelectors` in
+  `scripts/check-css-union.mjs`.
 
 **If the diff touches API surface** — any `Api/Endpoints/` file, or a response/request type one
 serializes — you own regenerating `src/TaskGuide.Web/src/api/schema.d.ts`, **whatever lane you are
