@@ -1696,6 +1696,8 @@ specified under **Shared controls** above and are not restated here.
 - an **elapsed** Defer renders with no "surfaces" pill, for the same reason
 - a `Done` Task strikes its title and disables its tick — there is no un-complete path
   (`DELETE .../completions/{due}` is a stub), so re-tapping must not be able to double-complete it
+- "A month" clamps to the target month's last day at a month end (2026-01-31 → 2026-02-28), rather
+  than overflowing into the month after next
 - a failed write's note (mark-off or postpone) renders outside the ready-state body, at the top
   of the scroll, naming the Task — so it survives a reload that also fails, rather than vanishing
   with the rows it would otherwise render inside (#102's rule, TriageScreen.tsx's taskActionNote)

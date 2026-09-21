@@ -35,10 +35,13 @@ function offsetDate(date: string, days: number): string {
   return shifted.toISOString().slice(0, 10)
 }
 
+// setUTCMonth overflows past a short month (2026-01-31 -> 2026-03-03, since day 31 doesn't
+// exist in February): clamp to the target month's last day instead.
 function addMonth(date: string): string {
-  const shifted = new Date(`${date}T00:00:00Z`)
-  shifted.setUTCMonth(shifted.getUTCMonth() + 1)
-  return shifted.toISOString().slice(0, 10)
+  const [y, m, d] = date.split('-').map(Number)
+  const targetMonthIndex = m // 0-based index of *next* month, since `m` itself is 1-based this-month
+  const lastDayOfTarget = new Date(Date.UTC(y, targetMonthIndex + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(y, targetMonthIndex, Math.min(d, lastDayOfTarget))).toISOString().slice(0, 10)
 }
 
 interface PostponeInterval {

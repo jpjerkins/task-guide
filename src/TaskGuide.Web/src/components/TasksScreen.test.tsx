@@ -470,6 +470,26 @@ describe('TasksScreen', () => {
       expect(screen.getByRole('button', { name: /not now/i })).toBeInTheDocument()
     })
 
+    it('"A month" clamps to the target month\'s last day at a month end, rather than overflowing', async () => {
+      // Chicago is CST (UTC-6) in January — no DST — so 18:00 UTC on the 31st is still
+      // 2026-01-31 locally.
+      const monthEndNow = new Date('2026-01-31T18:00:00Z')
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse([stubPostponable()]))
+        .mockResolvedValueOnce(new Response(null, { status: 204 }))
+        .mockResolvedValueOnce(jsonResponse([stubPostponable({ postpone: '2026-02-28', eligible: false })]))
+      vi.stubGlobal('fetch', fetchMock)
+      const user = userEvent.setup()
+      render(<TasksScreen now={monthEndNow} />)
+      await user.click(await screen.findByRole('button', { name: /not now/i }))
+      await user.click(screen.getByRole('button', { name: /^a month/i }))
+
+      const [, postponeCall] = fetchMock.mock.calls
+      // 2026-01-31 + "a month" must land on 2026-02-28 (Feb's last day), never 2026-03-03.
+      expect(JSON.parse(postponeCall[1]?.body as string)).toEqual({ date: '2026-02-28' })
+    })
+
     it('an elapsed Defer (now eligible again) renders with no "surfaces" pill', async () => {
       vi.stubGlobal(
         'fetch',
