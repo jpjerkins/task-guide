@@ -429,6 +429,36 @@ describe('TaskDetail — form', () => {
     })
   })
 
+  it("a refused Save keeps the user's unsaved edits in the fields, rather than reloading over them", async () => {
+    // § Quick capture's rule applies here too: a write that fails "fails loudly in the sheet,
+    // which stays open with what was typed" — capture is never queued, and neither is Detail's
+    // Save. The old handleSave called onSaved() (a reload) unconditionally, even after a caught
+    // refusal, and the reload's fresh `task` reset every field via the `useEffect(..., [task])`
+    // sync — so a refused Save explained itself and also wiped the title the user just typed.
+    const fetchMock = makeFetchMock({
+      taskResponses: [rawTask({ title: 'Old title', notes: 'Old notes' })],
+      writes: [
+        {
+          match: (url, init) => url === '/api/tasks/1' && init?.method === 'PUT',
+          response: new Response(JSON.stringify({ error: 'refused' }), { status: 409 }),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<TaskDetail taskId="1" />)
+
+    const titleInput = await screen.findByDisplayValue('Old title')
+    await user.clear(titleInput)
+    await user.type(titleInput, 'New unsaved title')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await screen.findByRole('alert')
+    expect(screen.getByDisplayValue('New unsaved title')).toBeInTheDocument()
+    // Only the initial GET — a refused write must not trigger a reload.
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/tasks/1' && !init)).toHaveLength(1)
+  })
+
   it("a refused Save renders the server's reason in the alert note", async () => {
     const fetchMock = makeFetchMock({
       taskResponses: [rawTask({ title: 'A task' }), rawTask({ title: 'A task' })],
@@ -450,37 +480,10 @@ describe('TaskDetail — form', () => {
     expect(alert).toHaveTextContent(/duration belongs in the duration field/i)
   })
 
-  it("a refused Save's note survives a reload that also fails", async () => {
-    // TasksScreen.tsx's precedent: a failed write's note must render outside the three-arm
-    // conditional. The reload a write triggers can itself fail, flipping state to 'error' and
-    // unmounting the ready-state body — if the note lived inside TaskForm (part of that body), it
-    // would vanish along with it, and the user would see a generic load failure with no memory of
-    // why the write was refused.
-    let taskCall = 0
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if (url === '/api/dimensions' && !init) return Promise.resolve(jsonResponse(DIMENSIONS))
-      if (url === '/api/tasks/1' && !init) {
-        taskCall++
-        if (taskCall === 1) return Promise.resolve(jsonResponse(rawTask({ title: 'A task' })))
-        return Promise.reject(new Error('offline'))
-      }
-      if (url === '/api/tasks/1' && init?.method === 'PUT') {
-        return Promise.resolve(
-          new Response(JSON.stringify({ error: 'duration belongs in the duration field' }), { status: 400 }),
-        )
-      }
-      throw new Error(`Unhandled fetch: ${init?.method ?? 'GET'} ${url}`)
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    const user = userEvent.setup()
-    render(<TaskDetail taskId="1" />)
-
-    await screen.findByDisplayValue('A task')
-    await user.click(screen.getByRole('button', { name: /^save$/i }))
-
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(/duration belongs in the duration field/i)
-    expect(await screen.findByText(/couldn.t load this task/i)).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent(/duration belongs in the duration field/i)
-  })
+  // Superseded by "keeps the user's unsaved edits" above: since a refused write no longer
+  // triggers a reload at all (that fix's whole point), the "note survives a *failed reload*"
+  // scenario this test used to cover isn't reachable through Save any more — a failed write and a
+  // failed reload can no longer happen in the same gesture. The note is still rendered outside the
+  // three-arm conditional in TaskDetail (belt-and-suspenders for any future write that does
+  // reload), but there is no live path today that exercises that distinction on its own.
 })

@@ -164,6 +164,11 @@ function TaskForm({
     })
   }
 
+  // Each handler reloads (`onSaved`) only on the success path, inside the `try` — never after a
+  // caught refusal. § Quick capture's rule applies here too: a write that fails "fails loudly in
+  // the sheet, which stays open with what was typed"; the old unconditional reload after a caught
+  // error ran the `useEffect(..., [task])` sync on the (unchanged) server task, wiping whatever
+  // the user had just typed at the same moment the note told them why it didn't save.
   async function handleSave() {
     onNote(null)
     setBusy(true)
@@ -179,10 +184,10 @@ function TaskForm({
         deadline: task.recurring ? null : deadline,
         dimensions: withoutDurationKey(dims),
       })
+      await onSaved()
     } catch (err) {
       onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't save.")
     }
-    await onSaved()
     setBusy(false)
   }
 
@@ -191,10 +196,10 @@ function TaskForm({
     setBusy(true)
     try {
       await clearPostpone(taskId)
+      await onSaved()
     } catch (err) {
       onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't clear postpone.")
     }
-    await onSaved()
     setBusy(false)
   }
 
@@ -205,10 +210,10 @@ function TaskForm({
     setBusy(true)
     try {
       await deferTaskByOffset(taskId, offset, offsetUnit)
+      await onSaved()
     } catch (err) {
       onNote(err instanceof ApiError && err.reason ? err.reason : "Couldn't defer.")
     }
-    await onSaved()
     setBusy(false)
   }
 
