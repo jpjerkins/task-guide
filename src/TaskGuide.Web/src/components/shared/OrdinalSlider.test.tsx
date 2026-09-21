@@ -245,6 +245,20 @@ describe('OrdinalSlider', () => {
     expect(onChange).toHaveBeenCalledWith('quiet')
   })
 
+  // Phil's call, 2026-09-21: provenance alone stops traversal commits, but a key aimed at the
+  // form — Enter to submit, Escape to dismiss, Ctrl+S — still starts and ends on a focused,
+  // untouched slider. Require the key be one a range input actually responds to.
+  it('does not commit on Enter (key not aimed at the slider) (#147)', () => {
+    const onChange = vi.fn()
+    render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)
+
+    const slider = screen.getByLabelText('Volume')
+    fireEvent.keyDown(slider, { key: 'Enter' })
+    fireEvent.keyUp(slider, { key: 'Enter' })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('does not commit a pointer release that did not start on the slider', () => {
     const onChange = vi.fn()
     render(<OrdinalSlider label="Volume" values={VALUES} value={null} defaultValue="normal" onChange={onChange} />)

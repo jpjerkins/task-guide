@@ -13,6 +13,8 @@ interface OrdinalSliderProps {
   id?: string
 }
 
+const RANGE_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']
+
 // A slider over an ordered value set (CONTEXT.md 339-482: Ordinal Dimensions), matching the
 // settled shape from tag-entry.prototype.html variant C's sheet (~850-862): "An ordinal slider
 // needs an explicit control for absence. A Dimension declaring a default makes unset and
@@ -71,29 +73,35 @@ export function OrdinalSlider({ label, values, value, onChange, defaultValue, re
         }}
         // While unset, the thumb sits at index 0 — a decrementing key (ArrowLeft, ArrowDown,
         // Home, PageDown) is a no-op there and the browser fires no `change` for it, so it would
-        // commit nothing. The rule is: a keystroke that started on this control and moved the
-        // thumb nowhere commits the value being shown. That's deliberately not keyed off which
-        // key it was (#147, 2nd pass) — a key list can always be incomplete, and `keyup` fires on
-        // whatever element is focused AT keyup time, not keydown time, so `Tab` and `Shift+Tab`
-        // both land a keyup on a slider whose keydown happened on the control being left (Shift
-        // is released last, so it fires on essentially every backward Tab traversal). Naming those
-        // keys would just repeat the mistake; tracking where the keydown landed subsumes them
-        // without knowing their names, mirroring `pointerStartedOnSlider` below. But Tab also
-        // moves focus ON keydown, so a keydown here can be followed by the keyup landing on the
-        // NEXT control instead of this one — this slider's keyup never runs, and the ref would
-        // stay stale until a later, unrelated keyup found it still `true`. Clearing it on blur
-        // closes that gap, mirroring `onPointerCancel`'s guard on the pointer path.
-        // `changedDuringKeypress` skips the reset on an auto-repeated keydown (`e.repeat`) so a
-        // held key doesn't erase the record of a `change` that already fired earlier in the same
-        // keystroke.
+        // commit nothing. The rule is: a keystroke that started on this control, moved the thumb
+        // nowhere, and is a key a range input actually responds to commits the value being shown.
+        // Provenance is deliberately not keyed off which key it was (#147, 2nd pass) — a key list
+        // can always be incomplete, and `keyup` fires on whatever element is focused AT keyup
+        // time, not keydown time, so `Tab` and `Shift+Tab` both land a keyup on a slider whose
+        // keydown happened on the control being left (Shift is released last, so it fires on
+        // essentially every backward Tab traversal). Naming those keys would just repeat the
+        // mistake; tracking where the keydown landed subsumes them without knowing their names,
+        // mirroring `pointerStartedOnSlider` below. But Tab also moves focus ON keydown, so a
+        // keydown here can be followed by the keyup landing on the NEXT control instead of this
+        // one — this slider's keyup never runs, and the ref would stay stale until a later,
+        // unrelated keyup found it still `true`. Clearing it on blur closes that gap, mirroring
+        // `onPointerCancel`'s guard on the pointer path. `changedDuringKeypress` skips the reset
+        // on an auto-repeated keydown (`e.repeat`) so a held key doesn't erase the record of a
+        // `change` that already fired earlier in the same keystroke. And the key itself must be
+        // one from RANGE_KEYS — a keystroke can start and end on this control without moving the
+        // thumb because it was never aimed at the slider at all (Enter to submit the form, Escape
+        // to dismiss, Ctrl+S), and provenance alone can't tell that apart from a real no-op arrow
+        // press. This is knowingly a key list again, the failure mode #147 opened with — an
+        // omitted key silently can't commit — but here the list is exhaustive over what a range
+        // input responds to at all, not a guess at which keys decrement.
         onKeyDown={(e) => {
           keyStartedOnSlider.current = true
           if (!e.repeat) {
             changedDuringKeypress.current = false
           }
         }}
-        onKeyUp={() => {
-          if (unset && keyStartedOnSlider.current && !changedDuringKeypress.current) {
+        onKeyUp={(e) => {
+          if (unset && keyStartedOnSlider.current && !changedDuringKeypress.current && RANGE_KEYS.includes(e.key)) {
             onChange(values[index])
           }
           keyStartedOnSlider.current = false

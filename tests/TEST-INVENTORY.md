@@ -1088,16 +1088,20 @@ a Task's shape is written by hand. `src/api/client.ts` is the normalisation boun
 - committing index 0 while unset (no `change` event fires, since the thumb already sits there) on
   `pointerUp` still commits the least value, without remounting the slider or double-committing
   once a value is already set
-- while unset, a keystroke that started on this control and moved the thumb nowhere commits the
-  value it is showing (#147) — deliberately not keyed off which key it was, because a key list can
-  always be incomplete; a range parked at index 0 fires no `change` for ArrowLeft/ArrowDown/
-  Home/PageDown alike, and a key the old ArrowLeft/Home-only guard missed (ArrowDown) commits too,
-  without remounting the slider or double-committing once a value is already set. `Tab` and
-  `Shift+Tab` land a keyup on a slider whose keydown happened on the control being left — neither
-  commits, because provenance (not key identity) gates the commit. A `change` firing during the
-  keypress also suppresses the keyup commit, even if a deferring parent hasn't applied it yet, so
-  the keystroke doesn't double-commit or downgrade the selection once it's already committed via
-  `change`
+- while unset, a keystroke commits the value being shown only if it started on this control,
+  moved the thumb nowhere, and is a key a range input responds to (#147) — a range parked at
+  index 0 fires no `change` for ArrowLeft/ArrowDown/Home/PageDown alike, and a key the old
+  ArrowLeft/Home-only guard missed (ArrowDown) commits too, without remounting the slider or
+  double-committing once a value is already set. `Tab` and `Shift+Tab` land a keyup on a slider
+  whose keydown happened on the control being left — neither commits, because provenance (not key
+  identity) gates the commit. A `change` firing during the keypress also suppresses the keyup
+  commit, even if a deferring parent hasn't applied it yet, so the keystroke doesn't
+  double-commit or downgrade the selection once it's already committed via `change`. The
+  provenance flag is cleared on blur, because Tab moves focus on keydown and can leave a stale
+  `true` behind for a later Shift+Tab back in to see; auto-repeat on a held key does not erase an
+  earlier `change` from the same keystroke; and a key not in the range-input's own key set (Enter
+  to submit the form, Escape to dismiss) does not commit even when it starts and ends on a
+  focused, untouched slider
 - `OrdinalSlider` falls back to the unset presentation — dimmed, index 0, no false "Set to" claim
   — when `value` isn't present in `values` at all
 - `OrdinalSlider` renders read-only with the same control structure — ticks, hint, and toggle
