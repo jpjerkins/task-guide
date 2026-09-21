@@ -110,6 +110,7 @@ function rules(css, prefix = '', into = new Map(), duplicates = null) {
 const selectorAliases = new Map([
   ['.nav button.icon', '.icon'],
 ]);
+const alias = (selector) => selectorAliases.get(selector) ?? selector;
 const retainedSelectors = new Set([
   'html, body, #root',
   '[hidden]',
@@ -136,14 +137,19 @@ const source = new Map([
 // filtered here to those `source` doesn't already have. Most of those 75
 // describe screens the SPA hasn't built, so they're permitted in index.css
 // and drift-checked when present, but never required - `missing` below stays
-// scoped to `source`. See #177.
+// scoped to `source`. The order check is likewise `source`-only: these
+// selectors have no agreed position relative to the union's, so a ported
+// tag-entry rule can sit anywhere. See #177 and #179.
+// The filter compares raw selectors but everything downstream compares
+// aliased ones, so it also excludes anything aliasing onto a source key -
+// otherwise one index.css selector would carry two expected bodies.
+const sourceAliased = new Set([...source.keys()].map(alias));
 const optional = new Map(
   [...rules(styleFrom('docs/prototypes/tag-entry.prototype.html'))]
-    .filter(([selector]) => !source.has(selector)),
+    .filter(([selector]) => !source.has(selector) && !sourceAliased.has(alias(selector))),
 );
 const duplicateSelectors = [];
 const actual = rules(readFileSync('src/TaskGuide.Web/src/index.css', 'utf8'), '', new Map(), duplicateSelectors);
-const alias = (selector) => selectorAliases.get(selector) ?? selector;
 const missing = [...source.keys()].filter((selector) => !actual.has(alias(selector)));
 const drifted = [...source, ...optional].filter(([selector, declMap]) =>
   actual.has(alias(selector)) && serialize(actual.get(alias(selector))) !== serialize(declMap),

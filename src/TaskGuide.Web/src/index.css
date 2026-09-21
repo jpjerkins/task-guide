@@ -1,9 +1,10 @@
 /* Union of docs/prototypes/ui-screens.prototype.html and schedule-editing.prototype.html, plus
    selectors ported from tag-entry.prototype.html.
    schedule-editing is later and supplies every shared-selector cosmetic value. tag-entry
-   contributes only the selectors it alone defines (`input.field.date`, `.hint`, `.range`,
-   `.ticks`), so it never overrides those shared values; they are permitted here and checked for
-   declaration drift, but not required. See #177.
+   contributes only the selectors it alone defines, so it never overrides those shared values; all
+   75 of them are permitted here and checked for declaration drift, but none is required. Four are
+   ported so far: `input.field.date`, `.hint`, `.range`, `.ticks` - adding another needs no
+   retainedSelectors entry, but the guard will not check where you put it. See #177 and #179.
    `.icon` intentionally widens the prototypes' `.nav button.icon` (a sheet-header Cancel has no
    `.nav` ancestor); see #125 and selectorAliases in scripts/check-css-union.mjs. */
 
