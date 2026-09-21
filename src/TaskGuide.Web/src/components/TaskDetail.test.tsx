@@ -135,7 +135,11 @@ describe('TaskDetail — fit bar', () => {
   })
 
   it('an unknown zeroKind renders as unknown, never as zero', async () => {
-    stub(rawTask({ opportunities: 0, patternWeekCount: 0, zeroKind: 'unknown' }))
+    // OrphanDetection.KindOfZero returns Unknown exactly when opportunities is null on an Active
+    // Task — the server never emits `{ opportunities: 0, zeroKind: 'unknown' }`. This is the same
+    // "opportunities: null" shape a deferred/postponed Task carries, and the two must render
+    // distinguishably (see the deferred/postponed test just below).
+    stub(rawTask({ opportunities: null, patternWeekCount: 3, zeroKind: 'unknown' }))
     render(<TaskDetail taskId="1" />)
 
     expect(await screen.findByText(/unknown/i)).toBeInTheDocument()

@@ -65,9 +65,14 @@ function fitBar(task: Task, dimensions: DimensionResponse[], today: string) {
   }
 
   const countBlock =
-    task.opportunities === null ? null : task.zeroKind === 'unknown' ? (
+    // Checked before the `opportunities === null` case below: OrphanDetection.KindOfZero returns
+    // Unknown exactly when opportunities is null on an Active Task, so the real wire payload for
+    // "unknown" is `{ opportunities: null, zeroKind: 'unknown' }` — the same opportunities: null
+    // shape a deferred/postponed Task carries with a different zeroKind. Checking null first would
+    // make the two indistinguishable.
+    task.zeroKind === 'unknown' ? (
       <span className="which">Opportunities: unknown — a fetched Dimension check failed.</span>
-    ) : task.opportunities === 0 && task.zeroKind === 'noneInThisStretch' ? (
+    ) : task.opportunities === null ? null : task.opportunities === 0 && task.zeroKind === 'noneInThisStretch' ? (
       <span className="which">
         An override or event has taken them all out of this stretch — nothing is wrong with the task.
       </span>
